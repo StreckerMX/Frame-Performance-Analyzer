@@ -1,0 +1,1402 @@
+{
+  "format_version": 1,
+  "options": {
+    "gpu_threshold": 10.0,
+    "trim_buffer_seconds": 1.0,
+    "auto_gpu_threshold": true,
+    "exclude_transitions": true
+  },
+  "base": {
+    "display_name": "golden_base",
+    "window": {
+      "start": 1.0,
+      "end": 19.0
+    },
+    "valid_bins": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "diagnostics": {
+      "total_bins": 20,
+      "visible_bins": 15,
+      "below_gpu_bins": 3,
+      "fps_outlier_bins": 0,
+      "edge_trimmed_bins": 2,
+      "fps_upper_bound": 157.65765765765767
+    },
+    "metadata": {
+      "application": "GoldenGame.exe",
+      "resolution": "3840x2160",
+      "gpu": "NVIDIA GeForce RTX 5070 Ti",
+      "cpu": "AMD Ryzen 7 5700X3D 8-Core Processor",
+      "runtime": "DXGI",
+      "duration": "15 s",
+      "capture_duration": "20 s",
+      "frame_count": 60,
+      "metric_count": 7
+    },
+    "effective_gpu_threshold": 44,
+    "metrics": [
+      {
+        "id": "fps",
+        "label": "FPS (Calculated)",
+        "unit": "FPS",
+        "higher_is_better": true,
+        "points": [
+          [
+            0.0,
+            99.00990099009901
+          ],
+          [
+            1.0,
+            98.03921568627452
+          ],
+          [
+            2.0,
+            97.08737864077669
+          ],
+          [
+            3.0,
+            96.15384615384615
+          ],
+          [
+            4.0,
+            95.23809523809524
+          ],
+          [
+            5.0,
+            94.33962264150944
+          ],
+          [
+            9.0,
+            90.9090909090909
+          ],
+          [
+            10.0,
+            90.0900900900901
+          ],
+          [
+            11.0,
+            89.2857142857143
+          ],
+          [
+            12.0,
+            88.49557522123892
+          ],
+          [
+            13.0,
+            87.71929824561403
+          ],
+          [
+            14.0,
+            86.95652173913044
+          ],
+          [
+            15.0,
+            86.20689655172414
+          ],
+          [
+            16.0,
+            85.47008547008548
+          ],
+          [
+            17.0,
+            84.74576271186439
+          ]
+        ],
+        "stats": {
+          "avg": 91.31647297167692,
+          "p1": 84.84716789801534,
+          "p01": 84.75590323047948,
+          "max": 99.00990099009901,
+          "min": 84.74576271186439
+        }
+      },
+      {
+        "id": "frametime",
+        "label": "Frame time",
+        "unit": "ms",
+        "higher_is_better": false,
+        "points": [
+          [
+            0.0,
+            10.1
+          ],
+          [
+            1.0,
+            10.2
+          ],
+          [
+            2.0,
+            10.3
+          ],
+          [
+            3.0,
+            10.4
+          ],
+          [
+            4.0,
+            10.5
+          ],
+          [
+            5.0,
+            10.6
+          ],
+          [
+            9.0,
+            11.0
+          ],
+          [
+            10.0,
+            11.1
+          ],
+          [
+            11.0,
+            11.199999999999998
+          ],
+          [
+            12.0,
+            11.300000000000002
+          ],
+          [
+            13.0,
+            11.4
+          ],
+          [
+            14.0,
+            11.5
+          ],
+          [
+            15.0,
+            11.6
+          ],
+          [
+            16.0,
+            11.699999999999998
+          ],
+          [
+            17.0,
+            11.800000000000002
+          ]
+        ],
+        "stats": {
+          "avg": 10.979999999999999,
+          "p1": 11.786000000000001,
+          "p01": 11.798600000000002,
+          "max": 11.800000000000002,
+          "min": 10.1
+        }
+      },
+      {
+        "id": "latency",
+        "label": "PC Latency",
+        "unit": "ms",
+        "higher_is_better": false,
+        "points": [
+          [
+            0.0,
+            20.5
+          ],
+          [
+            1.0,
+            21.0
+          ],
+          [
+            2.0,
+            21.5
+          ],
+          [
+            3.0,
+            22.0
+          ],
+          [
+            4.0,
+            22.5
+          ],
+          [
+            5.0,
+            23.0
+          ],
+          [
+            9.0,
+            25.0
+          ],
+          [
+            10.0,
+            25.5
+          ],
+          [
+            11.0,
+            26.0
+          ],
+          [
+            12.0,
+            26.5
+          ],
+          [
+            13.0,
+            27.0
+          ],
+          [
+            14.0,
+            27.5
+          ],
+          [
+            15.0,
+            28.0
+          ],
+          [
+            16.0,
+            28.5
+          ],
+          [
+            17.0,
+            29.0
+          ]
+        ],
+        "stats": {
+          "avg": 24.9,
+          "p1": 28.93,
+          "p01": 28.993000000000002,
+          "max": 29.0,
+          "min": 20.5
+        }
+      },
+      {
+        "id": "gpu0_util",
+        "label": "GPU0 Utilization",
+        "unit": "%",
+        "higher_is_better": null,
+        "points": [
+          [
+            0.0,
+            80.0
+          ],
+          [
+            1.0,
+            80.0
+          ],
+          [
+            2.0,
+            80.0
+          ],
+          [
+            3.0,
+            80.0
+          ],
+          [
+            4.0,
+            80.0
+          ],
+          [
+            5.0,
+            80.0
+          ],
+          [
+            9.0,
+            80.0
+          ],
+          [
+            10.0,
+            80.0
+          ],
+          [
+            11.0,
+            80.0
+          ],
+          [
+            12.0,
+            80.0
+          ],
+          [
+            13.0,
+            80.0
+          ],
+          [
+            14.0,
+            80.0
+          ],
+          [
+            15.0,
+            80.0
+          ],
+          [
+            16.0,
+            80.0
+          ],
+          [
+            17.0,
+            80.0
+          ]
+        ],
+        "stats": {
+          "avg": 80.0,
+          "max": 80.0,
+          "min": 80.0
+        }
+      },
+      {
+        "id": "gpu0_temp",
+        "label": "GPU0 Temperature",
+        "unit": "\u00b0C",
+        "higher_is_better": false,
+        "points": [
+          [
+            0.0,
+            51.0
+          ],
+          [
+            1.0,
+            52.0
+          ],
+          [
+            2.0,
+            53.0
+          ],
+          [
+            3.0,
+            54.0
+          ],
+          [
+            4.0,
+            55.0
+          ],
+          [
+            5.0,
+            56.0
+          ],
+          [
+            9.0,
+            60.0
+          ],
+          [
+            10.0,
+            61.0
+          ],
+          [
+            11.0,
+            62.0
+          ],
+          [
+            12.0,
+            63.0
+          ],
+          [
+            13.0,
+            64.0
+          ],
+          [
+            14.0,
+            65.0
+          ],
+          [
+            15.0,
+            66.0
+          ],
+          [
+            16.0,
+            67.0
+          ],
+          [
+            17.0,
+            68.0
+          ]
+        ],
+        "stats": {
+          "avg": 59.8,
+          "max": 68.0,
+          "min": 51.0
+        }
+      },
+      {
+        "id": "nv_power",
+        "label": "NV GPU Power",
+        "unit": "W",
+        "higher_is_better": false,
+        "points": [
+          [
+            0.0,
+            202.0
+          ],
+          [
+            1.0,
+            204.0
+          ],
+          [
+            2.0,
+            206.0
+          ],
+          [
+            3.0,
+            208.0
+          ],
+          [
+            4.0,
+            210.0
+          ],
+          [
+            5.0,
+            212.0
+          ],
+          [
+            9.0,
+            220.0
+          ],
+          [
+            10.0,
+            222.0
+          ],
+          [
+            11.0,
+            224.0
+          ],
+          [
+            12.0,
+            226.0
+          ],
+          [
+            13.0,
+            228.0
+          ],
+          [
+            14.0,
+            230.0
+          ],
+          [
+            15.0,
+            232.0
+          ],
+          [
+            16.0,
+            234.0
+          ],
+          [
+            17.0,
+            236.0
+          ]
+        ],
+        "stats": {
+          "avg": 219.6,
+          "p1": 202.28,
+          "p01": 202.028,
+          "max": 236.0,
+          "min": 202.0
+        }
+      },
+      {
+        "id": "cpu_util",
+        "label": "CPU Utilization",
+        "unit": "%",
+        "higher_is_better": null,
+        "points": [
+          [
+            0.0,
+            41.0
+          ],
+          [
+            1.0,
+            42.0
+          ],
+          [
+            2.0,
+            43.0
+          ],
+          [
+            3.0,
+            44.0
+          ],
+          [
+            4.0,
+            45.0
+          ],
+          [
+            5.0,
+            46.0
+          ],
+          [
+            9.0,
+            43.0
+          ],
+          [
+            10.0,
+            44.0
+          ],
+          [
+            11.0,
+            45.0
+          ],
+          [
+            12.0,
+            46.0
+          ],
+          [
+            13.0,
+            40.0
+          ],
+          [
+            14.0,
+            41.0
+          ],
+          [
+            15.0,
+            42.0
+          ],
+          [
+            16.0,
+            43.0
+          ],
+          [
+            17.0,
+            44.0
+          ]
+        ],
+        "stats": {
+          "avg": 43.266666666666666,
+          "max": 46.0,
+          "min": 40.0
+        }
+      }
+    ]
+  },
+  "comparison": {
+    "display_name": "golden_comparison",
+    "window": {
+      "start": 1.0,
+      "end": 19.0
+    },
+    "valid_bins": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "diagnostics": {
+      "total_bins": 20,
+      "visible_bins": 15,
+      "below_gpu_bins": 3,
+      "fps_outlier_bins": 0,
+      "edge_trimmed_bins": 2,
+      "fps_upper_bound": 192.30769230769232
+    },
+    "metadata": {
+      "application": "GoldenGame.exe",
+      "resolution": "3840x2160",
+      "gpu": "NVIDIA GeForce RTX 5070 Ti",
+      "cpu": "AMD Ryzen 7 5700X3D 8-Core Processor",
+      "runtime": "DXGI",
+      "duration": "15 s",
+      "capture_duration": "20 s",
+      "frame_count": 60,
+      "metric_count": 7
+    },
+    "effective_gpu_threshold": 44,
+    "metrics": [
+      {
+        "id": "fps",
+        "label": "FPS (Calculated)",
+        "unit": "FPS",
+        "higher_is_better": true,
+        "points": [
+          [
+            0.0,
+            123.4567901234568
+          ],
+          [
+            1.0,
+            121.95121951219514
+          ],
+          [
+            2.0,
+            120.48192771084337
+          ],
+          [
+            3.0,
+            119.04761904761904
+          ],
+          [
+            4.0,
+            117.6470588235294
+          ],
+          [
+            5.0,
+            116.27906976744187
+          ],
+          [
+            9.0,
+            111.11111111111111
+          ],
+          [
+            10.0,
+            109.8901098901099
+          ],
+          [
+            11.0,
+            108.69565217391305
+          ],
+          [
+            12.0,
+            107.5268817204301
+          ],
+          [
+            13.0,
+            106.38297872340425
+          ],
+          [
+            14.0,
+            105.26315789473684
+          ],
+          [
+            15.0,
+            104.16666666666667
+          ],
+          [
+            16.0,
+            103.09278350515464
+          ],
+          [
+            17.0,
+            102.0408163265306
+          ]
+        ],
+        "stats": {
+          "avg": 111.80225619980952,
+          "p1": 102.18809173153797,
+          "p01": 102.05554386703135,
+          "max": 123.4567901234568,
+          "min": 102.0408163265306
+        }
+      },
+      {
+        "id": "frametime",
+        "label": "Frame time",
+        "unit": "ms",
+        "higher_is_better": false,
+        "points": [
+          [
+            0.0,
+            8.1
+          ],
+          [
+            1.0,
+            8.2
+          ],
+          [
+            2.0,
+            8.3
+          ],
+          [
+            3.0,
+            8.4
+          ],
+          [
+            4.0,
+            8.5
+          ],
+          [
+            5.0,
+            8.6
+          ],
+          [
+            9.0,
+            9.0
+          ],
+          [
+            10.0,
+            9.1
+          ],
+          [
+            11.0,
+            9.2
+          ],
+          [
+            12.0,
+            9.3
+          ],
+          [
+            13.0,
+            9.4
+          ],
+          [
+            14.0,
+            9.5
+          ],
+          [
+            15.0,
+            9.6
+          ],
+          [
+            16.0,
+            9.7
+          ],
+          [
+            17.0,
+            9.8
+          ]
+        ],
+        "stats": {
+          "avg": 8.979999999999999,
+          "p1": 9.786,
+          "p01": 9.7986,
+          "max": 9.8,
+          "min": 8.1
+        }
+      },
+      {
+        "id": "latency",
+        "label": "PC Latency",
+        "unit": "ms",
+        "higher_is_better": false,
+        "points": [
+          [
+            0.0,
+            20.5
+          ],
+          [
+            1.0,
+            21.0
+          ],
+          [
+            2.0,
+            21.5
+          ],
+          [
+            3.0,
+            22.0
+          ],
+          [
+            4.0,
+            22.5
+          ],
+          [
+            5.0,
+            23.0
+          ],
+          [
+            9.0,
+            25.0
+          ],
+          [
+            10.0,
+            25.5
+          ],
+          [
+            11.0,
+            26.0
+          ],
+          [
+            12.0,
+            26.5
+          ],
+          [
+            13.0,
+            27.0
+          ],
+          [
+            14.0,
+            27.5
+          ],
+          [
+            15.0,
+            28.0
+          ],
+          [
+            16.0,
+            28.5
+          ],
+          [
+            17.0,
+            29.0
+          ]
+        ],
+        "stats": {
+          "avg": 24.9,
+          "p1": 28.93,
+          "p01": 28.993000000000002,
+          "max": 29.0,
+          "min": 20.5
+        }
+      },
+      {
+        "id": "gpu0_util",
+        "label": "GPU0 Utilization",
+        "unit": "%",
+        "higher_is_better": null,
+        "points": [
+          [
+            0.0,
+            80.0
+          ],
+          [
+            1.0,
+            80.0
+          ],
+          [
+            2.0,
+            80.0
+          ],
+          [
+            3.0,
+            80.0
+          ],
+          [
+            4.0,
+            80.0
+          ],
+          [
+            5.0,
+            80.0
+          ],
+          [
+            9.0,
+            80.0
+          ],
+          [
+            10.0,
+            80.0
+          ],
+          [
+            11.0,
+            80.0
+          ],
+          [
+            12.0,
+            80.0
+          ],
+          [
+            13.0,
+            80.0
+          ],
+          [
+            14.0,
+            80.0
+          ],
+          [
+            15.0,
+            80.0
+          ],
+          [
+            16.0,
+            80.0
+          ],
+          [
+            17.0,
+            80.0
+          ]
+        ],
+        "stats": {
+          "avg": 80.0,
+          "max": 80.0,
+          "min": 80.0
+        }
+      },
+      {
+        "id": "gpu0_temp",
+        "label": "GPU0 Temperature",
+        "unit": "\u00b0C",
+        "higher_is_better": false,
+        "points": [
+          [
+            0.0,
+            56.0
+          ],
+          [
+            1.0,
+            57.0
+          ],
+          [
+            2.0,
+            58.0
+          ],
+          [
+            3.0,
+            59.0
+          ],
+          [
+            4.0,
+            60.0
+          ],
+          [
+            5.0,
+            61.0
+          ],
+          [
+            9.0,
+            65.0
+          ],
+          [
+            10.0,
+            66.0
+          ],
+          [
+            11.0,
+            67.0
+          ],
+          [
+            12.0,
+            68.0
+          ],
+          [
+            13.0,
+            69.0
+          ],
+          [
+            14.0,
+            70.0
+          ],
+          [
+            15.0,
+            71.0
+          ],
+          [
+            16.0,
+            72.0
+          ],
+          [
+            17.0,
+            73.0
+          ]
+        ],
+        "stats": {
+          "avg": 64.8,
+          "max": 73.0,
+          "min": 56.0
+        }
+      },
+      {
+        "id": "nv_power",
+        "label": "NV GPU Power",
+        "unit": "W",
+        "higher_is_better": false,
+        "points": [
+          [
+            0.0,
+            192.0
+          ],
+          [
+            1.0,
+            194.0
+          ],
+          [
+            2.0,
+            196.0
+          ],
+          [
+            3.0,
+            198.0
+          ],
+          [
+            4.0,
+            200.0
+          ],
+          [
+            5.0,
+            202.0
+          ],
+          [
+            9.0,
+            210.0
+          ],
+          [
+            10.0,
+            212.0
+          ],
+          [
+            11.0,
+            214.0
+          ],
+          [
+            12.0,
+            216.0
+          ],
+          [
+            13.0,
+            218.0
+          ],
+          [
+            14.0,
+            220.0
+          ],
+          [
+            15.0,
+            222.0
+          ],
+          [
+            16.0,
+            224.0
+          ],
+          [
+            17.0,
+            226.0
+          ]
+        ],
+        "stats": {
+          "avg": 209.6,
+          "p1": 192.28,
+          "p01": 192.028,
+          "max": 226.0,
+          "min": 192.0
+        }
+      },
+      {
+        "id": "cpu_util",
+        "label": "CPU Utilization",
+        "unit": "%",
+        "higher_is_better": null,
+        "points": [
+          [
+            0.0,
+            41.0
+          ],
+          [
+            1.0,
+            42.0
+          ],
+          [
+            2.0,
+            43.0
+          ],
+          [
+            3.0,
+            44.0
+          ],
+          [
+            4.0,
+            45.0
+          ],
+          [
+            5.0,
+            46.0
+          ],
+          [
+            9.0,
+            43.0
+          ],
+          [
+            10.0,
+            44.0
+          ],
+          [
+            11.0,
+            45.0
+          ],
+          [
+            12.0,
+            46.0
+          ],
+          [
+            13.0,
+            40.0
+          ],
+          [
+            14.0,
+            41.0
+          ],
+          [
+            15.0,
+            42.0
+          ],
+          [
+            16.0,
+            43.0
+          ],
+          [
+            17.0,
+            44.0
+          ]
+        ],
+        "stats": {
+          "avg": 43.266666666666666,
+          "max": 46.0,
+          "min": 40.0
+        }
+      }
+    ]
+  },
+  "comparison_rows": [
+    {
+      "metric_id": "fps",
+      "statistic_key": "avg",
+      "base_value": 91.31647297167692,
+      "comparison_value": 111.80225619980952,
+      "delta": 20.485783228132604,
+      "delta_percent": 22.433831007124596,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "fps",
+      "statistic_key": "p1",
+      "base_value": 84.84716789801534,
+      "comparison_value": 102.18809173153797,
+      "delta": 17.340923833522623,
+      "delta_percent": 20.437834594981506,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "fps",
+      "statistic_key": "p01",
+      "base_value": 84.75590323047948,
+      "comparison_value": 102.05554386703135,
+      "delta": 17.29964063655187,
+      "delta_percent": 20.411133593265355,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "fps",
+      "statistic_key": "max",
+      "base_value": 99.00990099009901,
+      "comparison_value": 123.4567901234568,
+      "delta": 24.446889133357786,
+      "delta_percent": 24.69135802469136,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "fps",
+      "statistic_key": "min",
+      "base_value": 84.74576271186439,
+      "comparison_value": 102.0408163265306,
+      "delta": 17.295053614666216,
+      "delta_percent": 20.40816326530614,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "frametime",
+      "statistic_key": "avg",
+      "base_value": 10.979999999999999,
+      "comparison_value": 8.979999999999999,
+      "delta": -2.0,
+      "delta_percent": -18.214936247723134,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "frametime",
+      "statistic_key": "p1",
+      "base_value": 11.786000000000001,
+      "comparison_value": 9.786,
+      "delta": -2.0000000000000018,
+      "delta_percent": -16.969285593076545,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "frametime",
+      "statistic_key": "p01",
+      "base_value": 11.798600000000002,
+      "comparison_value": 9.7986,
+      "delta": -2.0000000000000018,
+      "delta_percent": -16.951163697387837,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "frametime",
+      "statistic_key": "max",
+      "base_value": 11.800000000000002,
+      "comparison_value": 9.8,
+      "delta": -2.0000000000000018,
+      "delta_percent": -16.949152542372893,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "frametime",
+      "statistic_key": "min",
+      "base_value": 10.1,
+      "comparison_value": 8.1,
+      "delta": -2.0,
+      "delta_percent": -19.801980198019802,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "latency",
+      "statistic_key": "avg",
+      "base_value": 24.9,
+      "comparison_value": 24.9,
+      "delta": 0.0,
+      "delta_percent": 0.0,
+      "kind": null
+    },
+    {
+      "metric_id": "latency",
+      "statistic_key": "p1",
+      "base_value": 28.93,
+      "comparison_value": 28.93,
+      "delta": 0.0,
+      "delta_percent": 0.0,
+      "kind": null
+    },
+    {
+      "metric_id": "latency",
+      "statistic_key": "p01",
+      "base_value": 28.993000000000002,
+      "comparison_value": 28.993000000000002,
+      "delta": 0.0,
+      "delta_percent": 0.0,
+      "kind": null
+    },
+    {
+      "metric_id": "latency",
+      "statistic_key": "max",
+      "base_value": 29.0,
+      "comparison_value": 29.0,
+      "delta": 0.0,
+      "delta_percent": 0.0,
+      "kind": null
+    },
+    {
+      "metric_id": "latency",
+      "statistic_key": "min",
+      "base_value": 20.5,
+      "comparison_value": 20.5,
+      "delta": 0.0,
+      "delta_percent": 0.0,
+      "kind": null
+    },
+    {
+      "metric_id": "gpu0_util",
+      "statistic_key": "avg",
+      "base_value": 80.0,
+      "comparison_value": 80.0,
+      "delta": 0.0,
+      "delta_percent": 0.0,
+      "kind": null
+    },
+    {
+      "metric_id": "gpu0_util",
+      "statistic_key": "max",
+      "base_value": 80.0,
+      "comparison_value": 80.0,
+      "delta": 0.0,
+      "delta_percent": 0.0,
+      "kind": null
+    },
+    {
+      "metric_id": "gpu0_util",
+      "statistic_key": "min",
+      "base_value": 80.0,
+      "comparison_value": 80.0,
+      "delta": 0.0,
+      "delta_percent": 0.0,
+      "kind": null
+    },
+    {
+      "metric_id": "gpu0_temp",
+      "statistic_key": "avg",
+      "base_value": 59.8,
+      "comparison_value": 64.8,
+      "delta": 5.0,
+      "delta_percent": 8.361204013377927,
+      "kind": "regression"
+    },
+    {
+      "metric_id": "gpu0_temp",
+      "statistic_key": "max",
+      "base_value": 68.0,
+      "comparison_value": 73.0,
+      "delta": 5.0,
+      "delta_percent": 7.352941176470589,
+      "kind": "regression"
+    },
+    {
+      "metric_id": "gpu0_temp",
+      "statistic_key": "min",
+      "base_value": 51.0,
+      "comparison_value": 56.0,
+      "delta": 5.0,
+      "delta_percent": 9.803921568627452,
+      "kind": "regression"
+    },
+    {
+      "metric_id": "nv_power",
+      "statistic_key": "avg",
+      "base_value": 219.6,
+      "comparison_value": 209.6,
+      "delta": -10.0,
+      "delta_percent": -4.553734061930784,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "nv_power",
+      "statistic_key": "p1",
+      "base_value": 202.28,
+      "comparison_value": 192.28,
+      "delta": -10.0,
+      "delta_percent": -4.943642475776152,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "nv_power",
+      "statistic_key": "p01",
+      "base_value": 202.028,
+      "comparison_value": 192.028,
+      "delta": -10.0,
+      "delta_percent": -4.949808937375018,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "nv_power",
+      "statistic_key": "max",
+      "base_value": 236.0,
+      "comparison_value": 226.0,
+      "delta": -10.0,
+      "delta_percent": -4.23728813559322,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "nv_power",
+      "statistic_key": "min",
+      "base_value": 202.0,
+      "comparison_value": 192.0,
+      "delta": -10.0,
+      "delta_percent": -4.9504950495049505,
+      "kind": "improvement"
+    },
+    {
+      "metric_id": "cpu_util",
+      "statistic_key": "avg",
+      "base_value": 43.266666666666666,
+      "comparison_value": 43.266666666666666,
+      "delta": 0.0,
+      "delta_percent": 0.0,
+      "kind": null
+    },
+    {
+      "metric_id": "cpu_util",
+      "statistic_key": "max",
+      "base_value": 46.0,
+      "comparison_value": 46.0,
+      "delta": 0.0,
+      "delta_percent": 0.0,
+      "kind": null
+    },
+    {
+      "metric_id": "cpu_util",
+      "statistic_key": "min",
+      "base_value": 40.0,
+      "comparison_value": 40.0,
+      "delta": 0.0,
+      "delta_percent": 0.0,
+      "kind": null
+    }
+  ]
+}
