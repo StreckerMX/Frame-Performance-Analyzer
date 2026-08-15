@@ -40,7 +40,7 @@ public class ChartViewModelTests
     public void Load_populates_metrics_and_selects_fps()
     {
         var session = SessionOf([10.0, 10.0, 10.0, 10.0]);
-        var viewModel = new ChartViewModel(Analysis);
+        var viewModel = new ChartViewModel();
 
         viewModel.Load(session);
 
@@ -55,7 +55,7 @@ public class ChartViewModelTests
     public void Selecting_a_metric_rebuilds_the_series()
     {
         var session = SessionOf([10.0, 10.0, 10.0, 10.0]);
-        var viewModel = new ChartViewModel(Analysis);
+        var viewModel = new ChartViewModel();
         viewModel.Load(session);
 
         viewModel.SelectedMetric = viewModel.Metrics.Single(metric => metric.Id == "frametime");
@@ -68,7 +68,7 @@ public class ChartViewModelTests
     [Fact]
     public void Clear_resets_all_chart_state()
     {
-        var viewModel = new ChartViewModel(Analysis);
+        var viewModel = new ChartViewModel();
         viewModel.Load(SessionOf([10.0, 10.0, 10.0, 10.0]));
 
         viewModel.Clear();
@@ -99,7 +99,7 @@ public class ChartViewModelTests
         var session = Analysis.Analyze(
             capture,
             new AnalysisOptions(GpuThreshold: 10, TrimBufferSeconds: 0, AutoGpuThreshold: false));
-        var viewModel = new ChartViewModel(Analysis);
+        var viewModel = new ChartViewModel();
 
         viewModel.Load(session);
 

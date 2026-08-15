@@ -40,7 +40,8 @@ public static class ChartPlotBuilder
         MetricDefinition metric,
         IReadOnlyList<MetricSeries> seriesList,
         ChartStyle style,
-        int pointBudget)
+        int pointBudget,
+        bool showMarkers = false)
     {
         plot.Clear();
 
@@ -74,6 +75,8 @@ public static class ChartPlotBuilder
                 signal.Color = color;
                 signal.LineWidth = 2.15f;
                 signal.LegendText = series.LabelOrDefault;
+                signal.MarkerSize = showMarkers ? 4f : 0f;
+                signal.MarkerColor = color;
             }
             else
             {
@@ -81,6 +84,8 @@ public static class ChartPlotBuilder
                 scatter.Color = color;
                 scatter.LineWidth = index == 0 ? 2.15f : 1.8f;
                 scatter.LegendText = series.LabelOrDefault;
+                scatter.MarkerSize = showMarkers ? 4f : 0f;
+                scatter.MarkerColor = color;
             }
 
             var average = FrameViewAnalyzer.Core.Math.Statistics.Mean(series.Y);

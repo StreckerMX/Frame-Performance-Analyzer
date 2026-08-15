@@ -71,7 +71,7 @@ public class MainWindowViewModelTests
         var viewModel = new MainWindowViewModel(
             settings,
             themes,
-            new ChartViewModel(analysis),
+            new ChartViewModel(),
             reader,
             analysis,
             dialogs);

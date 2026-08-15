@@ -57,4 +57,21 @@ public class DisplayTextTests
     {
         Assert.Equal(expected, DisplayText.FormatDurationHuman(seconds));
     }
+
+    [Theory]
+    [InlineData(null, "--")]
+    [InlineData(12.34, "12.3")]
+    [InlineData(99.9, "99.9")]
+    [InlineData(150.0, "150")]
+    [InlineData(1234.5, "1,234")]
+    public void FormatStat_follows_the_python_precision_rules(double? value, string expected)
+    {
+        Assert.Equal(expected, DisplayText.FormatStat(value));
+    }
+
+    [Fact]
+    public void FormatStat_appends_the_unit()
+    {
+        Assert.Equal("12.3 W", DisplayText.FormatStat(12.34, "W"));
+    }
 }

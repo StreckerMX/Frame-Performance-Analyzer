@@ -1,5 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
 
@@ -24,29 +26,56 @@ public partial class MainWindow : Window
         SourceInitialized += (_, _) => _placement.Restore(this);
         Closing += (_, _) => _placement.Save(this);
 
-        // Presentation glue: forward chart data changes and theme switches.
+        // Presentation glue: forward chart data, interaction toggles, and
+        // view-range changes; refresh the chart style on theme switches.
         viewModel.Chart.PropertyChanged += OnChartPropertyChanged;
+        ChartView.ViewChanged += bounds => viewModel.Chart.UpdateVisibleRange(bounds);
         themes.Changed += (_, _) => ChartView.RefreshStyle();
         OnChartPropertyChanged(this, new PropertyChangedEventArgs(nameof(ChartViewModel.Series)));
+        SyncInteractions();
     }
 
     private void OnChartPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(ChartViewModel.Series)
-            && e.PropertyName != nameof(ChartViewModel.HasData))
+        if (e.PropertyName == nameof(ChartViewModel.Series)
+            || e.PropertyName == nameof(ChartViewModel.HasData))
         {
-            return;
+            if (_viewModel.Chart.HasData
+                && _viewModel.Chart.SelectedMetric is not null
+                && _viewModel.Chart.Series is not null)
+            {
+                ChartView.ShowData(_viewModel.Chart.SelectedMetric, _viewModel.Chart.Series);
+                SyncInteractions();
+            }
+            else
+            {
+                ChartView.Clear();
+            }
         }
+        else if (e.PropertyName == nameof(ChartViewModel.MarkersVisible)
+                 || e.PropertyName == nameof(ChartViewModel.WheelZoomEnabled)
+                 || e.PropertyName == nameof(ChartViewModel.PanEnabled))
+        {
+            SyncInteractions();
+        }
+    }
 
-        if (_viewModel.Chart.HasData
-            && _viewModel.Chart.SelectedMetric is not null
-            && _viewModel.Chart.Series is not null)
+    private void SyncInteractions() => ChartView.ApplyInteractions(
+        _viewModel.Chart.WheelZoomEnabled,
+        _viewModel.Chart.PanEnabled,
+        _viewModel.Chart.MarkersVisible);
+
+    private void ResetZoom_Click(object sender, RoutedEventArgs e) => ChartView.ResetZoom();
+
+    private void AutoZoom_Click(object sender, RoutedEventArgs e) => ChartView.AutoZoom();
+
+    private void MetricSelector_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        // Windows convention: positive delta scrolls up (previous metric).
+        var direction = e.Delta > 0 ? -1 : 1;
+        if (_viewModel.Chart.StepSelectedMetric(direction))
         {
-            ChartView.ShowData(_viewModel.Chart.SelectedMetric, _viewModel.Chart.Series);
-        }
-        else
-        {
-            ChartView.Clear();
+            e.Handled = true;
         }
     }
 }

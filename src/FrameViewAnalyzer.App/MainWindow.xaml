@@ -79,30 +79,98 @@
         <Grid Grid.Row="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
+            <!-- Visible-range statistics strip -->
+            <Border Grid.Row="0"
+                    Margin="0,0,0,8"
+                    Background="{DynamicResource CardBrush}"
+                    BorderBrush="{DynamicResource CardBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="12,10">
+                <UniformGrid Columns="6">
+                    <StackPanel Margin="0,0,16,0">
+                        <TextBlock Text="AVERAGE FPS" FontSize="{DynamicResource FontSize.Tiny}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="{Binding Chart.AvgFpsText}" FontSize="{DynamicResource FontSize.Display}" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,16,0">
+                        <TextBlock Text="1% LOW" FontSize="{DynamicResource FontSize.Tiny}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="{Binding Chart.P1FpsText}" FontSize="{DynamicResource FontSize.Display}" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,16,0">
+                        <TextBlock Text="0.1% LOW" FontSize="{DynamicResource FontSize.Tiny}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="{Binding Chart.P01FpsText}" FontSize="{DynamicResource FontSize.Display}" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,16,0">
+                        <TextBlock Text="MAXIMUM" FontSize="{DynamicResource FontSize.Tiny}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="{Binding Chart.MaxFpsText}" FontSize="{DynamicResource FontSize.Display}" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,16,0">
+                        <TextBlock Text="MINIMUM" FontSize="{DynamicResource FontSize.Tiny}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="{Binding Chart.MinFpsText}" FontSize="{DynamicResource FontSize.Display}" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="VISIBLE TIME" FontSize="{DynamicResource FontSize.Tiny}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="{Binding Chart.VisibleTimeText}" FontSize="{DynamicResource FontSize.Display}" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                    </StackPanel>
+                </UniformGrid>
+            </Border>
+
             <!-- Chart toolbar -->
-            <Grid Grid.Row="0" Margin="0,0,0,8">
+            <Grid Grid.Row="1" Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Button Grid.Column="0"
                         Content="Load capture..."
                         Command="{Binding LoadCaptureCommand}"
                         Style="{StaticResource PrimaryButtonStyle}" />
                 <ComboBox Grid.Column="1"
+                          x:Name="MetricSelector"
                           MinWidth="220"
                           Margin="10,0,0,0"
                           ItemsSource="{Binding Chart.Metrics}"
                           SelectedItem="{Binding Chart.SelectedMetric}"
                           DisplayMemberPath="Label"
+                          PreviewMouseWheel="MetricSelector_PreviewMouseWheel"
                           FontSize="{DynamicResource FontSize.Body}" />
+                <ToggleButton Grid.Column="2"
+                              Margin="10,0,0,0"
+                              Content="Data points"
+                              IsChecked="{Binding Chart.MarkersVisible}"
+                              Style="{StaticResource ToggleButtonStyle}" />
+                <ToggleButton Grid.Column="3"
+                              Margin="8,0,0,0"
+                              Content="Wheel zoom"
+                              IsChecked="{Binding Chart.WheelZoomEnabled}"
+                              Style="{StaticResource ToggleButtonStyle}" />
+                <ToggleButton Grid.Column="4"
+                              Margin="8,0,0,0"
+                              Content="Drag pan"
+                              IsChecked="{Binding Chart.PanEnabled}"
+                              Style="{StaticResource ToggleButtonStyle}" />
+                <Button Grid.Column="6"
+                        Content="Reset zoom"
+                        Click="ResetZoom_Click"
+                        Style="{StaticResource GhostButtonStyle}" />
+                <Button Grid.Column="7"
+                        Margin="8,0,0,0"
+                        Content="Auto zoom"
+                        Click="AutoZoom_Click"
+                        Style="{StaticResource GhostButtonStyle}" />
             </Grid>
 
-            <Border Grid.Row="1"
+            <Border Grid.Row="2"
                     Background="{DynamicResource CardBrush}"
                     BorderBrush="{DynamicResource CardBorderBrush}"
                     BorderThickness="1"
