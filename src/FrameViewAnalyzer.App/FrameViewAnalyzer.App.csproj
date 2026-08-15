@@ -9,6 +9,7 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+    <PackageReference Include="ScottPlot.WPF" Version="5.1.59" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -18,6 +19,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>assets\frameview-analyzer.ico</ApplicationIcon>
+    <!-- ScottPlot.WPF transitively references SkiaSharp.Views.WPF, whose
+         latest 3.x package targets .NET Framework only. The wrapper loads
+         fine on modern .NET WPF (standard ScottPlot setup); suppress the
+         compatibility warning just for this package line. -->
+    <NoWarn>$(NoWarn);NU1701</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

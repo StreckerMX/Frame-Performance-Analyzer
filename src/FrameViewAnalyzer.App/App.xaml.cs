@@ -28,6 +28,8 @@ public partial class App : Application
         services.AddSingleton<ISettingsStore>(_ => new JsonSettingsStore());
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IWindowPlacementService, WindowPlacementService>();
+        services.AddSingleton<IDialogService, DialogService>();
+        services.AddSingleton<ChartViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
         _services = services.BuildServiceProvider();
