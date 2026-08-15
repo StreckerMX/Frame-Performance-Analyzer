@@ -257,4 +257,27 @@ public partial class ChartViewModel : ObservableObject
 
         HasData = hasData;
     }
+
+    /// <summary>
+    /// Base/comparison points for the selected metric, in the ChartPoint
+    /// shape consumed by the Analyze range calculations.
+    /// </summary>
+    public (IReadOnlyList<ChartPoint> Base, IReadOnlyList<ChartPoint> Comparison) CurrentPoints() =>
+        (ToPoints(Series), ToPoints(ComparisonSeries));
+
+    public static IReadOnlyList<ChartPoint> ToPoints(MetricSeries? series)
+    {
+        if (series is null || series.X.Length == 0)
+        {
+            return [];
+        }
+
+        var points = new ChartPoint[series.X.Length];
+        for (var index = 0; index < points.Length; index++)
+        {
+            points[index] = new ChartPoint(series.X[index], series.Y[index]);
+        }
+
+        return points;
+    }
 }

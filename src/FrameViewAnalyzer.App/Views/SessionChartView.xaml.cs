@@ -126,6 +126,47 @@ public partial class SessionChartView : UserControl
         NotifyViewChanged();
     }
 
+    /// <summary>
+    /// Jumps the visible range to a time window (Analyze actions). The window
+    /// is clamped to the full range and very short targets are padded to a
+    /// one-second span so the zoom always lands, like the Python reference.
+    /// </summary>
+    public void ZoomToRange(double minimum, double maximum)
+    {
+        if (_metric is null || _seriesList.Count == 0)
+        {
+            return;
+        }
+
+        if (maximum - minimum < 1.0)
+        {
+            var midpoint = (minimum + maximum) / 2.0;
+            minimum = midpoint - 0.5;
+            maximum = midpoint + 0.5;
+        }
+
+        minimum = System.Math.Max(minimum, _fullLimits.Left);
+        maximum = System.Math.Min(maximum, _fullLimits.Right);
+
+        var current = ChartHost.Plot.Axes.GetLimits();
+        var baseSeries = _seriesList[0];
+        var values = FrameViewAnalyzer.Analytics.Statistics.VisibleRangeCalculator.FilterValues(
+            baseSeries.X, baseSeries.Y, minimum, maximum);
+        var next = values.Count > 0
+            ? ChartViewport.FitY(
+                new AxisLimits(minimum, maximum, current.Bottom, current.Top),
+                values.Min(),
+                values.Max(),
+                _metric.Id == "fps")
+            : new AxisLimits(minimum, maximum, current.Bottom, current.Top);
+
+        _suppressViewChanged = true;
+        ChartHost.Plot.Axes.SetLimits(next);
+        ChartHost.Refresh();
+        _suppressViewChanged = false;
+        NotifyViewChanged();
+    }
+
     private void Render()
     {
         if (_metric is null || _seriesList.Count == 0)

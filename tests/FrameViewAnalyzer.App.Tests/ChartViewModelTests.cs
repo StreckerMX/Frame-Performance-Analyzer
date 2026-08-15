@@ -1,5 +1,7 @@
 using FrameViewAnalyzer.Analytics;
+using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.App.ViewModels;
+using FrameViewAnalyzer.Core.Metrics;
 using FrameViewAnalyzer.Core.Models;
 
 namespace FrameViewAnalyzer.App.Tests;
@@ -176,5 +178,20 @@ public class ChartViewModelTests
         var averageTile = viewModel.KpiTiles[0];
         Assert.Equal(ImprovementKind.Improvement, averageTile.Kind);
         Assert.Equal("▲ +100.0%", averageTile.DeltaText);
+    }
+
+    [Fact]
+    public void To_points_converts_series_and_handles_missing_series()
+    {
+        var series = new MetricSeries(
+            CoreMetricCatalog.CoreById["fps"],
+            [0.0, 1.0, 2.0],
+            [100.0, 120.0, 90.0]);
+
+        var points = ChartViewModel.ToPoints(series);
+
+        Assert.Equal(3, points.Count);
+        Assert.Equal(new ChartPoint(1.0, 120.0), points[1]);
+        Assert.Empty(ChartViewModel.ToPoints(null));
     }
 }

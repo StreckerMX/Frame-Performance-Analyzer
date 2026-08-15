@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Comparison;
+using FrameViewAnalyzer.Analytics.RangeAnalysis;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.Infrastructure.Csv;
@@ -25,6 +26,7 @@ public partial class App : Application
         services.AddSingleton<IFrameViewCsvReader, FrameViewCsvReader>();
         services.AddSingleton<ICaptureAnalysisService, CaptureAnalysisService>();
         services.AddSingleton<IComparisonService, ComparisonService>();
+        services.AddSingleton<IRangeAnalysisService, RangeAnalysisService>();
         services.AddSingleton<ISettingsStore>(_ => new JsonSettingsStore());
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IWindowPlacementService, WindowPlacementService>();

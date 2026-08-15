@@ -1,11 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FrameViewAnalyzer.Analytics;
+using FrameViewAnalyzer.Analytics.RangeAnalysis;
 using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Core.Formatting;
 using FrameViewAnalyzer.Core.Math;
+using FrameViewAnalyzer.Core.Models;
 using FrameViewAnalyzer.Infrastructure.Csv;
 using FrameViewAnalyzer.Infrastructure.Stores;
 
@@ -22,6 +24,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IFrameViewCsvReader _reader;
     private readonly ICaptureAnalysisService _analysis;
     private readonly IDialogService _dialogs;
+    private readonly IRangeAnalysisService _rangeAnalysis;
 
     [ObservableProperty]
     private string _appearanceMode = "dark";
@@ -40,6 +43,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private SessionAnalysis? _comparisonSession;
+
+    [ObservableProperty]
+    private bool _hasComparison;
 
     [ObservableProperty]
     private string _baseSessionName = "No capture loaded";
@@ -64,6 +70,12 @@ public partial class MainWindowViewModel : ObservableObject
 
     public ChartViewModel Chart { get; }
 
+    /// <summary>
+    /// Raised when an Analyze action wants the chart to jump somewhere; a
+    /// null range means "Full capture" (reset to the complete series).
+    /// </summary>
+    public event EventHandler<TimeRange?>? AnalyzeRangeRequested;
+
     public string VersionText => "FrameView Analyzer v2";
 
     public MainWindowViewModel(
@@ -72,6 +84,7 @@ public partial class MainWindowViewModel : ObservableObject
         ChartViewModel chart,
         IFrameViewCsvReader reader,
         ICaptureAnalysisService analysis,
+        IRangeAnalysisService rangeAnalysis,
         IDialogService dialogs)
     {
         _settings = settings;
@@ -79,6 +92,7 @@ public partial class MainWindowViewModel : ObservableObject
         _reader = reader;
         _analysis = analysis;
         _dialogs = dialogs;
+        _rangeAnalysis = rangeAnalysis;
         Chart = chart;
 
         var mode = Normalize(settings.Load().AppearanceMode);
@@ -247,7 +261,115 @@ public partial class MainWindowViewModel : ObservableObject
                     $"{baseAverage:F0} → {comparisonAverage:F0} FPS  {sign}{deltaPercent:F1}%";
             }
         }
+
+        HasComparison = ComparisonSession is not null;
     }
+
+    [RelayCommand]
+    private void AnalyzeFullCapture()
+    {
+        if (!Chart.HasData)
+        {
+            return;
+        }
+
+        AnalyzeRangeRequested?.Invoke(this, null);
+    }
+
+    [RelayCommand]
+    private void AnalyzeWorstRegion()
+    {
+        if (!Chart.HasData)
+        {
+            return;
+        }
+
+        if (DirectionOf() is not { } higherIsBetter)
+        {
+            _dialogs.ShowInfo(
+                "Analyze",
+                "This metric has no defined performance direction, so a "
+                + "worst region cannot be determined.");
+            return;
+        }
+
+        var result = _rangeAnalysis.WorstPerformanceRegion(Chart.CurrentPoints().Base, higherIsBetter);
+        ApplyAnalyzeRange(result, "Not enough valid data to find a 10-second worst-performance region.");
+    }
+
+    [RelayCommand]
+    private void AnalyzeStableRegion()
+    {
+        if (!Chart.HasData)
+        {
+            return;
+        }
+
+        var result = _rangeAnalysis.MostStableRegion(Chart.CurrentPoints().Base);
+        ApplyAnalyzeRange(result, "Not enough valid data to find a stable 10-second region.");
+    }
+
+    [RelayCommand]
+    private void AnalyzeLargestDrop()
+    {
+        if (!Chart.HasData)
+        {
+            return;
+        }
+
+        if (DirectionOf() is not { } higherIsBetter)
+        {
+            _dialogs.ShowInfo(
+                "Analyze",
+                "This metric has no defined performance direction, so a "
+                + "performance drop cannot be determined.");
+            return;
+        }
+
+        var result = _rangeAnalysis.LargestDropRegion(Chart.CurrentPoints().Base, higherIsBetter);
+        ApplyAnalyzeRange(result, "No meaningful performance drop was found in this capture.");
+    }
+
+    [RelayCommand]
+    private void AnalyzeLargestAbDifference()
+    {
+        if (!Chart.HasData)
+        {
+            return;
+        }
+
+        var points = Chart.CurrentPoints();
+        if (points.Comparison.Count == 0)
+        {
+            _dialogs.ShowInfo(
+                "Analyze",
+                "Load a comparison session to analyze A/B differences.");
+            return;
+        }
+
+        var result = _rangeAnalysis.LargestAbDifferenceRegion(points.Base, points.Comparison);
+        ApplyAnalyzeRange(
+            result,
+            "The sessions do not overlap enough to measure a meaningful A/B difference.");
+    }
+
+    private void ApplyAnalyzeRange(TimeRange? result, string emptyMessage)
+    {
+        if (result is null)
+        {
+            _dialogs.ShowInfo("Analyze", emptyMessage);
+            return;
+        }
+
+        AnalyzeRangeRequested?.Invoke(this, result);
+    }
+
+    private bool? DirectionOf() => Chart.SelectedMetric?.Direction switch
+    {
+        MetricDirection.HigherIsBetter => true,
+        MetricDirection.LowerIsBetter => false,
+        _ => null,
+    };
 
     private static string GameNameOf(SessionAnalysis session)
     {
