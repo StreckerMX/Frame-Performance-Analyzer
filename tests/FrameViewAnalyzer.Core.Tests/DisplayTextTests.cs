@@ -35,4 +35,26 @@ public class DisplayTextTests
     {
         Assert.Equal(expected, DisplayText.FormatDuration(seconds));
     }
+
+    [Theory]
+    [InlineData(0.0, "0 s")]
+    [InlineData(45.0, "45 s")]
+    [InlineData(60.0, "1 min")]
+    [InlineData(300.0, "5 min")]
+    [InlineData(90.0, "1 min 30 s")]
+    [InlineData(150.0, "2 min 30 s")]
+    [InlineData(3599.0, "59 min 59 s")]
+    [InlineData(3600.0, "1 h")]
+    [InlineData(7200.0, "2 h")]
+    [InlineData(3660.0, "1 h 1 min")]
+    [InlineData(4380.0, "1 h 13 min")]
+    [InlineData(4385.0, "1 h 13 min 5 s")]
+    [InlineData(89.6, "1 min 30 s")]
+    [InlineData(59.4, "59 s")]
+    [InlineData(double.PositiveInfinity, "0 s")]
+    [InlineData(-10.0, "0 s")]
+    public void FormatDurationHuman_renders_human_durations(double seconds, string expected)
+    {
+        Assert.Equal(expected, DisplayText.FormatDurationHuman(seconds));
+    }
 }

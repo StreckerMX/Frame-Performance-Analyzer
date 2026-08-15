@@ -1,11 +1,12 @@
 using FrameViewAnalyzer.Core.Models;
 using FrameViewAnalyzer.Core.Text;
 
-namespace FrameViewAnalyzer.Infrastructure.Csv;
+namespace FrameViewAnalyzer.Core.Metrics;
 
 /// <summary>
-/// Column-level numeric detection. Unparseable samples disqualify a column;
-/// NA and non-finite samples are skipped, mirroring the Python reference.
+/// Column-level numeric detection over a CaptureData. Unparseable samples
+/// disqualify a column; NA and non-finite samples are skipped, mirroring the
+/// Python reference.
 /// </summary>
 public static class ColumnInspector
 {
@@ -17,7 +18,7 @@ public static class ColumnInspector
         }
 
         var column = capture.Columns[columnIndex];
-        var limit = Math.Min(sampleSize, column.Length);
+        var limit = System.Math.Min(sampleSize, column.Length);
         var checkedRows = 0;
         var numericHits = 0;
 

@@ -1,7 +1,7 @@
+using FrameViewAnalyzer.Core.Metrics;
 using FrameViewAnalyzer.Core.Models;
-using FrameViewAnalyzer.Infrastructure.Csv;
 
-namespace FrameViewAnalyzer.Infrastructure.Tests;
+namespace FrameViewAnalyzer.Core.Tests;
 
 public class ColumnInspectorTests
 {

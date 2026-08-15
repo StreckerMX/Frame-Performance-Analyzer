@@ -51,9 +51,45 @@ public static partial class DisplayText
             return "--";
         }
 
-        var total = (long)Math.Round(seconds.Value, MidpointRounding.ToEven);
+        var total = (long)System.Math.Round(seconds.Value, MidpointRounding.ToEven);
         var minutes = total / 60;
         var secs = total % 60;
         return minutes == 0 ? $"{secs} s" : $"{minutes} min {secs} s";
+    }
+
+    /// <summary>
+    /// Human-readable duration with hours/minutes/seconds and no zero units:
+    /// 45 → "45 s", 300 → "5 min", 4385 → "1 h 13 min 5 s". Non-finite or
+    /// negative input renders as "0 s".
+    /// </summary>
+    public static string FormatDurationHuman(double seconds)
+    {
+        var rounded = double.IsFinite(seconds)
+            ? (long)System.Math.Round(seconds, MidpointRounding.ToEven)
+            : 0;
+        var total = System.Math.Max(0, rounded);
+
+        var hours = total / 3600;
+        var remainder = total % 3600;
+        var minutes = remainder / 60;
+        var secs = remainder % 60;
+
+        var parts = new List<string>();
+        if (hours > 0)
+        {
+            parts.Add($"{hours.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} h");
+        }
+
+        if (minutes > 0)
+        {
+            parts.Add($"{minutes} min");
+        }
+
+        if (secs > 0 || parts.Count == 0)
+        {
+            parts.Add($"{secs} s");
+        }
+
+        return string.Join(" ", parts);
     }
 }
