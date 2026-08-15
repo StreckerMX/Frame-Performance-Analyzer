@@ -58,8 +58,19 @@
                            Margin="0,3,0,0" />
             </StackPanel>
 
-            <!-- Theme selector + Library -->
+            <!-- Theme selector + Library + Export -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="Export ▾"
+                        Margin="0,0,12,0"
+                        Style="{StaticResource GhostButtonStyle}">
+                    <Button.ContextMenu>
+                        <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                            <MenuItem Header="PNG report" Click="ExportPng_Click" />
+                            <MenuItem Header="Statistics CSV" Click="ExportCsv_Click" />
+                            <MenuItem Header="Benchmark data JSON" Click="ExportJson_Click" />
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
                 <Button Content="Library"
                         Margin="0,0,12,0"
                         Click="Library_Click"

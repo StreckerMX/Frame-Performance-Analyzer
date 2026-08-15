@@ -46,11 +46,19 @@ public class MainWindowViewModelTests
     {
         public string? NextCsvPath { get; set; }
 
+        public string? NextSavePath { get; set; }
+
+        public string? NextOpenPath { get; set; }
+
         public string? LastError { get; private set; }
 
         public string? LastInfo { get; private set; }
 
         public string? PickCsvFile(string? initialDirectory) => NextCsvPath;
+
+        public string? PickSaveFile(string? initialFile, string filter, string defaultExtension) => NextSavePath;
+
+        public string? PickOpenFile(string filter) => NextOpenPath;
 
         public void ShowError(string title, string message) => LastError = $"{title}: {message}";
 

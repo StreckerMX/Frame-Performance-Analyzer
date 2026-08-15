@@ -208,6 +208,8 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0"
                        Text="Pick one capture as Base and another as Comparison, or toggle A/B twice to compare."
@@ -215,11 +217,21 @@
                        Foreground="{DynamicResource MutedBrush}"
                        VerticalAlignment="Center" />
             <Button Grid.Column="1"
+                    Content="Export package"
+                    Margin="0,0,8,0"
+                    Click="ExportPackage_Click"
+                    Style="{StaticResource GhostButtonStyle}" />
+            <Button Grid.Column="2"
+                    Content="Import package"
+                    Margin="0,0,8,0"
+                    Click="ImportPackage_Click"
+                    Style="{StaticResource GhostButtonStyle}" />
+            <Button Grid.Column="3"
                     Content="Import legacy data"
                     Margin="0,0,8,0"
                     Click="ImportLegacy_Click"
                     Style="{StaticResource GhostButtonStyle}" />
-            <Button Grid.Column="2"
+            <Button Grid.Column="4"
                     Content="Close"
                     Click="Close_Click"
                     Style="{StaticResource SecondaryButtonStyle}" />

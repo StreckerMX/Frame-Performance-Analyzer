@@ -1,25 +1,43 @@
+using System.IO;
 using System.Windows;
+using FrameViewAnalyzer.Analytics;
+using FrameViewAnalyzer.Analytics.Exports;
+using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
+using FrameViewAnalyzer.Core.Models;
 using FrameViewAnalyzer.Infrastructure;
+using FrameViewAnalyzer.Infrastructure.Csv;
+using FrameViewAnalyzer.Infrastructure.Exports;
 using FrameViewAnalyzer.Infrastructure.Legacy;
 using FrameViewAnalyzer.Infrastructure.Stores;
 
 namespace FrameViewAnalyzer.App.Views;
 
 /// <summary>
-/// Benchmark Library browser: search, filters, sorting, A/B selection, and
-/// the recent-comparisons bar. Loading requests are forwarded to the owner.
+/// Benchmark Library browser: search, filters, sorting, A/B selection, the
+/// recent-comparisons bar, legacy import, and package export/import.
+/// Loading requests are forwarded to the owner.
 /// </summary>
 public partial class BenchmarkLibraryWindow : Window
 {
     private readonly BenchmarkLibraryViewModel _viewModel;
     private readonly ILegacyDataImporter _legacyImporter;
+    private readonly IExportService _exportService;
+    private readonly IDialogService _dialogs;
+    private readonly ILibraryStore _libraryStore;
+    private readonly IManualMetadataStore _manualStore;
+    private readonly IFrameViewCsvReader _reader;
+    private readonly ICaptureAnalysisService _analysis;
 
     public BenchmarkLibraryWindow(
         ILibraryStore libraryStore,
         IManualMetadataStore manualStore,
         CaptureFolderScanner scanner,
         ILegacyDataImporter legacyImporter,
+        IExportService exportService,
+        IDialogService dialogs,
+        IFrameViewCsvReader reader,
+        ICaptureAnalysisService analysis,
         string? captureDirectory = null)
     {
         InitializeComponent();
@@ -27,6 +45,12 @@ public partial class BenchmarkLibraryWindow : Window
         // inside a ScrollViewer and the footer stays visible.
         MaxHeight = SystemParameters.WorkArea.Height - 24;
         _legacyImporter = legacyImporter;
+        _exportService = exportService;
+        _dialogs = dialogs;
+        _libraryStore = libraryStore;
+        _manualStore = manualStore;
+        _reader = reader;
+        _analysis = analysis;
         _viewModel = new BenchmarkLibraryViewModel(libraryStore, manualStore, scanner, captureDirectory);
         DataContext = _viewModel;
 
@@ -55,5 +79,79 @@ public partial class BenchmarkLibraryWindow : Window
             "Legacy import",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
+    }
+
+    private async void ExportPackage_Click(object sender, RoutedEventArgs e)
+    {
+        var path = _dialogs.PickSaveFile(
+            "FrameView_benchmarks.json",
+            "JSON (*.json)|*.json",
+            ".json");
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var library = _libraryStore.Load();
+            var result = await _exportService.PreparePackageAsync(
+                library,
+                _manualStore.Load(),
+                _reader,
+                _analysis);
+            if (result.Analyzed > 0)
+            {
+                _libraryStore.Save(library);
+            }
+
+            _exportService.WriteBenchmarkPackage(path, result.Package);
+            _dialogs.ShowInfo(
+                "Export",
+                $"Package saved to:\n{path}\n\n"
+                + $"Exported: {result.Exported} capture(s)\n"
+                + $"Analyzed to obtain statistics: {result.Analyzed}\n"
+                + $"Excluded (no analyzable statistics): {result.Excluded}");
+        }
+        catch (Exception error)
+        {
+            _dialogs.ShowError("Export", error.Message);
+        }
+    }
+
+    private async void ImportPackage_Click(object sender, RoutedEventArgs e)
+    {
+        var path = _dialogs.PickOpenFile("JSON (*.json)|*.json");
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var proposal = _exportService.ImportBenchmarkPackage(
+                _libraryStore.Load(),
+                _manualStore.Load(),
+                File.ReadAllText(path));
+
+            // Coordinated commit: both stores are serialized first, both
+            // destinations are version-checked, and the two files are written
+            // with rollback — a failure leaves both stores in their original
+            // state and throws instead of claiming success.
+            _exportService.CommitBenchmarkImport(proposal, _libraryStore, _manualStore);
+
+            // Only after both stores are persisted is the live in-memory
+            // state published (the metadata cache re-reads the files).
+            _manualStore.Reload();
+
+            await _viewModel.RefreshAsync();
+            _dialogs.ShowInfo(
+                "Benchmark package",
+                $"Imported {proposal.Imported} capture(s), {proposal.Skipped} skipped.");
+        }
+        catch (Exception error)
+        {
+            _dialogs.ShowError("Benchmark package", error.Message);
+        }
     }
 }

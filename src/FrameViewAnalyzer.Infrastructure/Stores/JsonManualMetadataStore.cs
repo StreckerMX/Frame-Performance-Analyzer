@@ -14,6 +14,12 @@ public interface IManualMetadataStore
     IReadOnlyDictionary<string, ManualMetadata> Load();
 
     void Save(IReadOnlyDictionary<string, ManualMetadata> entries);
+
+    /// <summary>
+    /// Re-reads the persisted file into the in-memory cache without writing.
+    /// Used after a successful coordinated import to publish the new state.
+    /// </summary>
+    void Reload();
 }
 
 /// <summary>
@@ -22,7 +28,7 @@ public interface IManualMetadataStore
 /// reference: tolerant reads (missing/malformed/unknown version → empty),
 /// atomic writes (temp file + replace), and empty entries dropped on save.
 /// </summary>
-public sealed class JsonManualMetadataStore : IManualMetadataStore
+public sealed class JsonManualMetadataStore : IManualMetadataStore, IStoreDestination
 {
     public const int StoreFormatVersion = 1;
 
@@ -50,7 +56,11 @@ public sealed class JsonManualMetadataStore : IManualMetadataStore
     }
 
     public static string DefaultMetadataPath() =>
-        Path.Combine(JsonSettingsStore.DefaultAppDataRoot(), "metadata.json");
+        System.IO.Path.Combine(JsonSettingsStore.DefaultAppDataRoot(), "metadata.json");
+
+    public string FilePath => _path;
+
+    public int ExpectedVersion => StoreFormatVersion;
 
     public ManualMetadata? Get(string identity) =>
         _entries.TryGetValue(identity, out var metadata) ? metadata : null;
@@ -124,7 +134,7 @@ public sealed class JsonManualMetadataStore : IManualMetadataStore
         // Version gate: a store written by a newer application version must
         // never be downgraded or overwritten. Saving fails safely and the
         // unknown-version file stays byte-for-byte untouched.
-        var existingVersion = TryReadStoreVersion();
+        var existingVersion = ReadVersion();
         if (existingVersion is { } version && version != StoreFormatVersion)
         {
             throw new InvalidOperationException(
@@ -133,12 +143,15 @@ public sealed class JsonManualMetadataStore : IManualMetadataStore
                 + "The file was left unchanged.");
         }
 
-        var directory = Path.GetDirectoryName(_path);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
+        Write(SerializeDocument(entries));
+    }
 
+    /// <summary>
+    /// Serializes the metadata document exactly as Save writes it (indented
+    /// JSON plus a trailing newline). Used by the coordinated import commit.
+    /// </summary>
+    internal static byte[] SerializeDocument(IReadOnlyDictionary<string, ManualMetadata> entries)
+    {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
         {
@@ -161,16 +174,24 @@ public sealed class JsonManualMetadataStore : IManualMetadataStore
         }
 
         stream.WriteByte((byte)'\n');
-        var temporary = _path + ".tmp";
-        File.WriteAllBytes(temporary, stream.ToArray());
-        File.Move(temporary, _path, overwrite: true);
+        return stream.ToArray();
+    }
+
+    public void Reload()
+    {
+        var next = Load();
+        _entries.Clear();
+        foreach (var (key, value) in next)
+        {
+            _entries[key] = value;
+        }
     }
 
     /// <summary>
     /// Format version of the file on disk, or null when it does not exist or
     /// cannot be read as a versioned JSON document (tolerated as empty).
     /// </summary>
-    private int? TryReadStoreVersion()
+    public int? ReadVersion()
     {
         try
         {
@@ -193,6 +214,49 @@ public sealed class JsonManualMetadataStore : IManualMetadataStore
             or InvalidOperationException)
         {
             return null;
+        }
+    }
+
+    public byte[]? ReadCurrentBytes() =>
+        File.Exists(_path) ? File.ReadAllBytes(_path) : null;
+
+    public void Write(byte[] bytes)
+    {
+        var directory = System.IO.Path.GetDirectoryName(_path);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var temporary = _path + ".tmp";
+        try
+        {
+            File.WriteAllBytes(temporary, bytes);
+            File.Move(temporary, _path, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                if (File.Exists(temporary))
+                {
+                    File.Delete(temporary);
+                }
+            }
+            catch (Exception cleanupError) when (cleanupError is IOException or UnauthorizedAccessException)
+            {
+                // Best-effort cleanup of the temporary file.
+            }
+
+            throw;
+        }
+    }
+
+    public void Delete()
+    {
+        if (File.Exists(_path))
+        {
+            File.Delete(_path);
         }
     }
 

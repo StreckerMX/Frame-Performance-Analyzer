@@ -20,6 +20,33 @@ public sealed class DialogService : IDialogService
         return dialog.ShowDialog() == true ? dialog.FileName : null;
     }
 
+    public string? PickSaveFile(string? initialFile, string filter, string defaultExtension)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save export",
+            Filter = filter,
+            DefaultExt = defaultExtension,
+            AddExtension = true,
+        };
+        if (!string.IsNullOrEmpty(initialFile))
+        {
+            dialog.FileName = initialFile;
+        }
+
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    public string? PickOpenFile(string filter)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Select a file",
+            Filter = filter,
+        };
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
     public void ShowError(string title, string message) =>
         MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
 

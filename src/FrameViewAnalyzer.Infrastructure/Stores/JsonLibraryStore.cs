@@ -19,14 +19,18 @@ public interface ILibraryStore
 /// never overwritten (saving throws instead of downgrading it). Writes are
 /// atomic (temp file + replace).
 /// </summary>
-public sealed class JsonLibraryStore : ILibraryStore
+public sealed class JsonLibraryStore : ILibraryStore, IStoreDestination
 {
     private readonly string _path;
 
     public JsonLibraryStore(string? path = null) => _path = path ?? DefaultLibraryPath();
 
     public static string DefaultLibraryPath() =>
-        Path.Combine(JsonSettingsStore.DefaultAppDataRoot(), "library.json");
+        System.IO.Path.Combine(JsonSettingsStore.DefaultAppDataRoot(), "library.json");
+
+    public string FilePath => _path;
+
+    public int ExpectedVersion => LibraryConstants.FormatVersion;
 
     public LibraryModel Load()
     {
@@ -87,7 +91,7 @@ public sealed class JsonLibraryStore : ILibraryStore
 
     public void Save(LibraryModel library)
     {
-        var existingVersion = TryReadStoreVersion();
+        var existingVersion = ReadVersion();
         if (existingVersion is { } version && version != LibraryConstants.FormatVersion)
         {
             throw new InvalidOperationException(
@@ -96,12 +100,16 @@ public sealed class JsonLibraryStore : ILibraryStore
                 + "The file was left unchanged.");
         }
 
-        var directory = Path.GetDirectoryName(_path);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
+        Write(SerializeDocument(library));
+    }
 
+    /// <summary>
+    /// Serializes a library document exactly as Save writes it (indented
+    /// JSON plus a trailing newline). Used by the coordinated import commit
+    /// so both documents are fully serialized before either file is touched.
+    /// </summary>
+    internal static byte[] SerializeDocument(LibraryModel library)
+    {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
         {
@@ -130,12 +138,10 @@ public sealed class JsonLibraryStore : ILibraryStore
         }
 
         stream.WriteByte((byte)'\n');
-        var temporary = _path + ".tmp";
-        File.WriteAllBytes(temporary, stream.ToArray());
-        File.Move(temporary, _path, overwrite: true);
+        return stream.ToArray();
     }
 
-    private int? TryReadStoreVersion()
+    public int? ReadVersion()
     {
         try
         {
@@ -158,6 +164,49 @@ public sealed class JsonLibraryStore : ILibraryStore
             or InvalidOperationException)
         {
             return null;
+        }
+    }
+
+    public byte[]? ReadCurrentBytes() =>
+        File.Exists(_path) ? File.ReadAllBytes(_path) : null;
+
+    public void Write(byte[] bytes)
+    {
+        var directory = System.IO.Path.GetDirectoryName(_path);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var temporary = _path + ".tmp";
+        try
+        {
+            File.WriteAllBytes(temporary, bytes);
+            File.Move(temporary, _path, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                if (File.Exists(temporary))
+                {
+                    File.Delete(temporary);
+                }
+            }
+            catch (Exception cleanupError) when (cleanupError is IOException or UnauthorizedAccessException)
+            {
+                // Best-effort cleanup of the temporary file.
+            }
+
+            throw;
+        }
+    }
+
+    public void Delete()
+    {
+        if (File.Exists(_path))
+        {
+            File.Delete(_path);
         }
     }
 
