@@ -6,7 +6,7 @@ namespace FrameViewAnalyzer.App.Tests;
 
 public class ChartViewModelInteractionTests
 {
-    private static SessionAnalysis MakeSession(int seconds = 10)
+    private static SessionAnalysis MakeSession(int seconds = 10, double frameTime = 10.0)
     {
         var rows = new List<string[]>();
         for (var second = 0; second < seconds; second++)
@@ -16,7 +16,7 @@ public class ChartViewModelInteractionTests
                 rows.Add(
                 [
                     (second + offset).ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    "10.0",
+                    frameTime.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     "80.0",
                 ]);
             }
@@ -46,32 +46,32 @@ public class ChartViewModelInteractionTests
     {
         var viewModel = new ChartViewModel();
 
-        viewModel.Load(MakeSession(seconds: 5));
+        viewModel.SetSessions(MakeSession(seconds: 5), null);
 
-        Assert.Equal("100.0", viewModel.AvgFpsText);
-        Assert.Equal("100.0", viewModel.P1FpsText);
-        Assert.Equal("100 FPS", viewModel.MaxFpsText);
-        Assert.Equal("100.0 FPS", viewModel.MinFpsText);
-        Assert.Equal("5 s", viewModel.VisibleTimeText);
+        Assert.Equal("100.0", viewModel.KpiTiles[0].Value);
+        Assert.Equal("100.0", viewModel.KpiTiles[1].Value);
+        Assert.Equal("100.0 FPS", viewModel.KpiTiles[3].Value);
+        Assert.Equal("100.0 FPS", viewModel.KpiTiles[4].Value);
+        Assert.Equal("5 s", viewModel.KpiTiles[5].Value);
     }
 
     [Fact]
     public void Visible_range_updates_the_kpi_strip()
     {
         var viewModel = new ChartViewModel();
-        viewModel.Load(MakeSession(seconds: 10));
+        viewModel.SetSessions(MakeSession(seconds: 10), null);
 
         viewModel.UpdateVisibleRange(new ScottPlot.AxisLimits(2, 5, 0, 150));
 
-        Assert.Equal("100.0", viewModel.AvgFpsText);
-        Assert.Equal("4 s", viewModel.VisibleTimeText);
+        Assert.Equal("100.0", viewModel.KpiTiles[0].Value);
+        Assert.Equal("4 s", viewModel.KpiTiles[5].Value);
     }
 
     [Fact]
     public void Step_selected_metric_moves_without_wrapping()
     {
         var viewModel = new ChartViewModel();
-        viewModel.Load(MakeSession(seconds: 4));
+        viewModel.SetSessions(MakeSession(seconds: 4), null);
         var metricCount = viewModel.Metrics.Count;
 
         Assert.Equal("fps", viewModel.SelectedMetric!.Id);
@@ -111,11 +111,11 @@ public class ChartViewModelInteractionTests
     public void Clear_resets_the_kpi_strip()
     {
         var viewModel = new ChartViewModel();
-        viewModel.Load(MakeSession(seconds: 3));
+        viewModel.SetSessions(MakeSession(seconds: 3), null);
 
         viewModel.Clear();
 
-        Assert.Equal("--", viewModel.AvgFpsText);
-        Assert.Equal("--", viewModel.VisibleTimeText);
+        Assert.Equal("--", viewModel.KpiTiles[0].Value);
+        Assert.Equal("--", viewModel.KpiTiles[5].Value);
     }
 }

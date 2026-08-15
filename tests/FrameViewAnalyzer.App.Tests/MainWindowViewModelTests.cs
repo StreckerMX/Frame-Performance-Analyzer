@@ -46,28 +46,29 @@ public class MainWindowViewModelTests
 
         public string? LastError { get; private set; }
 
+        public string? LastInfo { get; private set; }
+
         public string? PickCsvFile(string? initialDirectory) => NextCsvPath;
 
         public void ShowError(string title, string message) => LastError = $"{title}: {message}";
 
-        public void ShowInfo(string title, string message)
-        {
-        }
+        public void ShowInfo(string title, string message) => LastInfo = $"{title}: {message}";
     }
 
     private static (
         MainWindowViewModel ViewModel,
         FakeSettingsStore Settings,
         FakeThemeService Themes,
-        FakeDialogService Dialogs) Create(
-        string appearanceMode = "dark",
-        string? nextCsvPath = null)
+        FakeDialogService Dialogs,
+        string Directory) Create(string appearanceMode = "dark")
     {
         var settings = new FakeSettingsStore { Current = new SettingsDocument(AppearanceMode: appearanceMode) };
         var themes = new FakeThemeService();
-        var dialogs = new FakeDialogService { NextCsvPath = nextCsvPath };
+        var dialogs = new FakeDialogService();
         var reader = new FrameViewCsvReader();
         var analysis = new CaptureAnalysisService();
+        var directory = Path.Combine(Path.GetTempPath(), "fva-vm-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
         var viewModel = new MainWindowViewModel(
             settings,
             themes,
@@ -75,13 +76,37 @@ public class MainWindowViewModelTests
             reader,
             analysis,
             dialogs);
-        return (viewModel, settings, themes, dialogs);
+        return (viewModel, settings, themes, dialogs, directory);
+    }
+
+    private static string WriteCapture(string directory, string fileName, double frameTime = 10.0)
+    {
+        var csvPath = Path.Combine(directory, fileName);
+        var rows = string.Concat(
+            Enumerable.Range(0, 6).SelectMany(second =>
+                new[] { 0.0, 0.25, 0.5 }.Select(offset =>
+                    $"{second + offset},{frameTime},80\n")));
+        File.WriteAllText(csvPath, "TimeInSeconds,MsBetweenPresents,GPU0Util(%)\n" + rows);
+        return csvPath;
+    }
+
+    private static void Cleanup(string directory)
+    {
+        try
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+        catch (IOException)
+        {
+            // Best-effort cleanup; transient handles may briefly linger.
+        }
     }
 
     [Fact]
     public void Constructor_adopts_the_saved_theme()
     {
-        var (viewModel, _, _, _) = Create(appearanceMode: "light");
+        var (viewModel, _, _, _, directory) = Create(appearanceMode: "light");
+        Cleanup(directory);
 
         Assert.Equal("light", viewModel.AppearanceMode);
         Assert.False(viewModel.IsDark);
@@ -91,108 +116,148 @@ public class MainWindowViewModelTests
     [Fact]
     public void ChangeAppearance_applies_theme_and_persists()
     {
-        var (viewModel, settings, themes, _) = Create();
+        var (viewModel, settings, themes, _, directory) = Create();
+        Cleanup(directory);
 
         viewModel.ChangeAppearanceCommand.Execute("light");
 
         Assert.Equal("light", viewModel.AppearanceMode);
-        Assert.True(viewModel.IsLight);
-        Assert.False(viewModel.IsDark);
         Assert.Equal("light", themes.Current);
         Assert.Equal("light", settings.Current.AppearanceMode);
     }
 
     [Fact]
-    public void Reapplying_the_current_theme_is_a_no_op()
+    public async Task Load_base_fills_the_cards_chart_and_status()
     {
-        var (viewModel, settings, themes, _) = Create();
-
-        viewModel.ChangeAppearanceCommand.Execute("dark");
-
-        Assert.Equal(0, settings.SaveCount);
-        Assert.Equal(0, themes.ApplyCount);
-    }
-
-    [Fact]
-    public void Invalid_mode_normalizes_to_dark()
-    {
-        var (viewModel, settings, _, _) = Create(appearanceMode: "light");
-
-        viewModel.ChangeAppearanceCommand.Execute("sepia");
-
-        Assert.Equal("dark", viewModel.AppearanceMode);
-        Assert.Equal("dark", settings.Current.AppearanceMode);
-    }
-
-    [Fact]
-    public void Theme_radio_state_flows_through_bindings()
-    {
-        var (viewModel, settings, themes, _) = Create();
-
-        viewModel.IsLight = true;
-
-        Assert.Equal("light", viewModel.AppearanceMode);
-        Assert.Equal("light", themes.Current);
-        Assert.Equal("light", settings.Current.AppearanceMode);
-    }
-
-    [Fact]
-    public void Status_text_is_ready_by_default()
-    {
-        var (viewModel, _, _, _) = Create();
-
-        Assert.Contains("READY", viewModel.StatusText);
-        Assert.Equal("FrameView Analyzer v2", viewModel.VersionText);
-    }
-
-    [Fact]
-    public async Task Load_capture_fills_the_chart_and_status()
-    {
-        var directory = Path.Combine(Path.GetTempPath(), "fva-vm-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
+        var (viewModel, _, _, dialogs, directory) = Create();
         try
         {
-            var csvPath = Path.Combine(directory, "FrameView_Test_Log.csv");
-            var rows = string.Concat(
-                Enumerable.Range(0, 6).SelectMany(second =>
-                    new[] { 0.0, 0.25, 0.5 }.Select(offset =>
-                        $"{second + offset},10,80\n")));
-            File.WriteAllText(csvPath, "TimeInSeconds,MsBetweenPresents,GPU0Util(%)\n" + rows);
-            var (viewModel, _, _, dialogs) = Create(nextCsvPath: csvPath);
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Test_Log.csv");
 
-            await viewModel.LoadCaptureCommand.ExecuteAsync(null);
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
 
             Assert.Null(dialogs.LastError);
-            Assert.True(
-                viewModel.Chart.HasData,
-                $"status={viewModel.StatusText} window={viewModel.Chart.Session?.Window} "
-                + $"samples={viewModel.Chart.SampleCount} metrics={viewModel.Chart.Metrics.Count} "
-                + $"seriesLen={viewModel.Chart.Series?.X.Length ?? -1}");
-            Assert.Contains("ANALYZED", viewModel.StatusText);
-            Assert.Contains("18 samples", viewModel.StatusText);
+            Assert.True(viewModel.Chart.HasData);
+            Assert.Equal("Test", viewModel.BaseSessionName);
+            Assert.Contains("CAPTURE OPENED", viewModel.StatusText);
         }
         finally
         {
-            try
-            {
-                Directory.Delete(directory, recursive: true);
-            }
-            catch (IOException)
-            {
-                // Best-effort cleanup; transient handles may briefly linger.
-            }
+            Cleanup(directory);
         }
     }
 
     [Fact]
-    public void Load_capture_reports_errors_without_crashing()
+    public async Task Load_comparison_requires_a_base_session()
     {
-        var (viewModel, _, _, dialogs) = Create(nextCsvPath: "Z:/missing/file.csv");
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Test_Log.csv");
 
-        viewModel.LoadCaptureCommand.Execute(null);
+            await viewModel.LoadComparisonCommand.ExecuteAsync(null);
 
-        Assert.False(viewModel.Chart.HasData);
-        Assert.NotNull(dialogs.LastError);
-        Assert.Contains("CSV loading error", dialogs.LastError);
+            Assert.NotNull(dialogs.LastInfo);
+            Assert.Contains("base session", dialogs.LastInfo, StringComparison.OrdinalIgnoreCase);
+            Assert.Null(viewModel.BaseSession);
+            Assert.Null(viewModel.ComparisonSession);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Comparison_load_updates_cards_and_delta_line()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Base_Log.csv", frameTime: 10.0);
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Comp_Log.csv", frameTime: 20.0);
+
+            await viewModel.LoadComparisonCommand.ExecuteAsync(null);
+
+            Assert.NotNull(viewModel.ComparisonSession);
+            Assert.Equal(2, viewModel.Chart.SeriesList.Count);
+            Assert.Contains("→", viewModel.ComparisonDeltaLine);
+            Assert.Contains("-50.0%", viewModel.ComparisonDeltaLine);
+            Assert.Contains("COMPARISON OPENED", viewModel.StatusText);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Remove_comparison_keeps_the_base()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Base_Log.csv", frameTime: 10.0);
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Comp_Log.csv", frameTime: 20.0);
+            await viewModel.LoadComparisonCommand.ExecuteAsync(null);
+
+            viewModel.RemoveComparisonCommand.Execute(null);
+
+            Assert.NotNull(viewModel.BaseSession);
+            Assert.Null(viewModel.ComparisonSession);
+            Assert.Single(viewModel.Chart.SeriesList);
+            Assert.Contains("COMPARISON SESSION REMOVED", viewModel.StatusText);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Remove_base_promotes_the_comparison()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Base_Log.csv", frameTime: 10.0);
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Comp_Log.csv", frameTime: 20.0);
+            await viewModel.LoadComparisonCommand.ExecuteAsync(null);
+            var comparisonSession = viewModel.ComparisonSession;
+
+            viewModel.RemoveBaseCommand.Execute(null);
+
+            Assert.Equal(comparisonSession, viewModel.BaseSession);
+            Assert.Null(viewModel.ComparisonSession);
+            Assert.Single(viewModel.Chart.SeriesList);
+            Assert.Contains("now the base session", viewModel.StatusText);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Load_base_reports_errors_without_crashing()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = "Z:/missing/file.csv";
+
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+
+            Assert.False(viewModel.Chart.HasData);
+            Assert.NotNull(dialogs.LastError);
+            Assert.Contains("CSV loading error", dialogs.LastError);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
     }
 }

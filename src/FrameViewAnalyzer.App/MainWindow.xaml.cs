@@ -38,13 +38,14 @@ public partial class MainWindow : Window
     private void OnChartPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ChartViewModel.Series)
+            || e.PropertyName == nameof(ChartViewModel.ComparisonSeries)
             || e.PropertyName == nameof(ChartViewModel.HasData))
         {
             if (_viewModel.Chart.HasData
                 && _viewModel.Chart.SelectedMetric is not null
-                && _viewModel.Chart.Series is not null)
+                && _viewModel.Chart.SeriesList.Count > 0)
             {
-                ChartView.ShowData(_viewModel.Chart.SelectedMetric, _viewModel.Chart.Series);
+                ChartView.ShowData(_viewModel.Chart.SelectedMetric, _viewModel.Chart.SeriesList);
                 SyncInteractions();
             }
             else
