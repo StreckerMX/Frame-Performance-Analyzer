@@ -14,6 +14,8 @@ public sealed class ThemeService : IThemeService
 
     public string Current { get; private set; } = "dark";
 
+    public event EventHandler? Changed;
+
     public void Apply(string mode)
     {
         var normalized = Normalize(mode);
@@ -34,6 +36,7 @@ public sealed class ThemeService : IThemeService
         }
 
         Current = normalized;
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     private static string Normalize(string mode) =>
