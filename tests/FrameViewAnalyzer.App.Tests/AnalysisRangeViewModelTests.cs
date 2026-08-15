@@ -1,3 +1,4 @@
+using System.Windows.Threading;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.Core.Models;
@@ -102,6 +103,39 @@ public class AnalysisRangeViewModelTests
 
         Assert.Equal(1, raised);
         Assert.Equal(44.0, received!.GpuThreshold);
+    }
+
+    [Fact]
+    public void Rapid_changes_within_one_interval_fire_once_with_the_last_values()
+    {
+        var viewModel = new AnalysisRangeViewModel();
+        viewModel.Attach(Session(), null);
+
+        var events = new List<AnalysisOptions>();
+        viewModel.OptionsChanged += (_, options) => events.Add(options);
+
+        // Several changes inside one debounce interval must collapse into a
+        // single trailing-edge OptionsChanged carrying the last values.
+        viewModel.GpuThreshold = 15.0;
+        viewModel.TrimBufferSeconds = 3.0;
+        viewModel.GpuThreshold = 42.0;
+
+        // Pump the dispatcher until the debounce tick fires; a generous
+        // timeout timer only guards against a pathological hang.
+        var frame = new DispatcherFrame();
+        viewModel.OptionsChanged += (_, _) => frame.Continue = false;
+        var timeout = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+        timeout.Tick += (_, _) =>
+        {
+            timeout.Stop();
+            frame.Continue = false;
+        };
+        timeout.Start();
+        Dispatcher.PushFrame(frame);
+
+        var options = Assert.Single(events);
+        Assert.Equal(42.0, options.GpuThreshold);
+        Assert.Equal(3.0, options.TrimBufferSeconds);
     }
 
     [Fact]

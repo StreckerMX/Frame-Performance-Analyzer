@@ -183,13 +183,19 @@ public partial class AnalysisRangeViewModel : ObservableObject
         OptionsChanged?.Invoke(this, SnapshotOptions());
     }
 
+    /// <summary>
+    /// Trailing-edge debounce: every control change restarts the 400 ms delay,
+    /// so <c>OptionsChanged</c> fires only after ~400 ms of inactivity instead
+    /// of 400 ms after the first change of a continuous drag.
+    /// </summary>
     private void Schedule()
     {
-        if (_suppressEvents || !IsEnabled || _debounce.IsEnabled)
+        if (_suppressEvents || !IsEnabled)
         {
             return;
         }
 
+        _debounce.Stop();
         _debounce.Start();
     }
 }
