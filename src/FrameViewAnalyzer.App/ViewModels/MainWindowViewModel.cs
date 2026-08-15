@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.IO;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.RangeAnalysis;
 using FrameViewAnalyzer.Analytics.Series;
@@ -8,6 +9,7 @@ using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Core.Formatting;
 using FrameViewAnalyzer.Core.Math;
 using FrameViewAnalyzer.Core.Models;
+using FrameViewAnalyzer.Infrastructure;
 using FrameViewAnalyzer.Infrastructure.Csv;
 using FrameViewAnalyzer.Infrastructure.Stores;
 
@@ -25,6 +27,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly ICaptureAnalysisService _analysis;
     private readonly IDialogService _dialogs;
     private readonly IRangeAnalysisService _rangeAnalysis;
+    private readonly IManualMetadataStore _metadataStore;
 
     [ObservableProperty]
     private string _appearanceMode = "dark";
@@ -46,6 +49,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _hasComparison;
+
+    [ObservableProperty]
+    private bool _hasBaseSession;
 
     [ObservableProperty]
     private string _baseSessionName = "No capture loaded";
@@ -76,6 +82,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public event EventHandler<TimeRange?>? AnalyzeRangeRequested;
 
+    /// <summary>Raised when the manual metadata editor should open for a session.</summary>
+    public event EventHandler<MetadataEditorRequest>? MetadataEditorRequested;
+
     public string VersionText => "FrameView Analyzer v2";
 
     public MainWindowViewModel(
@@ -85,6 +94,7 @@ public partial class MainWindowViewModel : ObservableObject
         IFrameViewCsvReader reader,
         ICaptureAnalysisService analysis,
         IRangeAnalysisService rangeAnalysis,
+        IManualMetadataStore metadataStore,
         IDialogService dialogs)
     {
         _settings = settings;
@@ -93,6 +103,7 @@ public partial class MainWindowViewModel : ObservableObject
         _analysis = analysis;
         _dialogs = dialogs;
         _rangeAnalysis = rangeAnalysis;
+        _metadataStore = metadataStore;
         Chart = chart;
 
         var mode = Normalize(settings.Load().AppearanceMode);
@@ -230,20 +241,23 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void RefreshSessionCards()
     {
+        var baseManual = ManualMetadataOf(BaseSession);
+        var comparisonManual = ManualMetadataOf(ComparisonSession);
+
         BaseSessionName = BaseSession is null
             ? "No capture loaded"
-            : GameNameOf(BaseSession);
+            : CardNameOf(BaseSession, baseManual);
         BaseMetaLine = BaseSession is null
             ? "Load a FrameView *_Log.csv capture"
-            : MetaLineOf(BaseSession);
+            : (baseManual?.ConfigLine ?? MetaLineOf(BaseSession));
         BaseLoadButtonText = BaseSession is null ? "Load capture..." : "Change...";
 
         ComparisonSessionName = ComparisonSession is null
             ? "No comparison loaded"
-            : GameNameOf(ComparisonSession);
+            : CardNameOf(ComparisonSession, comparisonManual);
         ComparisonMetaLine = ComparisonSession is null
             ? "Load a second capture to compare performance."
-            : MetaLineOf(ComparisonSession);
+            : (comparisonManual?.ConfigLine ?? MetaLineOf(ComparisonSession));
         ComparisonLoadButtonText = ComparisonSession is null ? "Load comparison..." : "Change...";
 
         ComparisonDeltaLine = string.Empty;
@@ -262,8 +276,84 @@ public partial class MainWindowViewModel : ObservableObject
             }
         }
 
+        HasBaseSession = BaseSession is not null;
         HasComparison = ComparisonSession is not null;
     }
+
+    [RelayCommand]
+    private void EditBaseMetadata() => RequestMetadataEditor(BaseSession);
+
+    [RelayCommand]
+    private void EditComparisonMetadata() => RequestMetadataEditor(ComparisonSession);
+
+    private void RequestMetadataEditor(SessionAnalysis? session)
+    {
+        if (session is null)
+        {
+            return;
+        }
+
+        var identity = CaptureIdentityResolver.TryBuild(session.Capture.Path);
+        var current = identity is null ? null : _metadataStore.Get(identity);
+        MetadataEditorRequested?.Invoke(
+            this,
+            new MetadataEditorRequest(session, current ?? new ManualMetadata()));
+    }
+
+    /// <summary>
+    /// Persists manual metadata for a session and refreshes the cards.
+    /// Empty metadata removes the stored entry, like the Python reference.
+    /// </summary>
+    public void PersistMetadata(SessionAnalysis session, ManualMetadata metadata)
+    {
+        var identity = CaptureIdentityResolver.TryBuild(session.Capture.Path);
+        if (identity is null)
+        {
+            _dialogs.ShowError("Benchmark metadata", "The capture file could not be inspected.");
+            return;
+        }
+
+        try
+        {
+            _metadataStore.Set(identity, metadata);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _dialogs.ShowError("Benchmark metadata", $"Metadata could not be saved: {error.Message}");
+            return;
+        }
+
+        RefreshSessionCards();
+        StatusText = $"METADATA SAVED  ·  {session.Capture.DisplayName}";
+    }
+
+    private ManualMetadata? ManualMetadataOf(SessionAnalysis? session)
+    {
+        if (session is null)
+        {
+            return null;
+        }
+
+        var identity = CaptureIdentityResolver.TryBuild(session.Capture.Path);
+        return identity is null ? null : _metadataStore.Get(identity);
+    }
+
+    private static string CardNameOf(SessionAnalysis session, ManualMetadata? manual)
+    {
+        if (manual is not null && manual.BenchmarkName.Length > 0)
+        {
+            return manual.BenchmarkName;
+        }
+
+        if (manual is not null && manual.Game.Length > 0)
+        {
+            return manual.Game;
+        }
+
+        return GameNameOf(session);
+    }
+
+    public sealed record MetadataEditorRequest(SessionAnalysis Session, ManualMetadata Current);
 
     [RelayCommand]
     private void AnalyzeFullCapture()

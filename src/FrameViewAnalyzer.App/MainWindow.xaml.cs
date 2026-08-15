@@ -5,6 +5,7 @@ using System.Windows.Input;
 using FrameViewAnalyzer.Analytics.RangeAnalysis;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
+using FrameViewAnalyzer.App.Views;
 
 namespace FrameViewAnalyzer.App;
 
@@ -31,6 +32,7 @@ public partial class MainWindow : Window
         // view-range changes; refresh the chart style on theme switches.
         viewModel.Chart.PropertyChanged += OnChartPropertyChanged;
         viewModel.AnalyzeRangeRequested += OnAnalyzeRangeRequested;
+        viewModel.MetadataEditorRequested += OnMetadataEditorRequested;
         ChartView.ViewChanged += bounds => viewModel.Chart.UpdateVisibleRange(bounds);
         themes.Changed += (_, _) => ChartView.RefreshStyle();
         OnChartPropertyChanged(this, new PropertyChangedEventArgs(nameof(ChartViewModel.Series)));
@@ -82,6 +84,15 @@ public partial class MainWindow : Window
         {
             ChartView.ZoomToRange(range.Value.Start, range.Value.End);
         }
+    }
+
+    private void OnMetadataEditorRequested(
+        object? sender,
+        MainWindowViewModel.MetadataEditorRequest request)
+    {
+        var editor = new MetadataEditorWindow(request.Session, request.Current) { Owner = this };
+        editor.Saved += metadata => _viewModel.PersistMetadata(request.Session, metadata);
+        editor.ShowDialog();
     }
 
     private void MetricSelector_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
