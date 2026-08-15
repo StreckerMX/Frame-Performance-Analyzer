@@ -3,6 +3,7 @@
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
     <FontFamily x:Key="FontFamily.App">Segoe UI</FontFamily>
     <sys:Double x:Key="FontSize.Display">28</sys:Double>
+    <sys:Double x:Key="FontSize.KpiValue">18</sys:Double>
     <sys:Double x:Key="FontSize.Title">17</sys:Double>
     <sys:Double x:Key="FontSize.Section">12</sys:Double>
     <sys:Double x:Key="FontSize.Body">11</sys:Double>

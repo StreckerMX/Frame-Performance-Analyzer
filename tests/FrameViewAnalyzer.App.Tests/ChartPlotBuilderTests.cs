@@ -1,5 +1,6 @@
 using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.App.Charting;
+using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Core.Metrics;
 using ScottPlot;
 using ScottPlot.Plottables;
@@ -10,8 +11,12 @@ public class ChartPlotBuilderTests
 {
     private static MetricDefinition Fps => CoreMetricCatalog.CoreById["fps"];
 
-    private static MetricSeries Series(double[] xs, double[] ys, string? label = null) =>
-        new(Fps, xs, ys, label);
+    private static MetricSeries Series(
+        double[] xs,
+        double[] ys,
+        string? label = null,
+        SessionRole role = SessionRole.Base) =>
+        new(Fps, xs, ys, label, role);
 
     private static readonly ChartStyle Style = ChartStyle.FromApplicationResources();
 
@@ -94,5 +99,75 @@ public class ChartPlotBuilderTests
 
         Assert.NotNull(style);
         Assert.Equal(ScottPlot.Color.FromHex("#080808"), style.Background);
+    }
+
+    [Fact]
+    public void Base_only_metric_uses_the_series_a_color()
+    {
+        var plot = new Plot();
+        var xs = Enumerable.Range(0, 10).Select(i => (double)i).ToArray();
+        var ys = Enumerable.Range(0, 10).Select(i => 100.0).ToArray();
+
+        ChartPlotBuilder.Build(
+            plot,
+            Fps,
+            [Series(xs, ys, role: SessionRole.Base)],
+            Style,
+            pointBudget: 200);
+
+        var signal = plot.PlottableList.OfType<SignalXY>().Single();
+        Assert.Equal(Style.SeriesA.ARGB, signal.Color.ARGB);
+        var average = plot.PlottableList.OfType<HorizontalLine>().Single();
+        Assert.Equal(Style.SeriesA.WithAlpha(0.85).ARGB, average.LineColor.ARGB);
+    }
+
+    [Fact]
+    public void Comparison_only_metric_uses_the_series_b_color_even_as_the_only_series()
+    {
+        var plot = new Plot();
+        var xs = Enumerable.Range(0, 10).Select(i => (double)i).ToArray();
+        var ys = Enumerable.Range(0, 10).Select(i => 60.0).ToArray();
+
+        ChartPlotBuilder.Build(
+            plot,
+            Fps,
+            [Series(xs, ys, "Comparison", SessionRole.Comparison)],
+            Style,
+            pointBudget: 200);
+
+        var signal = plot.PlottableList.OfType<SignalXY>().Single();
+        Assert.Equal(Style.SeriesB.ARGB, signal.Color.ARGB);
+        var average = plot.PlottableList.OfType<HorizontalLine>().Single();
+        Assert.Equal(Style.SeriesB.WithAlpha(0.85).ARGB, average.LineColor.ARGB);
+    }
+
+    [Fact]
+    public void Shared_metric_uses_series_a_then_series_b_by_session_role()
+    {
+        var plot = new Plot();
+        var xs = Enumerable.Range(0, 10).Select(i => (double)i).ToArray();
+        var ys = Enumerable.Range(0, 10).Select(i => 100.0).ToArray();
+
+        ChartPlotBuilder.Build(
+            plot,
+            Fps,
+            [
+                Series(xs, ys, "Base", SessionRole.Base),
+                Series(xs, ys.Select(v => v - 40.0).ToArray(), "Comparison", SessionRole.Comparison),
+            ],
+            Style,
+            pointBudget: 200);
+
+        var signals = plot.PlottableList.OfType<SignalXY>().ToList();
+        Assert.Equal(2, signals.Count);
+        Assert.Equal(Style.SeriesA.ARGB, signals[0].Color.ARGB);
+        Assert.Equal(Style.SeriesB.ARGB, signals[1].Color.ARGB);
+        Assert.Equal("Base", signals[0].LegendText);
+        Assert.Equal("Comparison", signals[1].LegendText);
+
+        var averages = plot.PlottableList.OfType<HorizontalLine>().ToList();
+        Assert.Equal(2, averages.Count);
+        Assert.Equal(Style.SeriesA.WithAlpha(0.85).ARGB, averages[0].LineColor.ARGB);
+        Assert.Equal(Style.SeriesB.WithAlpha(0.85).ARGB, averages[1].LineColor.ARGB);
     }
 }

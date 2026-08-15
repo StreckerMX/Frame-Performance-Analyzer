@@ -1,4 +1,5 @@
 using FrameViewAnalyzer.Analytics.Series;
+using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Core.Charting;
 using FrameViewAnalyzer.Core.Metrics;
 using ScottPlot;
@@ -63,7 +64,10 @@ public static class ChartPlotBuilder
         for (var index = 0; index < seriesList.Count; index++)
         {
             var series = seriesList[index];
-            var color = index == 0 ? style.SeriesA : style.SeriesB;
+            // Styling follows the session role, never the list position: a
+            // Comparison-only metric is index 0 but still uses SeriesB.
+            var isBase = series.Role == SessionRole.Base;
+            var color = isBase ? style.SeriesA : style.SeriesB;
 
             var (decimatedX, decimatedY) = Decimation.Select(series.X, series.Y, pointBudget);
             var (gapX, gapY) = SeriesGeometry.InsertGapBreaks(decimatedX, decimatedY);
@@ -82,7 +86,7 @@ public static class ChartPlotBuilder
             {
                 var scatter = plot.Add.Scatter(gapX, gapY);
                 scatter.Color = color;
-                scatter.LineWidth = index == 0 ? 2.15f : 1.8f;
+                scatter.LineWidth = isBase ? 2.15f : 1.8f;
                 scatter.LegendText = series.LabelOrDefault;
                 scatter.MarkerSize = showMarkers ? 4f : 0f;
                 scatter.MarkerColor = color;

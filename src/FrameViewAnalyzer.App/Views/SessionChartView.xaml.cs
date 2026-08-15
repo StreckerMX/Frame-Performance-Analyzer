@@ -107,20 +107,15 @@ public partial class SessionChartView : UserControl
             return;
         }
 
-        var baseSeries = _seriesList[0];
         var limits = ChartHost.Plot.Axes.GetLimits();
-        var values = FrameViewAnalyzer.Analytics.Statistics.VisibleRangeCalculator.FilterValues(
-            baseSeries.X, baseSeries.Y, limits.Left, limits.Right);
-        if (values.Count == 0)
+        var fitted = ChartViewport.AutoZoomToSeries(limits, _seriesList, _metric.Id == "fps");
+        if (fitted is null)
         {
             return;
         }
 
-        var minY = values.Min();
-        var maxY = values.Max();
-        var fitted = ChartViewport.FitY(limits, minY, maxY, _metric.Id == "fps");
         _suppressViewChanged = true;
-        ChartHost.Plot.Axes.SetLimits(fitted);
+        ChartHost.Plot.Axes.SetLimits(fitted.Value);
         ChartHost.Refresh();
         _suppressViewChanged = false;
         NotifyViewChanged();
@@ -149,19 +144,13 @@ public partial class SessionChartView : UserControl
         maximum = System.Math.Min(maximum, _fullLimits.Right);
 
         var current = ChartHost.Plot.Axes.GetLimits();
-        var baseSeries = _seriesList[0];
-        var values = FrameViewAnalyzer.Analytics.Statistics.VisibleRangeCalculator.FilterValues(
-            baseSeries.X, baseSeries.Y, minimum, maximum);
-        var next = values.Count > 0
-            ? ChartViewport.FitY(
-                new AxisLimits(minimum, maximum, current.Bottom, current.Top),
-                values.Min(),
-                values.Max(),
-                _metric.Id == "fps")
-            : new AxisLimits(minimum, maximum, current.Bottom, current.Top);
+        var next = ChartViewport.AutoZoomToSeries(
+            new AxisLimits(minimum, maximum, current.Bottom, current.Top),
+            _seriesList,
+            _metric.Id == "fps");
 
         _suppressViewChanged = true;
-        ChartHost.Plot.Axes.SetLimits(next);
+        ChartHost.Plot.Axes.SetLimits(next ?? new AxisLimits(minimum, maximum, current.Bottom, current.Top));
         ChartHost.Refresh();
         _suppressViewChanged = false;
         NotifyViewChanged();
@@ -266,36 +255,30 @@ public partial class SessionChartView : UserControl
         var mouseCoordinates = ChartHost.Plot.GetCoordinates((float)position.X, (float)position.Y);
         var tolerance = System.Math.Max(0.65, limits.HorizontalSpan / 120.0);
 
-        var baseSeries = _seriesList[0];
-        var baseIndex = SeriesGeometry.NearestIndex(baseSeries.X, mouseCoordinates.X);
-        if (baseIndex < 0 || System.Math.Abs(baseSeries.X[baseIndex] - mouseCoordinates.X) > tolerance)
+        // Probe every plotted series independently against the cursor X;
+        // Base-only, Comparison-only, and overlapping regions all work.
+        var hits = SeriesProbe.Select(_seriesList, mouseCoordinates.X, tolerance);
+        var anchor = SeriesProbe.Anchor(hits);
+        if (anchor is null)
         {
             HideTooltip();
             return;
         }
 
-        var x = baseSeries.X[baseIndex];
-        var lines = new List<string> { $"Time: {x:F1} s" };
-        foreach (var series in _seriesList)
+        var lines = new List<string> { $"Time: {anchor.Value.X:F1} s" };
+        foreach (var hit in hits)
         {
-            var index = SeriesGeometry.NearestIndex(series.X, x);
-            if (index < 0 || System.Math.Abs(series.X[index] - x) > tolerance)
-            {
-                continue;
-            }
-
-            var y = series.Y[index];
             var valueText = _metric.Id == "fps"
-                ? $"{y:F1}"
-                : DisplayText.FormatStat(y, _metric.Unit);
-            lines.Add($"{series.LabelOrDefault}: {valueText}");
+                ? $"{hit.Y:F1}"
+                : DisplayText.FormatStat(hit.Y, _metric.Unit);
+            lines.Add($"{hit.Series.LabelOrDefault}: {valueText}");
         }
 
         TooltipText.Text = string.Join("\n", lines);
 
         if (_crosshair is not null)
         {
-            _crosshair.Position = new Coordinates(x, baseSeries.Y[baseIndex]);
+            _crosshair.Position = new Coordinates(anchor.Value.X, anchor.Value.Y);
             _crosshair.IsVisible = true;
             ChartHost.Refresh();
         }

@@ -4,6 +4,7 @@ using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Comparison;
 using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.Analytics.Statistics;
+using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Core.Formatting;
 using FrameViewAnalyzer.Core.Metrics;
 using FrameViewAnalyzer.Core.Models;
@@ -97,7 +98,7 @@ public partial class ChartViewModel : ObservableObject
 
         var keepSelection = Metrics.FirstOrDefault(metric => metric.Id == SelectedMetric?.Id);
         Metrics.Clear();
-        foreach (var metric in baseSession.Catalog)
+        foreach (var metric in ComparisonService.MetricUnion(baseSession, comparisonSession))
         {
             Metrics.Add(metric);
         }
@@ -234,15 +235,24 @@ public partial class ChartViewModel : ObservableObject
             return;
         }
 
+        // Build each session's series independently: a metric that only
+        // exists in one capture must not hide the other session's data.
+        // The session role travels with the series so styling (SeriesA for
+        // Base, SeriesB for Comparison) never depends on list position.
         var baseSeries = SeriesBuilder.Build(Session, SelectedMetric.Id);
-        var hasData = baseSeries.Y.Length > 0;
-        Series = hasData ? baseSeries : null;
+        Series = baseSeries.Y.Length > 0
+            ? baseSeries with { Role = SessionRole.Base }
+            : null;
 
         if (ComparisonSession is not null)
         {
             var comparisonSeries = SeriesBuilder.Build(ComparisonSession, SelectedMetric.Id);
             ComparisonSeries = comparisonSeries.Y.Length > 0
-                ? comparisonSeries with { Label = "Comparison" }
+                ? comparisonSeries with
+                {
+                    Label = "Comparison",
+                    Role = SessionRole.Comparison,
+                }
                 : null;
         }
         else
@@ -255,7 +265,7 @@ public partial class ChartViewModel : ObservableObject
             ? null
             : SeriesBuilder.Build(ComparisonSession, "fps");
 
-        HasData = hasData;
+        HasData = Series is not null || ComparisonSeries is not null;
     }
 
     /// <summary>

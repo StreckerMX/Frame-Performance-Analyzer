@@ -63,7 +63,13 @@ public sealed class ComparisonService : IComparisonService
         return (delta, deltaPercent);
     }
 
-    private static IReadOnlyList<MetricDefinition> MetricUnion(
+    /// <summary>
+    /// Union of the Base and Comparison metric catalogs: Base ordering
+    /// first, Comparison-only metrics appended, deduplicated by ordinal
+    /// <see cref="MetricDefinition.Id"/>. Shared by the comparison tables
+    /// and the chart's metric selector.
+    /// </summary>
+    public static IReadOnlyList<MetricDefinition> MetricUnion(
         SessionAnalysis baseSession,
         SessionAnalysis? comparisonSession)
     {

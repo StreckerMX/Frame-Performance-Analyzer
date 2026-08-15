@@ -1,3 +1,5 @@
+using FrameViewAnalyzer.Analytics.Series;
+using FrameViewAnalyzer.Analytics.Statistics;
 using ScottPlot;
 
 namespace FrameViewAnalyzer.App.Charting;
@@ -79,5 +81,41 @@ public static class ChartViewport
             System.Math.Max(spread * 0.16, System.Math.Abs(maxY) * 0.03),
             1.0);
         return new AxisLimits(current.Left, current.Right, low - padLow, high);
+    }
+
+    /// <summary>
+    /// Global Y fit across every plotted series inside the visible X range.
+    /// Series without points in the range are ignored; null is returned when
+    /// nothing is visible. FPS metrics keep the zero baseline. Full-resolution
+    /// series only — never decimated rendering data.
+    /// </summary>
+    public static AxisLimits? AutoZoomToSeries(
+        AxisLimits current,
+        IReadOnlyList<MetricSeries> seriesList,
+        bool fpsBaselineZero)
+    {
+        double? minY = null;
+        double? maxY = null;
+        foreach (var series in seriesList)
+        {
+            var values = VisibleRangeCalculator.FilterValues(
+                series.X, series.Y, current.Left, current.Right);
+            if (values.Count == 0)
+            {
+                continue;
+            }
+
+            var seriesMin = values.Min();
+            var seriesMax = values.Max();
+            minY = minY is null ? seriesMin : System.Math.Min(minY.Value, seriesMin);
+            maxY = maxY is null ? seriesMax : System.Math.Max(maxY.Value, seriesMax);
+        }
+
+        if (minY is null || maxY is null)
+        {
+            return null;
+        }
+
+        return FitY(current, minY.Value, maxY.Value, fpsBaselineZero);
     }
 }

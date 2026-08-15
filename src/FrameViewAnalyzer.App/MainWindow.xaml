@@ -204,9 +204,10 @@
                                            FontWeight="Bold"
                                            Foreground="{DynamicResource AccentBrush}" />
                                 <TextBlock Text="{Binding Value}"
-                                           FontSize="{DynamicResource FontSize.Display}"
+                                           FontSize="{DynamicResource FontSize.KpiValue}"
                                            FontWeight="Bold"
-                                           Foreground="{DynamicResource TextBrush}" />
+                                           Foreground="{DynamicResource TextBrush}"
+                                           TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="{Binding DeltaText}" Margin="0,2,0,0">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
