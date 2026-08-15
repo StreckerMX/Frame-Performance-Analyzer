@@ -10,9 +10,9 @@ test vectors where algorithms must match exactly.
 
 ## Status
 
-**Phase 12 of 15 complete — performance baselines and optimization.**
+**Phase 13 of 15 complete — feature-parity audit and parity closure.**
 
-Implemented through Phase 12:
+Implemented through Phase 13:
 
 - **Phase 0** — solution skeleton, project layout, strict gates
 - **Phase 1** — FrameView CSV loader + domain models (encodings, missing
@@ -42,9 +42,13 @@ Implemented through Phase 12:
   decimation) with corrected baselines and measured optimizations: −55% / −99%
   allocations on Compare, −40% allocations on Analyze
   (see `docs/PERFORMANCE.md`)
+- **Phase 13** — feature-parity audit and closure (`docs/PARITY.md`): Session
+  Details window, analysis-range controls, Summary CSV table, keyboard
+  shortcuts, capture-folder workflow, persisted analysis options, omitted-load
+  gap visualization, and Serilog file logging
 
-Remaining future work: **final parity audit** and the **release candidate**
-are **not implemented yet**.
+Remaining future work: the **release candidate** (Phase 14) is **not
+implemented yet**.
 
 ## Stack
 

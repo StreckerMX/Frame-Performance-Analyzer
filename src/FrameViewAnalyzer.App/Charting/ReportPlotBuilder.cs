@@ -57,6 +57,9 @@ public static class ReportPlotBuilder
             plot.Axes.Left.Label.ForeColor = style.Muted;
             plot.Title(group.Metric.Label);
 
+            // Omitted-load bands are part of the report context too.
+            GapOverlay.Apply(plot, group.Series, style);
+
             foreach (var series in group.Series)
             {
                 var color = series.Role == SessionRole.Base ? style.SeriesA : style.SeriesB;

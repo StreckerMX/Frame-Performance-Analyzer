@@ -4,6 +4,7 @@ using FrameViewAnalyzer.Analytics.RangeAnalysis;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.Core.Models;
+using FrameViewAnalyzer.Infrastructure;
 using FrameViewAnalyzer.Infrastructure.Csv;
 using FrameViewAnalyzer.Infrastructure.Stores;
 
@@ -50,6 +51,8 @@ public class MainWindowViewModelTests
 
         public string? NextOpenPath { get; set; }
 
+        public string? NextFolderPath { get; set; }
+
         public string? LastError { get; private set; }
 
         public string? LastInfo { get; private set; }
@@ -59,6 +62,8 @@ public class MainWindowViewModelTests
         public string? PickSaveFile(string? initialFile, string filter, string defaultExtension) => NextSavePath;
 
         public string? PickOpenFile(string filter) => NextOpenPath;
+
+        public string? PickFolder(string? initialDirectory) => NextFolderPath;
 
         public void ShowError(string title, string message) => LastError = $"{title}: {message}";
 
@@ -88,6 +93,7 @@ public class MainWindowViewModelTests
             new RangeAnalysisService(),
             new JsonManualMetadataStore(Path.Combine(directory, "metadata.json")),
             new JsonLibraryStore(Path.Combine(directory, "library.json")),
+            new CaptureFolderScanner(reader),
             dialogs);
         return (viewModel, settings, themes, dialogs, directory);
     }
@@ -663,6 +669,38 @@ public class MainWindowViewModelTests
             Assert.Equal("Test", viewModel.BaseSessionName);
             Assert.DoesNotContain("Temporary", viewModel.BaseMetaLine);
             Assert.Contains("METADATA SAVED", viewModel.StatusText);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Analysis_option_changes_reanalyze_both_sessions_and_persist_the_options()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            var basePath = WriteCapture(directory, "FrameView_Base_Log.csv");
+            await viewModel.LoadBaseFromPathAsync(basePath);
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Comp_Log.csv", frameTime: 12.0);
+            await viewModel.LoadComparisonFromPathAsync(dialogs.NextCsvPath);
+
+            var selectedMetric = viewModel.Chart.SelectedMetric;
+            viewModel.AnalysisRange.TrimBufferSeconds = 2.0;
+
+            await viewModel.ApplyAnalysisOptionsAsync(viewModel.AnalysisRange.SnapshotOptions());
+
+            Assert.Equal(2.0, viewModel.BaseSession!.EffectiveOptions.TrimBufferSeconds);
+            Assert.Equal(2.0, viewModel.ComparisonSession!.EffectiveOptions.TrimBufferSeconds);
+            Assert.Equal(selectedMetric, viewModel.Chart.SelectedMetric);
+
+            var identity = CaptureIdentityResolver.TryBuild(basePath)!;
+            var library = new JsonLibraryStore(Path.Combine(directory, "library.json")).Load();
+            var record = library.Records[identity];
+            Assert.Equal("2", record.AnalysisOptions["trim_buffer_seconds"]);
+            Assert.True(record.StatsSummary.ContainsKey("avg_fps"));
         }
         finally
         {

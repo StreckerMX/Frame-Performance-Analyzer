@@ -143,7 +143,8 @@ public static class ExportReport
                     record.Cpu,
                     record.DurationSeconds),
                 manual.TryGetValue(record.Identity, out var value) ? value : null,
-                record.StatsSummary));
+                record.StatsSummary,
+                record.AnalysisOptions));
         }
 
         return new BenchmarkPackageDto(
@@ -224,7 +225,8 @@ public sealed record PackageCaptureDto(
     bool SourceAvailable,
     PackageDetectedDto Detected,
     ManualMetadata? ManualMetadata,
-    IReadOnlyDictionary<string, double> StatsSummary);
+    IReadOnlyDictionary<string, double> StatsSummary,
+    IReadOnlyDictionary<string, string>? AnalysisOptions = null);
 
 public sealed record PackageDetectedDto(
     string Game,

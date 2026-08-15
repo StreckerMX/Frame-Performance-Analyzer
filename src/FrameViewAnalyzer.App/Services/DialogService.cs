@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using Microsoft.Win32;
 
@@ -45,6 +46,20 @@ public sealed class DialogService : IDialogService
             Filter = filter,
         };
         return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    public string? PickFolder(string? initialDirectory)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Choose a capture folder",
+        };
+        if (!string.IsNullOrEmpty(initialDirectory) && Directory.Exists(initialDirectory))
+        {
+            dialog.InitialDirectory = initialDirectory;
+        }
+
+        return dialog.ShowDialog() == true ? dialog.FolderName : null;
     }
 
     public void ShowError(string title, string message) =>

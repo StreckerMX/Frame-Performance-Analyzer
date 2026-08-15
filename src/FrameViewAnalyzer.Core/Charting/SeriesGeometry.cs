@@ -8,6 +8,65 @@ public static class SeriesGeometry
 {
     public const double DefaultMinimumGapSeconds = 1.5;
 
+    /// <summary>Gaps at least this long are labeled "N s omitted" on the chart.</summary>
+    public const double LabelThresholdSeconds = 3.0;
+
+    /// <summary>One omitted-time span between two consecutive points.</summary>
+    public readonly record struct GapSpan(double Start, double End)
+    {
+        public double DurationSeconds => End - Start;
+    }
+
+    /// <summary>
+    /// Spans where consecutive x values are farther apart than
+    /// <paramref name="minimumGapSeconds"/>, i.e. the omitted load ranges
+    /// that InsertGapBreaks renders as line breaks.
+    /// </summary>
+    public static IReadOnlyList<GapSpan> FindGaps(
+        IReadOnlyList<double> xs,
+        double minimumGapSeconds = DefaultMinimumGapSeconds)
+    {
+        var gaps = new List<GapSpan>();
+        for (var i = 1; i < xs.Count; i++)
+        {
+            if (xs[i] - xs[i - 1] > minimumGapSeconds)
+            {
+                gaps.Add(new GapSpan(xs[i - 1], xs[i]));
+            }
+        }
+
+        return gaps;
+    }
+
+    /// <summary>
+    /// Union of overlapping or adjacent spans, ordered by start. Used so
+    /// multi-series plots shade each omitted range exactly once.
+    /// </summary>
+    public static IReadOnlyList<GapSpan> MergeOverlapping(IReadOnlyList<GapSpan> spans)
+    {
+        if (spans.Count <= 1)
+        {
+            return spans;
+        }
+
+        var sorted = spans.OrderBy(span => span.Start).ToList();
+        var merged = new List<GapSpan>(sorted.Count) { sorted[0] };
+        foreach (var span in sorted.Skip(1))
+        {
+            var last = merged[^1];
+            if (span.Start <= last.End)
+            {
+                merged[^1] = new GapSpan(last.Start, System.Math.Max(last.End, span.End));
+            }
+            else
+            {
+                merged.Add(span);
+            }
+        }
+
+        return merged;
+    }
+
     /// <summary>
     /// Inserts NaN breaks wherever consecutive x values are farther apart
     /// than <paramref name="minimumGapSeconds"/> (excluded loads appear as

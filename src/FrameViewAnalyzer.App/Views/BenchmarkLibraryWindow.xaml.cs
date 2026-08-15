@@ -71,14 +71,22 @@ public partial class BenchmarkLibraryWindow : Window
 
     private async void ImportLegacy_Click(object sender, RoutedEventArgs e)
     {
-        var result = _legacyImporter.Import();
-        await _viewModel.RefreshAsync();
-        MessageBox.Show(
-            this,
-            result.Summary(),
-            "Legacy import",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        try
+        {
+            var result = _legacyImporter.Import();
+            await _viewModel.RefreshAsync();
+            MessageBox.Show(
+                this,
+                result.Summary(),
+                "Legacy import",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception error)
+        {
+            AppLog.ErrorOperation("Legacy data import", error);
+            _dialogs.ShowError("Legacy import", error.Message);
+        }
     }
 
     private async void ExportPackage_Click(object sender, RoutedEventArgs e)
@@ -115,6 +123,7 @@ public partial class BenchmarkLibraryWindow : Window
         }
         catch (Exception error)
         {
+            AppLog.ErrorOperation("Benchmark package export", error);
             _dialogs.ShowError("Export", error.Message);
         }
     }
@@ -151,6 +160,7 @@ public partial class BenchmarkLibraryWindow : Window
         }
         catch (Exception error)
         {
+            AppLog.ErrorOperation("Benchmark package import", error);
             _dialogs.ShowError("Benchmark package", error.Message);
         }
     }

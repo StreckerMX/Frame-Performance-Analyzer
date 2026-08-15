@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.Collections.ObjectModel;
 using System.IO;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Library;
@@ -10,11 +11,15 @@ using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Core.Formatting;
 using FrameViewAnalyzer.Core.Math;
 using FrameViewAnalyzer.Core.Models;
+using FrameViewAnalyzer.Core.Text;
 using FrameViewAnalyzer.Infrastructure;
 using FrameViewAnalyzer.Infrastructure.Csv;
 using FrameViewAnalyzer.Infrastructure.Stores;
 
 namespace FrameViewAnalyzer.App.ViewModels;
+
+/// <summary>One quick-capture option in the capture dropdown.</summary>
+public sealed record CaptureOption(string Path, string Display);
 
 /// <summary>
 /// Main-window state: theme mode, the Base/Comparison session pair, session
@@ -30,6 +35,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IRangeAnalysisService _rangeAnalysis;
     private readonly IManualMetadataStore _metadataStore;
     private readonly ILibraryStore _libraryStore;
+    private readonly CaptureFolderScanner _scanner;
 
     [ObservableProperty]
     private string _appearanceMode = "dark";
@@ -76,7 +82,18 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private string _comparisonLoadButtonText = "Load comparison...";
 
+    [ObservableProperty]
+    private string _captureFolderPath = string.Empty;
+
+    [ObservableProperty]
+    private CaptureOption? _selectedCapture;
+
+    public ObservableCollection<CaptureOption> Captures { get; } = [];
+
     public ChartViewModel Chart { get; }
+
+    /// <summary>Analysis-range controls (GPU threshold / trim / transitions).</summary>
+    public AnalysisRangeViewModel AnalysisRange { get; }
 
     /// <summary>
     /// Raised when an Analyze action wants the chart to jump somewhere; a
@@ -86,6 +103,18 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Raised when the manual metadata editor should open for a session.</summary>
     public event EventHandler<MetadataEditorRequest>? MetadataEditorRequested;
+
+    /// <summary>Raised when a FrameView_Summary.csv should open in the summary table.</summary>
+    public event EventHandler<string>? SummaryRequested;
+
+    /// <summary>Raised when a keyboard shortcut requests the PNG report export.</summary>
+    public event EventHandler? ExportPngReportRequested;
+
+    /// <summary>Raised when a keyboard shortcut requests the Statistics CSV export.</summary>
+    public event EventHandler? ExportStatisticsCsvRequested;
+
+    /// <summary>Raised when a keyboard shortcut requests the Benchmark JSON export.</summary>
+    public event EventHandler? ExportBenchmarkJsonRequested;
 
     public string VersionText => "FrameView Analyzer v2";
 
@@ -98,6 +127,7 @@ public partial class MainWindowViewModel : ObservableObject
         IRangeAnalysisService rangeAnalysis,
         IManualMetadataStore metadataStore,
         ILibraryStore libraryStore,
+        CaptureFolderScanner scanner,
         IDialogService dialogs)
     {
         _settings = settings;
@@ -108,12 +138,87 @@ public partial class MainWindowViewModel : ObservableObject
         _rangeAnalysis = rangeAnalysis;
         _metadataStore = metadataStore;
         _libraryStore = libraryStore;
+        _scanner = scanner;
         Chart = chart;
+        AnalysisRange = new AnalysisRangeViewModel();
+        AnalysisRange.OptionsChanged += (_, options) => _ = ApplyAnalysisOptionsAsync(options);
 
         var mode = Normalize(settings.Load().AppearanceMode);
         _appearanceMode = mode;
         _isDark = mode == "dark";
         _isLight = mode == "light";
+        CaptureFolderPath = settings.Load().CaptureDirectory
+            ?? PlatformFolders.FrameViewDirectory();
+    }
+
+    partial void OnSelectedCaptureChanged(CaptureOption? value)
+    {
+        if (value is not null)
+        {
+            _ = LoadBaseFromPathAsync(value.Path);
+        }
+    }
+
+    [RelayCommand]
+    private async Task RefreshCapturesAsync()
+    {
+        try
+        {
+            var directory = _settings.Load().CaptureDirectory
+                ?? PlatformFolders.FrameViewDirectory();
+            CaptureFolderPath = directory;
+            Captures.Clear();
+            SelectedCapture = null;
+            if (!Directory.Exists(directory))
+            {
+                StatusText = "CAPTURE FOLDER MISSING  ·  " + directory;
+                return;
+            }
+
+            foreach (var path in CaptureFolderScanner.DiscoverLogFiles(directory).Take(500))
+            {
+                var info = await _scanner.ReadCaptureInfoAsync(path);
+                if (info is null)
+                {
+                    continue;
+                }
+
+                Captures.Add(new CaptureOption(
+                    info.Path,
+                    CaptureFileNaming.SanitizeDisplayName(info.Name)));
+            }
+
+            StatusText = Captures.Count == 0
+                ? "READY  ·  No FrameView logs in the folder"
+                : $"READY  ·  {Captures.Count:N0} capture(s) in the folder";
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            StatusText = "READY  ·  Capture folder unavailable";
+        }
+    }
+
+    [RelayCommand]
+    private async Task ChooseCaptureFolderAsync()
+    {
+        var folder = _dialogs.PickFolder(CaptureFolderPath);
+        if (folder is null)
+        {
+            return;
+        }
+
+        await PersistCaptureFolderAsync(folder);
+    }
+
+    [RelayCommand]
+    private Task ResetCaptureFolderAsync() =>
+        PersistCaptureFolderAsync(PlatformFolders.FrameViewDirectory());
+
+    private async Task PersistCaptureFolderAsync(string folder)
+    {
+        _settings.Save(_settings.Load() with { CaptureDirectory = folder });
+        CaptureFolderPath = folder;
+        await RefreshCapturesAsync();
     }
 
     [RelayCommand]
@@ -134,9 +239,15 @@ public partial class MainWindowViewModel : ObservableObject
         try
         {
             var session = await LoadSessionAsync(path);
+            if (session is null)
+            {
+                return;
+            }
+
             BaseSession = session;
             RefreshSessionCards();
             Chart.SetSessions(BaseSession, ComparisonSession);
+            AnalysisRange.Attach(BaseSession, ComparisonSession);
             IndexSession(session);
             StatusText = $"CAPTURE OPENED  ·  {session.Capture.DisplayName}  ·  {ResolutionOf(session)}";
         }
@@ -180,9 +291,15 @@ public partial class MainWindowViewModel : ObservableObject
         try
         {
             var session = await LoadSessionAsync(path);
+            if (session is null)
+            {
+                return;
+            }
+
             ComparisonSession = session;
             RefreshSessionCards();
             Chart.SetSessions(BaseSession, ComparisonSession);
+            AnalysisRange.Attach(BaseSession, ComparisonSession);
             IndexSession(session);
             RecordComparison();
             StatusText = $"COMPARISON OPENED  ·  {session.Capture.DisplayName}  ·  {ResolutionOf(session)}";
@@ -272,6 +389,7 @@ public partial class MainWindowViewModel : ObservableObject
         ComparisonSession = null;
         RefreshSessionCards();
         Chart.SetSessions(BaseSession, null);
+        AnalysisRange.Attach(BaseSession, null);
         StatusText = "COMPARISON SESSION REMOVED";
     }
 
@@ -289,9 +407,52 @@ public partial class MainWindowViewModel : ObservableObject
         ComparisonSession = comparisonSession;
         RefreshSessionCards();
         Chart.SetSessions(BaseSession, ComparisonSession);
+        AnalysisRange.Attach(BaseSession, ComparisonSession);
         StatusText = promoted
             ? "BASE SESSION REMOVED  ·  The comparison is now the base session"
             : "READY  ·  No captures loaded";
+    }
+
+    /// <summary>
+    /// Re-analyzes the loaded Base (and Comparison) with the new analysis
+    /// options, rebuilds the chart series (preserving the selected metric),
+    /// refreshes the KPI tiles, and updates the library digest together with
+    /// the persisted analysis options.
+    /// </summary>
+    public async Task ApplyAnalysisOptionsAsync(AnalysisOptions options)
+    {
+        if (BaseSession is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var baseSession = _analysis.Reanalyze(BaseSession, options);
+            BaseSession = baseSession;
+            if (ComparisonSession is not null)
+            {
+                ComparisonSession = _analysis.Reanalyze(ComparisonSession, options);
+            }
+
+            RefreshSessionCards();
+            Chart.SetSessions(BaseSession, ComparisonSession);
+            AnalysisRange.Attach(BaseSession, ComparisonSession);
+            IndexSession(baseSession);
+            if (ComparisonSession is not null)
+            {
+                IndexSession(ComparisonSession);
+            }
+
+            StatusText = $"REANALYZED  ·  {baseSession.Capture.DisplayName}";
+        }
+        catch (Exception error) when (error is IOException
+            or UnauthorizedAccessException
+            or InvalidOperationException)
+        {
+            // Library bookkeeping failures never break re-analysis.
+            StatusText = "REANALYZED";
+        }
     }
 
     [RelayCommand]
@@ -328,9 +489,34 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    private async Task<SessionAnalysis> LoadSessionAsync(string path)
+    partial void OnHasBaseSessionChanged(bool value)
+    {
+        ExportPngReportCommand.NotifyCanExecuteChanged();
+        ExportStatisticsCsvCommand.NotifyCanExecuteChanged();
+        ExportBenchmarkJsonCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(HasBaseSession))]
+    private void ExportPngReport() => ExportPngReportRequested?.Invoke(this, EventArgs.Empty);
+
+    [RelayCommand(CanExecute = nameof(HasBaseSession))]
+    private void ExportStatisticsCsv() => ExportStatisticsCsvRequested?.Invoke(this, EventArgs.Empty);
+
+    [RelayCommand(CanExecute = nameof(HasBaseSession))]
+    private void ExportBenchmarkJson() => ExportBenchmarkJsonRequested?.Invoke(this, EventArgs.Empty);
+
+    private async Task<SessionAnalysis?> LoadSessionAsync(string path)
     {
         var capture = await _reader.LoadCaptureAsync(path);
+        var kind = _reader.DetectKind(capture.Headers, Path.GetFileName(path));
+        if (kind == CsvKind.Summary)
+        {
+            // Summary CSVs never occupy the Base/Comparison slots and never
+            // run log analytics; they open the read-only summary table.
+            SummaryRequested?.Invoke(this, path);
+            return null;
+        }
+
         return _analysis.Analyze(capture);
     }
 
@@ -416,6 +602,7 @@ public partial class MainWindowViewModel : ObservableObject
             or UnauthorizedAccessException
             or InvalidOperationException)
         {
+            AppLog.ErrorOperation("Manual metadata persistence", error);
             _dialogs.ShowError("Benchmark metadata", $"Metadata could not be saved: {error.Message}");
             return;
         }
