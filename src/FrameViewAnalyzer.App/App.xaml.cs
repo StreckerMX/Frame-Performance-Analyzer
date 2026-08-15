@@ -6,6 +6,7 @@ using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.Infrastructure;
 using FrameViewAnalyzer.Infrastructure.Csv;
+using FrameViewAnalyzer.Infrastructure.Exports;
 using FrameViewAnalyzer.Infrastructure.Legacy;
 using FrameViewAnalyzer.Infrastructure.Stores;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,6 +34,7 @@ public partial class App : Application
         services.AddSingleton<IManualMetadataStore>(_ => new JsonManualMetadataStore());
         services.AddSingleton<ILibraryStore>(_ => new JsonLibraryStore());
         services.AddSingleton<CaptureFolderScanner>();
+        services.AddSingleton<IExportService, ExportService>();
         services.AddSingleton<ILegacyDataImporter>(provider => new LegacyDataImporter(
             provider.GetRequiredService<ISettingsStore>(),
             provider.GetRequiredService<IManualMetadataStore>(),

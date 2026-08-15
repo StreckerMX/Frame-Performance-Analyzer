@@ -435,6 +435,9 @@ public partial class MainWindowViewModel : ObservableObject
         return identity is null ? null : _metadataStore.Get(identity);
     }
 
+    /// <summary>Stored manual metadata for a session, used by exports.</summary>
+    public ManualMetadata? ManualMetadataFor(SessionAnalysis session) => ManualMetadataOf(session);
+
     private static string CardNameOf(SessionAnalysis session, ManualMetadata? manual)
     {
         if (manual is not null && manual.BenchmarkName.Length > 0)

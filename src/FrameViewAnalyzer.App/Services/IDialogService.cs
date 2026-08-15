@@ -5,6 +5,10 @@ public interface IDialogService
 {
     string? PickCsvFile(string? initialDirectory);
 
+    string? PickSaveFile(string? initialFile, string filter, string defaultExtension);
+
+    string? PickOpenFile(string filter);
+
     void ShowError(string title, string message);
 
     void ShowInfo(string title, string message);
