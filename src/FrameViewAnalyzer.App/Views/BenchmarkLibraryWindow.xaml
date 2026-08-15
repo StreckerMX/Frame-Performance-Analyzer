@@ -204,14 +204,25 @@
         </ScrollViewer>
 
         <Grid Grid.Row="4" Margin="0,12,0,0">
-            <Button Content="Close"
-                    HorizontalAlignment="Right"
-                    Click="Close_Click"
-                    Style="{StaticResource SecondaryButtonStyle}" />
-            <TextBlock Text="Pick one capture as Base and another as Comparison, or toggle A/B twice to compare."
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="Pick one capture as Base and another as Comparison, or toggle A/B twice to compare."
                        FontSize="{DynamicResource FontSize.Tiny}"
                        Foreground="{DynamicResource MutedBrush}"
                        VerticalAlignment="Center" />
+            <Button Grid.Column="1"
+                    Content="Import legacy data"
+                    Margin="0,0,8,0"
+                    Click="ImportLegacy_Click"
+                    Style="{StaticResource GhostButtonStyle}" />
+            <Button Grid.Column="2"
+                    Content="Close"
+                    Click="Close_Click"
+                    Style="{StaticResource SecondaryButtonStyle}" />
         </Grid>
     </Grid>
 </Window>

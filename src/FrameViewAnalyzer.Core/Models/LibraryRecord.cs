@@ -17,15 +17,22 @@ public sealed record LibraryRecord(
     string AddedAt,
     string LastSeenAt,
     bool Available = true,
-    IReadOnlyDictionary<string, double>? StatsSummary = null)
+    IReadOnlyDictionary<string, double>? StatsSummary = null,
+    IReadOnlyDictionary<string, string>? AnalysisOptions = null)
 {
     private static readonly IReadOnlyDictionary<string, double> EmptyStats =
         new Dictionary<string, double>();
 
+    private static readonly IReadOnlyDictionary<string, string> EmptyOptions =
+        new Dictionary<string, string>();
+
     public IReadOnlyDictionary<string, double> StatsSummary { get; init; } =
         StatsSummary ?? EmptyStats;
 
-    /// <summary>Value equality: scalar fields plus ordered stats pairs.</summary>
+    public IReadOnlyDictionary<string, string> AnalysisOptions { get; init; } =
+        AnalysisOptions ?? EmptyOptions;
+
+    /// <summary>Value equality: scalar fields plus ordered dictionary pairs.</summary>
     public bool Equals(LibraryRecord? other) =>
         other is not null
         && Identity == other.Identity
@@ -39,8 +46,8 @@ public sealed record LibraryRecord(
         && AddedAt == other.AddedAt
         && LastSeenAt == other.LastSeenAt
         && Available == other.Available
-        && StatsSummary.OrderBy(pair => pair.Key, StringComparer.Ordinal)
-            .SequenceEqual(other.StatsSummary.OrderBy(pair => pair.Key, StringComparer.Ordinal));
+        && Ordered(StatsSummary).SequenceEqual(Ordered(other.StatsSummary))
+        && Ordered(AnalysisOptions).SequenceEqual(Ordered(other.AnalysisOptions));
 
     public override int GetHashCode()
     {
@@ -56,7 +63,13 @@ public sealed record LibraryRecord(
         hash.Add(AddedAt);
         hash.Add(LastSeenAt);
         hash.Add(Available);
-        foreach (var (key, value) in StatsSummary.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        foreach (var (key, value) in Ordered(StatsSummary))
+        {
+            hash.Add(key);
+            hash.Add(value);
+        }
+
+        foreach (var (key, value) in Ordered(AnalysisOptions))
         {
             hash.Add(key);
             hash.Add(value);
@@ -64,4 +77,8 @@ public sealed record LibraryRecord(
 
         return hash.ToHashCode();
     }
+
+    private static IOrderedEnumerable<KeyValuePair<string, T>> Ordered<T>(
+        IReadOnlyDictionary<string, T> pairs) =>
+        pairs.OrderBy(pair => pair.Key, StringComparer.Ordinal);
 }

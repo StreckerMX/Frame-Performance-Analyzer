@@ -192,6 +192,20 @@ public sealed class JsonLibraryStore : ILibraryStore
                 }
             }
 
+            var options = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (payload.TryGetProperty("analysis_options", out var rawOptions)
+                && rawOptions.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in rawOptions.EnumerateObject())
+                {
+                    if (property.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number
+                        or JsonValueKind.True or JsonValueKind.False)
+                    {
+                        options[property.Name] = property.Value.ToString();
+                    }
+                }
+            }
+
             return new LibraryRecord(
                 Identity: identity,
                 SourcePath: Field("source_path"),
@@ -209,7 +223,8 @@ public sealed class JsonLibraryStore : ILibraryStore
                 LastSeenAt: Field("last_seen_at"),
                 Available: !payload.TryGetProperty("available", out var available)
                     || available.ValueKind != JsonValueKind.False,
-                StatsSummary: stats);
+                StatsSummary: stats,
+                AnalysisOptions: options);
         }
         catch (Exception error) when (error is InvalidOperationException or FormatException)
         {
@@ -243,6 +258,13 @@ public sealed class JsonLibraryStore : ILibraryStore
         foreach (var (key, value) in record.StatsSummary.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
             writer.WriteNumber(key, value);
+        }
+
+        writer.WriteEndObject();
+        writer.WriteStartObject("analysis_options");
+        foreach (var (key, value) in record.AnalysisOptions.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            writer.WriteString(key, value);
         }
 
         writer.WriteEndObject();

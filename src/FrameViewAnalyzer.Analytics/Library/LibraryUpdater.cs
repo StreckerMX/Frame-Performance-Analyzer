@@ -29,23 +29,32 @@ public static class LibraryUpdater
             LastSeenAt: now,
             Available: true);
 
-    /// <summary>Merge freshly scanned context into an existing record.</summary>
+    /// <summary>
+    /// Merge freshly scanned context into an existing record without erasing
+    /// richer information: null, empty, whitespace, and "--" values never
+    /// overwrite useful existing fields, while valid newly discovered values
+    /// replace missing or placeholder ones. AddedAt and the statistics
+    /// digest are preserved unless explicitly recalculated.
+    /// </summary>
     public static LibraryRecord Merge(
         LibraryRecord existing,
         CaptureInfo capture,
         string now) =>
         existing with
         {
-            SourcePath = capture.Path,
-            SourceName = capture.Name,
-            Game = capture.Application,
-            Resolution = capture.Resolution,
-            Gpu = capture.Gpu,
-            Cpu = capture.Cpu,
-            DurationSeconds = capture.DurationSeconds,
+            SourcePath = Keep(existing.SourcePath, capture.Path),
+            SourceName = Keep(existing.SourceName, capture.Name),
+            Game = Keep(existing.Game, capture.Application),
+            Resolution = Keep(existing.Resolution, capture.Resolution),
+            Gpu = Keep(existing.Gpu, capture.Gpu),
+            Cpu = Keep(existing.Cpu, capture.Cpu),
+            DurationSeconds = capture.DurationSeconds ?? existing.DurationSeconds,
             LastSeenAt = now,
             Available = true,
         };
+
+    private static string Keep(string existing, string incoming) =>
+        string.IsNullOrWhiteSpace(incoming) || incoming == "--" ? existing : incoming;
 
     /// <summary>Insert or merge one capture; returns the current record.</summary>
     public static LibraryRecord Upsert(

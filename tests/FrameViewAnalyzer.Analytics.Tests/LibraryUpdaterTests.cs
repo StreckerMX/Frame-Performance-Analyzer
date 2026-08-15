@@ -81,4 +81,75 @@ public class LibraryUpdaterTests
         Assert.Contains("p01_fps", stats.Keys);
         Assert.Equal(100.0, stats["avg_fps"], precision: 9);
     }
+
+    private static LibraryRecord RichRecord() => new(
+        "id-1",
+        "C:/captures/a.csv",
+        "FrameView_2026_01_02T033633_Log.csv",
+        "GTA5 Enhanced",
+        "1920x1080",
+        "RTX 5070 Ti",
+        "Ryzen 7",
+        143.2,
+        "2026-01-01T00:00:00Z",
+        "2026-01-02T00:00:00Z",
+        Available: true,
+        StatsSummary: new Dictionary<string, double> { ["avg_fps"] = 120.0 },
+        AnalysisOptions: new Dictionary<string, string> { ["gpu_threshold"] = "10" });
+
+    [Fact]
+    public void Merge_preserves_the_scanned_duration_when_the_session_says_null()
+    {
+        var merged = LibraryUpdater.Merge(
+            RichRecord(),
+            Capture with { Path = Capture.Path, DurationSeconds = null },
+            "2026-01-03T00:00:00Z");
+
+        Assert.Equal(143.2, merged.DurationSeconds);
+    }
+
+    [Fact]
+    public void Merge_preserves_the_gpu_when_the_session_value_is_empty()
+    {
+        var merged = LibraryUpdater.Merge(
+            RichRecord(),
+            Capture with { Gpu = string.Empty },
+            "now");
+
+        Assert.Equal("RTX 5070 Ti", merged.Gpu);
+    }
+
+    [Fact]
+    public void Merge_replaces_placeholders_with_newly_detected_values()
+    {
+        var existing = RichRecord() with { Resolution = "--" };
+
+        var merged = LibraryUpdater.Merge(
+            existing,
+            Capture with { Resolution = "3840x2160" },
+            "now");
+
+        Assert.Equal("3840x2160", merged.Resolution);
+    }
+
+    [Fact]
+    public void Merge_updates_a_moved_source_path_but_keeps_added_at()
+    {
+        var moved = Capture with { Path = "D:/new-location/FrameView_2026_01_02T033633_Log.csv" };
+
+        var merged = LibraryUpdater.Merge(RichRecord(), moved, "2026-01-03T00:00:00Z");
+
+        Assert.Equal(moved.Path, merged.SourcePath);
+        Assert.Equal("2026-01-01T00:00:00Z", merged.AddedAt);
+        Assert.Equal("2026-01-03T00:00:00Z", merged.LastSeenAt);
+    }
+
+    [Fact]
+    public void Merge_preserves_the_stats_digest_without_recalculation()
+    {
+        var merged = LibraryUpdater.Merge(RichRecord(), Capture, "now");
+
+        Assert.Equal(120.0, merged.StatsSummary["avg_fps"]);
+        Assert.Equal("10", merged.AnalysisOptions["gpu_threshold"]);
+    }
 }

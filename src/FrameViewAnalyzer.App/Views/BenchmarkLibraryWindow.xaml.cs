@@ -1,6 +1,7 @@
 using System.Windows;
 using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.Infrastructure;
+using FrameViewAnalyzer.Infrastructure.Legacy;
 using FrameViewAnalyzer.Infrastructure.Stores;
 
 namespace FrameViewAnalyzer.App.Views;
@@ -12,14 +13,20 @@ namespace FrameViewAnalyzer.App.Views;
 public partial class BenchmarkLibraryWindow : Window
 {
     private readonly BenchmarkLibraryViewModel _viewModel;
+    private readonly ILegacyDataImporter _legacyImporter;
 
     public BenchmarkLibraryWindow(
         ILibraryStore libraryStore,
         IManualMetadataStore manualStore,
         CaptureFolderScanner scanner,
+        ILegacyDataImporter legacyImporter,
         string? captureDirectory = null)
     {
         InitializeComponent();
+        // Small screens / high DPI: cap to the working area; the row list is
+        // inside a ScrollViewer and the footer stays visible.
+        MaxHeight = SystemParameters.WorkArea.Height - 24;
+        _legacyImporter = legacyImporter;
         _viewModel = new BenchmarkLibraryViewModel(libraryStore, manualStore, scanner, captureDirectory);
         DataContext = _viewModel;
 
@@ -37,4 +44,16 @@ public partial class BenchmarkLibraryWindow : Window
     public event Action<string, string>? CompareRequested;
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private async void ImportLegacy_Click(object sender, RoutedEventArgs e)
+    {
+        var result = _legacyImporter.Import();
+        await _viewModel.RefreshAsync();
+        MessageBox.Show(
+            this,
+            result.Summary(),
+            "Legacy import",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
 }

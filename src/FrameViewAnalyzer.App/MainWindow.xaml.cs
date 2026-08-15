@@ -7,6 +7,7 @@ using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.App.Views;
 using FrameViewAnalyzer.Infrastructure;
+using FrameViewAnalyzer.Infrastructure.Legacy;
 using FrameViewAnalyzer.Infrastructure.Stores;
 
 namespace FrameViewAnalyzer.App;
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
     private readonly IManualMetadataStore _manualMetadataStore;
     private readonly CaptureFolderScanner _scanner;
     private readonly ISettingsStore _settings;
+    private readonly ILegacyDataImporter _legacyImporter;
 
     public MainWindow(
         MainWindowViewModel viewModel,
@@ -27,7 +29,8 @@ public partial class MainWindow : Window
         ILibraryStore libraryStore,
         IManualMetadataStore manualMetadataStore,
         CaptureFolderScanner scanner,
-        ISettingsStore settings)
+        ISettingsStore settings,
+        ILegacyDataImporter legacyImporter)
     {
         InitializeComponent();
         _placement = placement;
@@ -36,6 +39,7 @@ public partial class MainWindow : Window
         _manualMetadataStore = manualMetadataStore;
         _scanner = scanner;
         _settings = settings;
+        _legacyImporter = legacyImporter;
         DataContext = viewModel;
 
         // Restore once the native window exists; save on every close.
@@ -126,6 +130,7 @@ public partial class MainWindow : Window
             _libraryStore,
             _manualMetadataStore,
             _scanner,
+            _legacyImporter,
             captureDirectory)
         {
             Owner = this,
