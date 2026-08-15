@@ -1,5 +1,7 @@
 using FrameViewAnalyzer.Analytics;
+using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.App.ViewModels;
+using FrameViewAnalyzer.Core.Metrics;
 using FrameViewAnalyzer.Core.Models;
 
 namespace FrameViewAnalyzer.App.Tests;
@@ -8,7 +10,9 @@ public class ChartViewModelTests
 {
     private static CaptureAnalysisService Analysis { get; } = new();
 
-    private static SessionAnalysis SessionOf(double[] frameTimes)
+    private static SessionAnalysis SessionOf(
+        double[] frameTimes,
+        (string Header, string[] Values)? extra = null)
     {
         var rows = frameTimes
             .Select((frameTime, index) => new[]
@@ -18,23 +22,34 @@ public class ChartViewModelTests
                 "80.0",
             })
             .ToArray();
+        var headers = new List<string> { "TimeInSeconds", "MsBetweenPresents", "GPU0Util(%)" };
+        var columns = new List<string[]>
+        {
+            rows.Select(row => row[0]).ToArray(),
+            rows.Select(row => row[1]).ToArray(),
+            rows.Select(row => row[2]).ToArray(),
+        };
+        if (extra is { } additional)
+        {
+            headers.Add(additional.Header);
+            columns.Add(additional.Values);
+        }
+
         var capture = new CaptureData
         {
             Path = "capture.csv",
             DisplayName = "capture",
             Kind = CsvKind.Log,
-            Headers = ["TimeInSeconds", "MsBetweenPresents", "GPU0Util(%)"],
-            Columns =
-            [
-                rows.Select(row => row[0]).ToArray(),
-                rows.Select(row => row[1]).ToArray(),
-                rows.Select(row => row[2]).ToArray(),
-            ],
+            Headers = headers.ToArray(),
+            Columns = columns.ToArray(),
         };
         return Analysis.Analyze(
             capture,
             new AnalysisOptions(GpuThreshold: 10, TrimBufferSeconds: 0, AutoGpuThreshold: false));
     }
+
+    private static (string, string[]) DroppedColumn(double[] frameTimes) =>
+        ("Dropped", frameTimes.Select(_ => "0.0").ToArray());
 
     [Fact]
     public void SetSessions_populates_metrics_and_selects_fps()
@@ -176,5 +191,98 @@ public class ChartViewModelTests
         var averageTile = viewModel.KpiTiles[0];
         Assert.Equal(ImprovementKind.Improvement, averageTile.Kind);
         Assert.Equal("▲ +100.0%", averageTile.DeltaText);
+    }
+
+    [Fact]
+    public void To_points_converts_series_and_handles_missing_series()
+    {
+        var series = new MetricSeries(
+            CoreMetricCatalog.CoreById["fps"],
+            [0.0, 1.0, 2.0],
+            [100.0, 120.0, 90.0]);
+
+        var points = ChartViewModel.ToPoints(series);
+
+        Assert.Equal(3, points.Count);
+        Assert.Equal(new ChartPoint(1.0, 120.0), points[1]);
+        Assert.Empty(ChartViewModel.ToPoints(null));
+    }
+
+    [Fact]
+    public void Metrics_are_the_union_of_base_and_comparison_catalogs()
+    {
+        var baseSession = SessionOf([10.0, 10.0, 10.0, 10.0]);
+        var comparison = SessionOf(
+            [20.0, 20.0, 20.0, 20.0],
+            DroppedColumn([20.0, 20.0, 20.0, 20.0]));
+        var viewModel = new ChartViewModel();
+
+        viewModel.SetSessions(baseSession, comparison);
+
+        var ids = viewModel.Metrics.Select(metric => metric.Id).ToList();
+        Assert.Equal(baseSession.Catalog.Count + 1, ids.Count);
+        Assert.Contains("dropped", ids);
+        Assert.DoesNotContain("dropped", baseSession.Catalog.Select(metric => metric.Id));
+        // Base ordering first, comparison-only metrics appended.
+        Assert.Equal(
+            baseSession.Catalog.Select(metric => metric.Id),
+            ids.Take(baseSession.Catalog.Count));
+        Assert.Equal("dropped", ids[^1]);
+    }
+
+    [Fact]
+    public void Comparison_only_metric_renders_the_comparison_alone()
+    {
+        var baseSession = SessionOf([10.0, 10.0, 10.0, 10.0]);
+        var comparison = SessionOf(
+            [20.0, 20.0, 20.0, 20.0],
+            DroppedColumn([20.0, 20.0, 20.0, 20.0]));
+        var viewModel = new ChartViewModel();
+        viewModel.SetSessions(baseSession, comparison);
+
+        viewModel.SelectedMetric = viewModel.Metrics.Single(metric => metric.Id == "dropped");
+
+        Assert.True(viewModel.HasData);
+        Assert.Null(viewModel.Series);
+        Assert.NotNull(viewModel.ComparisonSeries);
+        Assert.Equal("Comparison", viewModel.ComparisonSeries!.Label);
+        Assert.Single(viewModel.SeriesList);
+    }
+
+    [Fact]
+    public void Base_only_metric_renders_the_base_normally()
+    {
+        var baseSession = SessionOf(
+            [10.0, 10.0, 10.0, 10.0],
+            DroppedColumn([10.0, 10.0, 10.0, 10.0]));
+        var comparison = SessionOf([20.0, 20.0, 20.0, 20.0]);
+        var viewModel = new ChartViewModel();
+        viewModel.SetSessions(baseSession, comparison);
+
+        viewModel.SelectedMetric = viewModel.Metrics.Single(metric => metric.Id == "dropped");
+
+        Assert.True(viewModel.HasData);
+        Assert.NotNull(viewModel.Series);
+        Assert.Null(viewModel.ComparisonSeries);
+        Assert.Single(viewModel.SeriesList);
+    }
+
+    [Fact]
+    public void Comparison_only_metric_does_not_hide_shared_metrics()
+    {
+        var baseSession = SessionOf([10.0, 10.0, 10.0, 10.0]);
+        var comparison = SessionOf(
+            [20.0, 20.0, 20.0, 20.0],
+            DroppedColumn([20.0, 20.0, 20.0, 20.0]));
+        var viewModel = new ChartViewModel();
+        viewModel.SetSessions(baseSession, comparison);
+        viewModel.SelectedMetric = viewModel.Metrics.Single(metric => metric.Id == "dropped");
+
+        viewModel.SelectedMetric = viewModel.Metrics.Single(metric => metric.Id == "fps");
+
+        Assert.True(viewModel.HasData);
+        Assert.NotNull(viewModel.Series);
+        Assert.NotNull(viewModel.ComparisonSeries);
+        Assert.Equal(2, viewModel.SeriesList.Count);
     }
 }

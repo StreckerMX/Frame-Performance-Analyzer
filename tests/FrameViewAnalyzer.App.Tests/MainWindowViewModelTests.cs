@@ -1,5 +1,6 @@
 using System.IO;
 using FrameViewAnalyzer.Analytics;
+using FrameViewAnalyzer.Analytics.RangeAnalysis;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.Infrastructure.Csv;
@@ -75,17 +76,26 @@ public class MainWindowViewModelTests
             new ChartViewModel(),
             reader,
             analysis,
+            new RangeAnalysisService(),
             dialogs);
         return (viewModel, settings, themes, dialogs, directory);
     }
 
-    private static string WriteCapture(string directory, string fileName, double frameTime = 10.0)
+    private static string WriteCapture(
+        string directory,
+        string fileName,
+        double frameTime = 10.0,
+        int seconds = 6,
+        Func<int, double>? frameTimeBySecond = null)
     {
         var csvPath = Path.Combine(directory, fileName);
         var rows = string.Concat(
-            Enumerable.Range(0, 6).SelectMany(second =>
+            Enumerable.Range(0, seconds).SelectMany(second =>
                 new[] { 0.0, 0.25, 0.5 }.Select(offset =>
-                    $"{second + offset},{frameTime},80\n")));
+                {
+                    var time = frameTimeBySecond?.Invoke(second) ?? frameTime;
+                    return $"{second + offset},{time},80\n";
+                })));
         File.WriteAllText(csvPath, "TimeInSeconds,MsBetweenPresents,GPU0Util(%)\n" + rows);
         return csvPath;
     }
@@ -259,5 +269,302 @@ public class MainWindowViewModelTests
         {
             Cleanup(directory);
         }
+    }
+
+    [Fact]
+    public async Task Analyze_full_capture_requests_a_full_zoom()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Test_Log.csv");
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            Assert.Null(dialogs.LastError);
+            Assert.True(viewModel.Chart.HasData);
+            var listener = Listen(viewModel);
+
+            viewModel.AnalyzeFullCaptureCommand.Execute(null);
+
+            Assert.True(listener.Invoked);
+            Assert.Null(listener.Requested);
+            Assert.Null(dialogs.LastInfo);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Analyze_worst_region_jumps_to_the_worst_ten_seconds()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            // 14 s at a constant 100 FPS; the 1 s edge trim leaves bins 1-12,
+            // and the chart X axis is rebased to the window start: range (0, 9).
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Test_Log.csv", seconds: 14);
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            var listener = Listen(viewModel);
+
+            viewModel.AnalyzeWorstRegionCommand.Execute(null);
+
+            Assert.True(listener.Invoked);
+            Assert.Equal(new TimeRange(0.0, 9.0), listener.Requested);
+            Assert.Null(dialogs.LastInfo);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Analyze_stable_region_jumps_to_the_stablest_ten_seconds()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Test_Log.csv", seconds: 14);
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            var listener = Listen(viewModel);
+
+            viewModel.AnalyzeStableRegionCommand.Execute(null);
+
+            Assert.True(listener.Invoked);
+            Assert.Equal(new TimeRange(0.0, 9.0), listener.Requested);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Analyze_largest_drop_jumps_to_the_drop_region()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            // 100 FPS for seconds 0-6, then 50 FPS; trim leaves bins 1-12 and
+            // the drop lands at bin 7 (X = 6 on the rebased axis): range (0, 6).
+            dialogs.NextCsvPath = WriteCapture(
+                directory,
+                "FrameView_Test_Log.csv",
+                seconds: 14,
+                frameTimeBySecond: second => second < 7 ? 10.0 : 20.0);
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            var listener = Listen(viewModel);
+
+            viewModel.AnalyzeLargestDropCommand.Execute(null);
+
+            Assert.True(listener.Invoked);
+            Assert.Equal(new TimeRange(0.0, 6.0), listener.Requested);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Analyze_largest_drop_without_a_drop_shows_info()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Test_Log.csv", seconds: 14);
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            var listener = Listen(viewModel);
+
+            viewModel.AnalyzeLargestDropCommand.Execute(null);
+
+            Assert.False(listener.Invoked);
+            Assert.NotNull(dialogs.LastInfo);
+            Assert.Contains("No meaningful performance drop", dialogs.LastInfo);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Analyze_without_direction_shows_info()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Test_Log.csv", seconds: 14);
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            viewModel.Chart.SelectedMetric = viewModel.Chart.Metrics.Single(
+                metric => metric.Id == "gpu0_util");
+            var listener = Listen(viewModel);
+
+            viewModel.AnalyzeWorstRegionCommand.Execute(null);
+
+            Assert.False(listener.Invoked);
+            Assert.NotNull(dialogs.LastInfo);
+            Assert.Contains("no defined performance direction", dialogs.LastInfo);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Analyze_ab_difference_requires_a_comparison()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Test_Log.csv", seconds: 14);
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            var listener = Listen(viewModel);
+
+            viewModel.AnalyzeLargestAbDifferenceCommand.Execute(null);
+
+            Assert.False(listener.Invoked);
+            Assert.NotNull(dialogs.LastInfo);
+            Assert.Contains("Load a comparison session", dialogs.LastInfo);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Analyze_ab_difference_jumps_to_the_diverging_region()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Base_Log.csv", seconds: 14);
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            dialogs.NextCsvPath = WriteCapture(
+                directory, "FrameView_Comp_Log.csv", frameTime: 20.0, seconds: 14);
+            await viewModel.LoadComparisonCommand.ExecuteAsync(null);
+            var listener = Listen(viewModel);
+
+            viewModel.AnalyzeLargestAbDifferenceCommand.Execute(null);
+
+            Assert.True(listener.Invoked);
+            Assert.Equal(new TimeRange(0.0, 9.0), listener.Requested);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public void Analyze_without_data_is_a_no_op()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        Cleanup(directory);
+        var listener = Listen(viewModel);
+
+        viewModel.AnalyzeFullCaptureCommand.Execute(null);
+        viewModel.AnalyzeWorstRegionCommand.Execute(null);
+        viewModel.AnalyzeLargestAbDifferenceCommand.Execute(null);
+
+        Assert.False(listener.Invoked);
+        Assert.Null(dialogs.LastInfo);
+    }
+
+    [Fact]
+    public async Task Has_comparison_follows_the_comparison_session()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            Assert.False(viewModel.HasComparison);
+
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Base_Log.csv");
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            Assert.False(viewModel.HasComparison);
+
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Comp_Log.csv", frameTime: 20.0);
+            await viewModel.LoadComparisonCommand.ExecuteAsync(null);
+            Assert.True(viewModel.HasComparison);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Analyze_worst_region_uses_base_points_when_comparing()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            // Base: constant 100 FPS (worst region (0, 9) on the rebased axis).
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Base_Log.csv", seconds: 14);
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            // Comparison: 100 FPS for 0-6 s then 50 FPS; its own worst region
+            // would be (2, 11), so this proves the command uses Base points.
+            dialogs.NextCsvPath = WriteCapture(
+                directory,
+                "FrameView_Comp_Log.csv",
+                seconds: 14,
+                frameTimeBySecond: second => second < 7 ? 10.0 : 20.0);
+            await viewModel.LoadComparisonCommand.ExecuteAsync(null);
+            var listener = Listen(viewModel);
+
+            viewModel.AnalyzeWorstRegionCommand.Execute(null);
+
+            Assert.True(listener.Invoked);
+            Assert.Equal(new TimeRange(0.0, 9.0), listener.Requested);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Analyze_still_works_after_removing_a_session()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Base_Log.csv", seconds: 14);
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Comp_Log.csv", seconds: 14);
+            await viewModel.LoadComparisonCommand.ExecuteAsync(null);
+            viewModel.RemoveComparisonCommand.Execute(null);
+            var listener = Listen(viewModel);
+
+            viewModel.AnalyzeStableRegionCommand.Execute(null);
+
+            Assert.True(listener.Invoked);
+            Assert.Equal(new TimeRange(0.0, 9.0), listener.Requested);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    private sealed class AnalyzeListener
+    {
+        public bool Invoked { get; set; }
+
+        public TimeRange? Requested { get; set; }
+    }
+
+    private static AnalyzeListener Listen(MainWindowViewModel viewModel)
+    {
+        var listener = new AnalyzeListener();
+        viewModel.AnalyzeRangeRequested += (_, range) =>
+        {
+            listener.Invoked = true;
+            listener.Requested = range;
+        };
+        return listener;
     }
 }

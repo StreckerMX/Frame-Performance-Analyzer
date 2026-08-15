@@ -204,9 +204,10 @@
                                            FontWeight="Bold"
                                            Foreground="{DynamicResource AccentBrush}" />
                                 <TextBlock Text="{Binding Value}"
-                                           FontSize="{DynamicResource FontSize.Display}"
+                                           FontSize="{DynamicResource FontSize.KpiValue}"
                                            FontWeight="Bold"
-                                           Foreground="{DynamicResource TextBrush}" />
+                                           Foreground="{DynamicResource TextBrush}"
+                                           TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="{Binding DeltaText}" Margin="0,2,0,0">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
@@ -240,6 +241,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <ComboBox Grid.Column="0"
                           x:Name="MetricSelector"
@@ -265,10 +267,26 @@
                               IsChecked="{Binding Chart.PanEnabled}"
                               Style="{StaticResource ToggleButtonStyle}" />
                 <Button Grid.Column="5"
+                        Content="Analyze ▾"
+                        Style="{StaticResource GhostButtonStyle}">
+                    <Button.ContextMenu>
+                        <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                            <MenuItem Header="Full capture" Command="{Binding AnalyzeFullCaptureCommand}" />
+                            <MenuItem Header="Worst performance region (10 s)" Command="{Binding AnalyzeWorstRegionCommand}" />
+                            <MenuItem Header="Most stable region (10 s)" Command="{Binding AnalyzeStableRegionCommand}" />
+                            <MenuItem Header="Largest performance drop" Command="{Binding AnalyzeLargestDropCommand}" />
+                            <MenuItem Header="Largest A/B difference"
+                                      Command="{Binding AnalyzeLargestAbDifferenceCommand}"
+                                      IsEnabled="{Binding HasComparison}" />
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
+                <Button Grid.Column="6"
+                        Margin="8,0,0,0"
                         Content="Reset zoom"
                         Click="ResetZoom_Click"
                         Style="{StaticResource GhostButtonStyle}" />
-                <Button Grid.Column="6"
+                <Button Grid.Column="7"
                         Margin="8,0,0,0"
                         Content="Auto zoom"
                         Click="AutoZoom_Click"
