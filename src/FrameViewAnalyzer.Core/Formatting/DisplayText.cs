@@ -92,4 +92,31 @@ public static partial class DisplayText
 
         return string.Join(" ", parts);
     }
+
+    /// <summary>
+    /// Statistic value formatting like the Python reference: missing → "--",
+    /// ≥1000 no decimals, ≥100 no decimals, otherwise one decimal.
+    /// </summary>
+    public static string FormatStat(double? value, string unit = "")
+    {
+        if (value is null)
+        {
+            return "--";
+        }
+
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        var suffix = unit.Length > 0 ? $" {unit}" : string.Empty;
+        var absolute = System.Math.Abs(value.Value);
+        if (absolute >= 1000)
+        {
+            return $"{value.Value.ToString("N0", culture)}{suffix}";
+        }
+
+        if (absolute >= 100)
+        {
+            return $"{value.Value.ToString("F0", culture)}{suffix}";
+        }
+
+        return $"{value.Value.ToString("F1", culture)}{suffix}";
+    }
 }

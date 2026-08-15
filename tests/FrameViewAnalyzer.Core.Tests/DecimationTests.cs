@@ -123,4 +123,25 @@ public class SeriesGeometryTests
         Assert.Empty(xs);
         Assert.Empty(ys);
     }
+
+    [Fact]
+    public void Nearest_index_finds_exact_matches()
+    {
+        Assert.Equal(2, SeriesGeometry.NearestIndex([0.0, 1.0, 2.0, 3.0], 2.0));
+    }
+
+    [Fact]
+    public void Nearest_index_resolves_between_points()
+    {
+        Assert.Equal(1, SeriesGeometry.NearestIndex([0.0, 1.0, 2.0, 3.0], 1.4));
+        Assert.Equal(2, SeriesGeometry.NearestIndex([0.0, 1.0, 2.0, 3.0], 1.6));
+    }
+
+    [Fact]
+    public void Nearest_index_clamps_to_the_edges()
+    {
+        Assert.Equal(0, SeriesGeometry.NearestIndex([0.0, 1.0, 2.0], -5.0));
+        Assert.Equal(2, SeriesGeometry.NearestIndex([0.0, 1.0, 2.0], 99.0));
+        Assert.Equal(-1, SeriesGeometry.NearestIndex([], 1.0));
+    }
 }

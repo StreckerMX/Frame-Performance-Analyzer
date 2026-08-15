@@ -40,4 +40,44 @@ public static class SeriesGeometry
 
         return (resultXs.ToArray(), resultYs.ToArray());
     }
+
+    /// <summary>
+    /// Index of the point nearest to <paramref name="x"/> in an ascending
+    /// series (binary search; ties resolve to the earlier point).
+    /// Returns -1 for empty input.
+    /// </summary>
+    public static int NearestIndex(IReadOnlyList<double> xs, double x)
+    {
+        if (xs.Count == 0)
+        {
+            return -1;
+        }
+
+        if (x <= xs[0])
+        {
+            return 0;
+        }
+
+        if (x >= xs[^1])
+        {
+            return xs.Count - 1;
+        }
+
+        var low = 0;
+        var high = xs.Count - 1;
+        while (high - low > 1)
+        {
+            var middle = (low + high) / 2;
+            if (xs[middle] <= x)
+            {
+                low = middle;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+
+        return System.Math.Abs(xs[low] - x) <= System.Math.Abs(xs[high] - x) ? low : high;
+    }
 }
