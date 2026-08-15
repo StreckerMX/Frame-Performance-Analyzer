@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\FrameViewAnalyzer.Core\FrameViewAnalyzer.Core.csproj" />
+    <ProjectReference Include="..\FrameViewAnalyzer.Analytics\FrameViewAnalyzer.Analytics.csproj" />
+    <ProjectReference Include="..\FrameViewAnalyzer.Infrastructure\FrameViewAnalyzer.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+</Project>
