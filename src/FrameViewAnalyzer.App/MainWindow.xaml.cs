@@ -70,6 +70,19 @@ public partial class MainWindow : Window
         viewModel.Chart.PropertyChanged += OnChartPropertyChanged;
         viewModel.AnalyzeRangeRequested += OnAnalyzeRangeRequested;
         viewModel.MetadataEditorRequested += OnMetadataEditorRequested;
+        viewModel.SummaryRequested += async (_, path) =>
+        {
+            var capture = await _reader.LoadCaptureAsync(path);
+            var window = new SummaryTableWindow(
+                new SummaryTableViewModel(SummaryTable.Build(capture)))
+            {
+                Owner = this,
+            };
+            window.Show();
+        };
+        viewModel.ExportPngReportRequested += (_, _) => ExportPng_Click(this, new RoutedEventArgs());
+        viewModel.ExportStatisticsCsvRequested += (_, _) => ExportCsv_Click(this, new RoutedEventArgs());
+        viewModel.ExportBenchmarkJsonRequested += (_, _) => ExportJson_Click(this, new RoutedEventArgs());
         ChartView.ViewChanged += bounds => viewModel.Chart.UpdateVisibleRange(bounds);
         themes.Changed += (_, _) => ChartView.RefreshStyle();
         OnChartPropertyChanged(this, new PropertyChangedEventArgs(nameof(ChartViewModel.Series)));
@@ -140,6 +153,31 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
         }
+    }
+
+    private void BaseDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel.BaseSession is { } session)
+        {
+            OpenDetails(session);
+        }
+    }
+
+    private void ComparisonDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel.ComparisonSession is { } session)
+        {
+            OpenDetails(session);
+        }
+    }
+
+    private void OpenDetails(SessionAnalysis session)
+    {
+        var window = new SessionDetailsWindow(new SessionDetailsViewModel(session))
+        {
+            Owner = this,
+        };
+        window.ShowDialog();
     }
 
     private void Library_Click(object sender, RoutedEventArgs e)

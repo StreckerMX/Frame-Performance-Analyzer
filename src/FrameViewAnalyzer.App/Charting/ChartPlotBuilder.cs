@@ -60,6 +60,9 @@ public static class ChartPlotBuilder
         plot.Axes.Left.Label.Text = unitLabel;
         plot.Axes.Left.Label.ForeColor = style.Muted;
 
+        // Shaded omitted-load bands render underneath the series lines.
+        GapOverlay.Apply(plot, seriesList, style);
+
         var showLegend = seriesList.Count > 1;
         for (var index = 0; index < seriesList.Count; index++)
         {

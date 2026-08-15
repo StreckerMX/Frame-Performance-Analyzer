@@ -144,4 +144,50 @@ public class SeriesGeometryTests
         Assert.Equal(2, SeriesGeometry.NearestIndex([0.0, 1.0, 2.0], 99.0));
         Assert.Equal(-1, SeriesGeometry.NearestIndex([], 1.0));
     }
+
+    [Fact]
+    public void FindGaps_reports_spans_above_the_minimum_rule()
+    {
+        var xs = new double[] { 0, 1, 2, 9, 10, 20, 21 };
+
+        var gaps = SeriesGeometry.FindGaps(xs);
+
+        Assert.Equal(2, gaps.Count);
+        Assert.Equal(new SeriesGeometry.GapSpan(2, 9), gaps[0]);
+        Assert.Equal(7.0, gaps[0].DurationSeconds);
+        Assert.Equal(new SeriesGeometry.GapSpan(10, 20), gaps[1]);
+    }
+
+    [Fact]
+    public void FindGaps_ignores_small_deltas_and_empty_input()
+    {
+        Assert.Empty(SeriesGeometry.FindGaps([]));
+        Assert.Empty(SeriesGeometry.FindGaps([1.0]));
+        Assert.Empty(SeriesGeometry.FindGaps([0.0, 1.0, 2.0]));
+    }
+
+    [Fact]
+    public void MergeOverlapping_unions_overlapping_and_adjacent_spans()
+    {
+        var merged = SeriesGeometry.MergeOverlapping(
+        [
+            new SeriesGeometry.GapSpan(2, 9),
+            new SeriesGeometry.GapSpan(8, 12),
+            new SeriesGeometry.GapSpan(12, 15),
+            new SeriesGeometry.GapSpan(20, 21),
+        ]);
+
+        Assert.Equal(2, merged.Count);
+        Assert.Equal(new SeriesGeometry.GapSpan(2, 15), merged[0]);
+        Assert.Equal(new SeriesGeometry.GapSpan(20, 21), merged[1]);
+    }
+
+    [Fact]
+    public void Label_threshold_matches_the_reference_omitted_rule()
+    {
+        // The Python reference labels gaps of ~3 s or more as "N s omitted".
+        Assert.True(SeriesGeometry.LabelThresholdSeconds >= 3.0);
+        var gaps = SeriesGeometry.FindGaps([0.0, 1.0, 5.0, 6.0]);
+        Assert.True(gaps[0].DurationSeconds >= SeriesGeometry.LabelThresholdSeconds);
+    }
 }

@@ -94,7 +94,9 @@ public static class LibraryUpdater
 
     /// <summary>
     /// Cache the average / 1% low / 0.1% low FPS digest for a record from an
-    /// analyzed session. The library never re-analyzes files during scans.
+    /// analyzed session, together with the exact analysis options that
+    /// produced it (reproducibility: digest and options always correspond).
+    /// The library never re-analyzes files during scans.
     /// </summary>
     public static void UpdateStats(
         LibraryModel library,
@@ -117,6 +119,24 @@ public static class LibraryUpdater
             }
         }
 
-        library.Records[identity] = record with { StatsSummary = summary };
+        library.Records[identity] = record with
+        {
+            StatsSummary = summary,
+            AnalysisOptions = OptionsDictionary(session.EffectiveOptions),
+        };
     }
+
+    /// <summary>
+    /// Canonical string dictionary for the analysis options that produced a
+    /// session. Mirrors the JSON statistics export field names so the same
+    /// options can be reconstructed for reproducibility.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> OptionsDictionary(AnalysisOptions options) =>
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["gpu_threshold"] = options.GpuThreshold.ToString(CultureInfo.InvariantCulture),
+            ["trim_buffer_seconds"] = options.TrimBufferSeconds.ToString(CultureInfo.InvariantCulture),
+            ["auto_gpu_threshold"] = options.AutoGpuThreshold ? "true" : "false",
+            ["exclude_transitions"] = options.ExcludeTransitions ? "true" : "false",
+        };
 }

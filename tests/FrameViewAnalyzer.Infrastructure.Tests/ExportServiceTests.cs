@@ -377,6 +377,43 @@ public class ExportServiceTests
     }
 
     [Fact]
+    public void Package_round_trip_retains_analysis_options()
+    {
+        var library = new LibraryModel();
+        library.Records["a"] = Record("a") with
+        {
+            AnalysisOptions = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gpu_threshold"] = "25",
+                ["trim_buffer_seconds"] = "2",
+                ["auto_gpu_threshold"] = "false",
+                ["exclude_transitions"] = "true",
+            },
+        };
+        var package = ExportReport.BuildBenchmarkPackage(
+            library,
+            new Dictionary<string, ManualMetadata>());
+
+        var proposal = _service.ImportBenchmarkPackage(
+            new LibraryModel(),
+            new Dictionary<string, ManualMetadata>(),
+            JsonSerializer.Serialize(package, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            }));
+
+        Assert.Equal(
+            "25",
+            proposal.Library.Records["a"].AnalysisOptions["gpu_threshold"]);
+        Assert.Equal(
+            "2",
+            proposal.Library.Records["a"].AnalysisOptions["trim_buffer_seconds"]);
+        Assert.Equal(
+            "false",
+            proposal.Library.Records["a"].AnalysisOptions["auto_gpu_threshold"]);
+    }
+
+    [Fact]
     public void Version_mismatch_is_rejected_without_modifying_destination_state()
     {
         var library = new LibraryModel();
