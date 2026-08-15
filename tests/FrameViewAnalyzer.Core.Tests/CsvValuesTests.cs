@@ -60,4 +60,39 @@ public class CsvValuesTests
         Assert.True(CsvValues.TryParseNumber("1.5", out var value));
         Assert.Equal(1.5, value);
     }
+
+    [Theory]
+    [InlineData(" 60 ")]
+    [InlineData("60 ")]
+    [InlineData(" 60")]
+    [InlineData("1e3")]
+    [InlineData("-2.5E-2")]
+    [InlineData("+4.25")]
+    public void TryParseNumber_accepts_padded_signed_and_exponent_forms(string raw)
+    {
+        Assert.True(CsvValues.TryParseNumber(raw, out _));
+    }
+
+    [Theory]
+    [InlineData("Infinity")]
+    [InlineData("+INF")]
+    [InlineData("NaN")]
+    [InlineData("-infinity")]
+    public void TryParseNumber_rejects_inf_and_nan_tokens_under_any_casing(string raw)
+    {
+        Assert.False(CsvValues.TryParseNumber(raw, out _));
+    }
+
+    [Fact]
+    public void TryParseAnyNumber_accepts_inf_and_nan_tokens_like_python_float()
+    {
+        Assert.True(CsvValues.TryParseAnyNumber("inf", out var inf));
+        Assert.True(double.IsPositiveInfinity(inf));
+        Assert.True(CsvValues.TryParseAnyNumber("+Infinity", out var plusInf));
+        Assert.True(double.IsPositiveInfinity(plusInf));
+        Assert.True(CsvValues.TryParseAnyNumber("-inf", out var negInf));
+        Assert.True(double.IsNegativeInfinity(negInf));
+        Assert.True(CsvValues.TryParseAnyNumber("nan", out var nan));
+        Assert.True(double.IsNaN(nan));
+    }
 }

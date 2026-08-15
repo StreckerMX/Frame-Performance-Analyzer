@@ -1,0 +1,17 @@
+benchmark,parameters,mean,error,stddev,allocated
+CsvParsingBenchmarks.LoadCaptureAsync,Rows=25000,5.143 ms,0.084 ms,0.074 ms,4.97 MB
+CsvParsingBenchmarks.LoadCaptureAsync,Rows=200000,65.456 ms,1.299 ms,3.642 ms,38.26 MB
+AnalysisBenchmarks.Analyze,Rows=25000,6.883 ms,0.043 ms,0.038 ms,4812.32 KB
+AnalysisBenchmarks.ComputeStatistics,Rows=25000,2.304 ms,0.010 ms,0.010 ms,686.12 KB
+AnalysisBenchmarks.DetectGpuProfile,Rows=25000,13.908 us,0.243 us,0.227 us,40.42 KB
+AnalysisBenchmarks.Analyze,Rows=200000,55.611 ms,0.442 ms,0.413 ms,38601.27 KB
+AnalysisBenchmarks.ComputeStatistics,Rows=200000,24.573 ms,0.231 ms,0.216 ms,5471.5 KB
+AnalysisBenchmarks.DetectGpuProfile,Rows=200000,185.759 us,3.656 us,4.064 us,325.65 KB
+ComparisonBenchmarks.Compare,Rows=25000,12.97 ms,0.252 ms,0.197 ms,13.45 MB
+ComparisonBenchmarks.Compare,Rows=200000,104.11 ms,1.975 ms,1.542 ms,107.81 MB
+DecimationBenchmarks.MinMaxEnvelope,Points=1000000 Budget=1000,1046.2 us,,,31.41 KB
+DecimationBenchmarks.MinMaxEnvelope,Points=1000000 Budget=4000,1117.9 us,,,125.16 KB
+DecimationBenchmarks.Lttb,Points=1000000 Budget=1000,1352.9 us,,,15.67 KB
+DecimationBenchmarks.Lttb,Points=1000000 Budget=4000,1665.9 us,,,62.55 KB
+DecimationBenchmarks.Select,Points=1000000 Budget=1000,1062.9 us,,,31.41 KB
+DecimationBenchmarks.Select,Points=1000000 Budget=4000,1128.8 us,,,125.16 KB

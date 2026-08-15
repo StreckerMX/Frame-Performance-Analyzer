@@ -1,4 +1,3 @@
-using FrameViewAnalyzer.Core.Math;
 using FrameViewAnalyzer.Core.Metrics;
 
 namespace FrameViewAnalyzer.Analytics.Series;
@@ -12,15 +11,34 @@ public static class SeriesBuilder
 {
     public static MetricSeries Build(SessionAnalysis session, string metricId)
     {
+        var (series, _) = BuildCore(session, metricId, includeXs: true);
+        return series;
+    }
+
+    /// <summary>
+    /// Y values only (comparison/statistics hot path); identical values to
+    /// <see cref="Build"/> without the x coordinates.
+    /// </summary>
+    public static double[] Values(SessionAnalysis session, string metricId)
+    {
+        var (_, ys) = BuildCore(session, metricId, includeXs: false);
+        return ys;
+    }
+
+    private static (MetricSeries Series, double[] Ys) BuildCore(
+        SessionAnalysis session,
+        string metricId,
+        bool includeXs)
+    {
         var metric = ResolveMetric(session, metricId);
         if (metric is null)
         {
-            return new MetricSeries(CoreMetricCatalog.CoreById["fps"], [], []);
+            return (new MetricSeries(CoreMetricCatalog.CoreById["fps"], [], []), []);
         }
 
         if (session.Samples.Count == 0 || session.Window is null)
         {
-            return new MetricSeries(metric, [], []);
+            return (new MetricSeries(metric, [], []), []);
         }
 
         var origin = session.Window.Start;
@@ -44,12 +62,21 @@ public static class SeriesBuilder
                     continue;
                 }
 
-                xs.Add(summary.Start - origin);
+                if (includeXs)
+                {
+                    xs.Add(summary.Start - origin);
+                }
+
                 ys.Add(summary.Fps.Value);
             }
         }
         else
         {
+            // Column indices are resolved once per metric and the scratch
+            // buffer is reused across bins, so the bin loop allocates
+            // neither a header-set per row nor a list per bin.
+            var columns = MetricValueResolver.MetricColumns.Resolve(session.Capture, metric);
+            var buffer = new double[16];
             foreach (var index in session.ValidBins.Order())
             {
                 if (!session.RowsByBin.TryGetValue(index, out var sampleIndices))
@@ -57,30 +84,47 @@ public static class SeriesBuilder
                     continue;
                 }
 
-                var values = new List<double>(sampleIndices.Length);
+                if (sampleIndices.Length > buffer.Length)
+                {
+                    buffer = new double[sampleIndices.Length];
+                }
+
+                var count = 0;
                 foreach (var sampleIndex in sampleIndices)
                 {
                     var value = MetricValueResolver.GetMetricValue(
                         session.Capture,
                         metric,
-                        session.Samples.RowIndex[sampleIndex]);
+                        session.Samples.RowIndex[sampleIndex],
+                        columns);
                     if (value is not null)
                     {
-                        values.Add(value.Value);
+                        buffer[count++] = value.Value;
                     }
                 }
 
-                if (values.Count < AnalysisConstants.MinFramesPerBin)
+                if (count < AnalysisConstants.MinFramesPerBin)
                 {
                     continue;
                 }
 
-                xs.Add(index * AnalysisConstants.FpsBinSeconds - origin);
-                ys.Add(FrameViewAnalyzer.Core.Math.Statistics.Mean(values) ?? 0.0);
+                var sum = 0.0;
+                for (var i = 0; i < count; i++)
+                {
+                    sum += buffer[i];
+                }
+
+                if (includeXs)
+                {
+                    xs.Add(index * AnalysisConstants.FpsBinSeconds - origin);
+                }
+
+                ys.Add(sum / count);
             }
         }
 
-        return new MetricSeries(metric, xs.ToArray(), ys.ToArray());
+        var yArray = ys.ToArray();
+        return (new MetricSeries(metric, xs.ToArray(), yArray), yArray);
     }
 
     private static MetricDefinition? ResolveMetric(SessionAnalysis session, string metricId)

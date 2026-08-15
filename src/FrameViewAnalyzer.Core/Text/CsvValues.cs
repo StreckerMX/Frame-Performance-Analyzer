@@ -58,6 +58,15 @@ public static class CsvValues
         }
 
         var normalized = raw.Replace(',', '.');
+        // Fast path: numeric cells (the overwhelmingly common case) parse
+        // directly. NumberStyles.Float accepts the inf/nan tokens the Python
+        // float() would accept, so the fallback switch only runs for
+        // genuinely non-numeric cells and allocates no strings here.
+        if (double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+        {
+            return true;
+        }
+
         switch (normalized.Trim().ToLowerInvariant())
         {
             case "inf":
@@ -75,9 +84,9 @@ public static class CsvValues
             case "-nan":
                 value = double.NaN;
                 return true;
+            default:
+                return false;
         }
-
-        return double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
     }
 
     /// <summary>

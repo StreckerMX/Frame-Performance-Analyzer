@@ -90,7 +90,7 @@ public sealed class ComparisonService : IComparisonService
     }
 
     private static MetricStatistics StatisticsFor(SessionAnalysis session, MetricDefinition metric) =>
-        StatisticsCalculator.Compute(metric, SeriesBuilder.Build(session, metric.Id).Y);
+        StatisticsCalculator.Compute(metric, SeriesBuilder.Values(session, metric.Id));
 
     private static double? ValueFor(MetricStatistics stats, string key) => key switch
     {

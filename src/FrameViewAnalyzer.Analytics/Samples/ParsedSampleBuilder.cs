@@ -41,11 +41,12 @@ public static class ParsedSampleBuilder
         var fpsColumnIndex = capture.IndexOfHeader("FPS");
         var gpuIndices = ResolveIndices(capture, GpuUtilKeys);
 
-        var times = new List<double>();
-        var frametimes = new List<double>();
-        var fpsValues = new List<double>();
-        var utils = new List<double>();
-        var rowIndices = new List<int>();
+        var capacity = capture.RowCount;
+        var times = new List<double>(capacity);
+        var frametimes = new List<double>(capacity);
+        var fpsValues = new List<double>(capacity);
+        var utils = new List<double>(capacity);
+        var rowIndices = new List<int>(capacity);
 
         for (var row = 0; row < capture.RowCount; row++)
         {
@@ -64,7 +65,23 @@ public static class ParsedSampleBuilder
             rowIndices.Add(row);
         }
 
-        // Stable sort by time, like the Python reference.
+        // FrameView logs are written with ascending timestamps; when the
+        // input is already ordered, the stable sort is the identity (the
+        // Python reference's sorted() produces the exact same result) and
+        // can be skipped entirely. Unordered input keeps the LINQ stable
+        // sort for exact parity.
+        if (IsAscending(times))
+        {
+            return new ParsedSamples
+            {
+                TimeSeconds = times.ToArray(),
+                FrametimeMs = frametimes.ToArray(),
+                Fps = fpsValues.ToArray(),
+                GpuUtilPercent = utils.ToArray(),
+                RowIndex = rowIndices.ToArray(),
+            };
+        }
+
         var order = Enumerable.Range(0, times.Count)
             .OrderBy(i => times[i])
             .ToArray();
@@ -77,6 +94,19 @@ public static class ParsedSampleBuilder
             GpuUtilPercent = Select(utils, order),
             RowIndex = Select(rowIndices, order),
         };
+    }
+
+    private static bool IsAscending(List<double> values)
+    {
+        for (var i = 1; i < values.Count; i++)
+        {
+            if (values[i] < values[i - 1])
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static int[] ResolveIndices(CaptureData capture, params string[] headers)

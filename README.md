@@ -10,9 +10,9 @@ test vectors where algorithms must match exactly.
 
 ## Status
 
-**Phase 11 of 15 complete — Exports.**
+**Phase 12 of 15 complete — performance baselines and optimization.**
 
-Implemented through Phase 11:
+Implemented through Phase 12:
 
 - **Phase 0** — solution skeleton, project layout, strict gates
 - **Phase 1** — FrameView CSV loader + domain models (encodings, missing
@@ -38,9 +38,13 @@ Implemented through Phase 11:
 - **Phase 11** — exports: multi-chart PNG report with a compact context
   header, Statistics CSV (invariant, UTF-8 BOM), Benchmark data JSON, and
   portable benchmark package export/import with statistics hydration
+- **Phase 12** — BenchmarkDotNet suite (CSV parsing, analytics, comparison,
+  decimation) with corrected baselines and measured optimizations: −55% / −99%
+  allocations on Compare, −40% allocations on Analyze
+  (see `docs/PERFORMANCE.md`)
 
-Remaining future work: **BenchmarkDotNet optimization**, **final parity
-audit**, and the **release candidate** are **not implemented yet**.
+Remaining future work: **final parity audit** and the **release candidate**
+are **not implemented yet**.
 
 ## Stack
 

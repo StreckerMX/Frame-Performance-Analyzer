@@ -22,4 +22,14 @@
     <ProjectReference Include="..\..\src\FrameViewAnalyzer.Infrastructure\FrameViewAnalyzer.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      The benchmark fixture is validated by tests WITHOUT referencing the
+      BenchmarkDotNet executable project: the fixture source is compiled
+      directly into this test project, so no benchmark dependency leaks
+      into the production test graph.
+    -->
+    <Compile Include="..\..\bench\FrameViewAnalyzer.Benchmarks\BenchmarkData.cs" Link="BenchmarkData.cs" />
+  </ItemGroup>
+
 </Project>

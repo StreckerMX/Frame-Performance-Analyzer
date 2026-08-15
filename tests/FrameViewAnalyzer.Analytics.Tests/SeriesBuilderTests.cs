@@ -103,4 +103,19 @@ public class SeriesBuilderTests
             MetricDirection.Undefined,
             CoreMetricCatalog.CoreById["gpu0_util"].Direction);
     }
+
+    [Fact]
+    public void Values_matches_Build_y_for_every_metric()
+    {
+        var session = _service.Analyze(
+            TestCapture.MakeSession(seconds: 6),
+            new AnalysisOptions(GpuThreshold: 10, TrimBufferSeconds: 0, AutoGpuThreshold: false));
+
+        foreach (var metric in session.Catalog)
+        {
+            Assert.Equal(
+                SeriesBuilder.Build(session, metric.Id).Y,
+                SeriesBuilder.Values(session, metric.Id));
+        }
+    }
 }
