@@ -21,7 +21,7 @@ public static class ComparisonText
         };
 
         return deltaPercent is not null
-            ? $"{arrow}{deltaPercent:+.1f}%"
-            : $"{arrow}{delta:+.1f}";
+            ? $"{arrow}{deltaPercent:+0.0;-0.0}%"
+            : $"{arrow}{delta:+0.0;-0.0}";
     }
 }

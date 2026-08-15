@@ -15,13 +15,13 @@ namespace FrameViewAnalyzer.App.Views;
 /// ScottPlot host with the reference interaction model. ScottPlot's native
 /// input processor is disabled; wheel zoom (cursor-anchored), drag pan, and
 /// the hover tooltip are implemented here with pure viewport math so every
-/// behavior matches the Python reference. Plot assembly is presentation
-/// glue; analytics data arrives from the view model unchanged.
+/// behavior matches the Python reference. Base and comparison series are
+/// plotted together with a legend.
 /// </summary>
 public partial class SessionChartView : UserControl
 {
     private MetricDefinition? _metric;
-    private MetricSeries? _series;
+    private IReadOnlyList<MetricSeries> _seriesList = [];
     private AxisLimits _fullLimits;
     private bool _wheelZoomEnabled = true;
     private bool _panEnabled = true;
@@ -46,10 +46,10 @@ public partial class SessionChartView : UserControl
         ChartHost.Plot.RenderManager.AxisLimitsChanged += (_, _) => NotifyViewChanged();
     }
 
-    public void ShowData(MetricDefinition metric, MetricSeries series)
+    public void ShowData(MetricDefinition metric, IReadOnlyList<MetricSeries> seriesList)
     {
         _metric = metric;
-        _series = series;
+        _seriesList = seriesList;
         HideTooltip();
         Render();
         NotifyViewChanged();
@@ -58,7 +58,7 @@ public partial class SessionChartView : UserControl
     public void Clear()
     {
         _metric = null;
-        _series = null;
+        _seriesList = [];
         _crosshair = null;
         HideTooltip();
         ChartHost.Plot.Clear();
@@ -80,7 +80,7 @@ public partial class SessionChartView : UserControl
     /// <summary>Re-renders with the current theme brushes (theme switch).</summary>
     public void RefreshStyle()
     {
-        if (_metric is not null && _series is not null)
+        if (_metric is not null && _seriesList.Count > 0)
         {
             Render();
         }
@@ -88,7 +88,7 @@ public partial class SessionChartView : UserControl
 
     public void ResetZoom()
     {
-        if (_series is null)
+        if (_seriesList.Count == 0)
         {
             return;
         }
@@ -102,14 +102,15 @@ public partial class SessionChartView : UserControl
 
     public void AutoZoom()
     {
-        if (_metric is null || _series is null)
+        if (_metric is null || _seriesList.Count == 0)
         {
             return;
         }
 
+        var baseSeries = _seriesList[0];
         var limits = ChartHost.Plot.Axes.GetLimits();
         var values = FrameViewAnalyzer.Analytics.Statistics.VisibleRangeCalculator.FilterValues(
-            _series.X, _series.Y, limits.Left, limits.Right);
+            baseSeries.X, baseSeries.Y, limits.Left, limits.Right);
         if (values.Count == 0)
         {
             return;
@@ -127,7 +128,7 @@ public partial class SessionChartView : UserControl
 
     private void Render()
     {
-        if (_metric is null || _series is null)
+        if (_metric is null || _seriesList.Count == 0)
         {
             return;
         }
@@ -135,7 +136,7 @@ public partial class SessionChartView : UserControl
         var style = ChartStyle.FromApplicationResources();
         var budget = System.Math.Max(200, (int)(ActualWidth > 10 ? ActualWidth : 800) * 2);
         ChartPlotBuilder.Build(
-            ChartHost.Plot, _metric, [_series], style, budget, _markersVisible);
+            ChartHost.Plot, _metric, _seriesList, style, budget, _markersVisible);
 
         _fullLimits = ChartHost.Plot.Axes.GetLimits();
 
@@ -155,7 +156,7 @@ public partial class SessionChartView : UserControl
 
     private void OnMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (!_wheelZoomEnabled || _series is null)
+        if (!_wheelZoomEnabled || _seriesList.Count == 0)
         {
             e.Handled = true;
             return;
@@ -174,7 +175,7 @@ public partial class SessionChartView : UserControl
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (!_panEnabled || _series is null)
+        if (!_panEnabled || _seriesList.Count == 0)
         {
             return;
         }
@@ -203,7 +204,7 @@ public partial class SessionChartView : UserControl
     {
         var position = e.GetPosition(ChartHost);
 
-        if (_panAnchor is not null && _series is not null)
+        if (_panAnchor is not null && _seriesList.Count > 0)
         {
             var anchorCoordinates = ChartHost.Plot.GetCoordinates(
                 (float)_panAnchor.Value.X, (float)_panAnchor.Value.Y);
@@ -214,7 +215,7 @@ public partial class SessionChartView : UserControl
             return;
         }
 
-        if (_metric is null || _series is null || _series.X.Length == 0)
+        if (_metric is null || _seriesList.Count == 0)
         {
             HideTooltip();
             return;
@@ -223,23 +224,37 @@ public partial class SessionChartView : UserControl
         var limits = ChartHost.Plot.Axes.GetLimits();
         var mouseCoordinates = ChartHost.Plot.GetCoordinates((float)position.X, (float)position.Y);
         var tolerance = System.Math.Max(0.65, limits.HorizontalSpan / 120.0);
-        var index = SeriesGeometry.NearestIndex(_series.X, mouseCoordinates.X);
-        if (index < 0 || System.Math.Abs(_series.X[index] - mouseCoordinates.X) > tolerance)
+
+        var baseSeries = _seriesList[0];
+        var baseIndex = SeriesGeometry.NearestIndex(baseSeries.X, mouseCoordinates.X);
+        if (baseIndex < 0 || System.Math.Abs(baseSeries.X[baseIndex] - mouseCoordinates.X) > tolerance)
         {
             HideTooltip();
             return;
         }
 
-        var x = _series.X[index];
-        var y = _series.Y[index];
-        var valueText = _metric.Id == "fps"
-            ? $"{y:F1}"
-            : DisplayText.FormatStat(y, _metric.Unit);
-        TooltipText.Text = $"Time: {x:F1} s\n{_metric.Label}: {valueText}";
+        var x = baseSeries.X[baseIndex];
+        var lines = new List<string> { $"Time: {x:F1} s" };
+        foreach (var series in _seriesList)
+        {
+            var index = SeriesGeometry.NearestIndex(series.X, x);
+            if (index < 0 || System.Math.Abs(series.X[index] - x) > tolerance)
+            {
+                continue;
+            }
+
+            var y = series.Y[index];
+            var valueText = _metric.Id == "fps"
+                ? $"{y:F1}"
+                : DisplayText.FormatStat(y, _metric.Unit);
+            lines.Add($"{series.LabelOrDefault}: {valueText}");
+        }
+
+        TooltipText.Text = string.Join("\n", lines);
 
         if (_crosshair is not null)
         {
-            _crosshair.Position = new Coordinates(x, y);
+            _crosshair.Position = new Coordinates(x, baseSeries.Y[baseIndex]);
             _crosshair.IsVisible = true;
             ChartHost.Refresh();
         }
@@ -278,7 +293,7 @@ public partial class SessionChartView : UserControl
 
     private void NotifyViewChanged()
     {
-        if (_suppressViewChanged || _series is null)
+        if (_suppressViewChanged || _seriesList.Count == 0)
         {
             return;
         }
