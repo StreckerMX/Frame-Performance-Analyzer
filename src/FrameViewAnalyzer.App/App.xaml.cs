@@ -28,6 +28,7 @@ public partial class App : Application
         services.AddSingleton<IComparisonService, ComparisonService>();
         services.AddSingleton<IRangeAnalysisService, RangeAnalysisService>();
         services.AddSingleton<ISettingsStore>(_ => new JsonSettingsStore());
+        services.AddSingleton<IManualMetadataStore>(_ => new JsonManualMetadataStore());
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IWindowPlacementService, WindowPlacementService>();
         services.AddSingleton<IDialogService, DialogService>();

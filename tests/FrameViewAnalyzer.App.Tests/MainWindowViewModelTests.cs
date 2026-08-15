@@ -3,6 +3,7 @@ using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.RangeAnalysis;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
+using FrameViewAnalyzer.Core.Models;
 using FrameViewAnalyzer.Infrastructure.Csv;
 using FrameViewAnalyzer.Infrastructure.Stores;
 
@@ -77,6 +78,7 @@ public class MainWindowViewModelTests
             reader,
             analysis,
             new RangeAnalysisService(),
+            new JsonManualMetadataStore(Path.Combine(directory, "metadata.json")),
             dialogs);
         return (viewModel, settings, themes, dialogs, directory);
     }
@@ -566,5 +568,119 @@ public class MainWindowViewModelTests
             listener.Requested = range;
         };
         return listener;
+    }
+
+    [Fact]
+    public async Task Edit_metadata_requests_the_editor_with_stored_values()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Test_Log.csv");
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            var session = viewModel.BaseSession!;
+            viewModel.PersistMetadata(session, new ManualMetadata(Game: "Stored Run"));
+            MainWindowViewModel.MetadataEditorRequest? request = null;
+            viewModel.MetadataEditorRequested += (_, value) => request = value;
+
+            viewModel.EditBaseMetadataCommand.Execute(null);
+
+            Assert.NotNull(request);
+            Assert.Equal(session, request!.Session);
+            Assert.Equal("Stored Run", request.Current.Game);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public void Edit_metadata_without_a_session_is_a_no_op()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        Cleanup(directory);
+        var requested = false;
+        viewModel.MetadataEditorRequested += (_, _) => requested = true;
+
+        viewModel.EditBaseMetadataCommand.Execute(null);
+        viewModel.EditComparisonMetadataCommand.Execute(null);
+
+        Assert.False(requested);
+        Assert.Null(dialogs.LastInfo);
+    }
+
+    [Fact]
+    public async Task Persisting_metadata_updates_the_card_name_and_config_line()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Test_Log.csv");
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            var session = viewModel.BaseSession!;
+
+            viewModel.PersistMetadata(
+                session,
+                new ManualMetadata(
+                    BenchmarkName: "RTX Run",
+                    Resolution: "4K",
+                    GraphicsPreset: "Ultra",
+                    Tags: ["gpu"]));
+
+            Assert.Equal("RTX Run", viewModel.BaseSessionName);
+            Assert.Equal("4K · Ultra", viewModel.BaseMetaLine);
+            Assert.Contains("METADATA SAVED", viewModel.StatusText);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Empty_metadata_removes_the_entry_and_restores_detected_lines()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Test_Log.csv");
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+            var session = viewModel.BaseSession!;
+            viewModel.PersistMetadata(session, new ManualMetadata(BenchmarkName: "Temporary"));
+
+            viewModel.PersistMetadata(session, new ManualMetadata());
+
+            Assert.Equal("Test", viewModel.BaseSessionName);
+            Assert.DoesNotContain("Temporary", viewModel.BaseMetaLine);
+            Assert.Contains("METADATA SAVED", viewModel.StatusText);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Has_base_session_follows_the_base_session()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            Assert.False(viewModel.HasBaseSession);
+
+            dialogs.NextCsvPath = WriteCapture(directory, "FrameView_Test_Log.csv");
+            await viewModel.LoadBaseCommand.ExecuteAsync(null);
+
+            Assert.True(viewModel.HasBaseSession);
+
+            viewModel.RemoveBaseCommand.Execute(null);
+
+            Assert.False(viewModel.HasBaseSession);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
     }
 }
