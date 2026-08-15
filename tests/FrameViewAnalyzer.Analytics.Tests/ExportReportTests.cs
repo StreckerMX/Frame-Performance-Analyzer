@@ -91,10 +91,31 @@ public class ExportReportTests
 
         var payload = ExportReport.BuildStatisticsPayload(baseSession, null, manual);
 
-        Assert.Equal("1", payload.FormatVersion);
+        Assert.Equal(1, payload.FormatVersion);
         Assert.Single(payload.Sessions);
         Assert.Equal("base", payload.Sessions[0].Role);
         Assert.Equal("RTX Run", payload.Sessions[0].ManualMetadata!.BenchmarkName);
+    }
+
+    [Fact]
+    public void Base_and_comparison_metadata_stay_on_their_own_session()
+    {
+        var baseSession = SessionOf();
+        var comparison = SessionOf(application: "Other.exe", resolution: "1080p");
+
+        var payload = ExportReport.BuildStatisticsPayload(
+            baseSession,
+            comparison,
+            new ManualMetadata(BenchmarkName: "Base Run", Tags: ["base"]),
+            new ManualMetadata(BenchmarkName: "Comparison Run", Tags: ["comparison"]));
+
+        Assert.Equal(2, payload.Sessions.Count);
+        Assert.Equal("base", payload.Sessions[0].Role);
+        Assert.Equal("Base Run", payload.Sessions[0].ManualMetadata!.BenchmarkName);
+        Assert.Equal(["base"], payload.Sessions[0].ManualMetadata!.Tags);
+        Assert.Equal("comparison", payload.Sessions[1].Role);
+        Assert.Equal("Comparison Run", payload.Sessions[1].ManualMetadata!.BenchmarkName);
+        Assert.Equal(["comparison"], payload.Sessions[1].ManualMetadata!.Tags);
     }
 
     [Fact]

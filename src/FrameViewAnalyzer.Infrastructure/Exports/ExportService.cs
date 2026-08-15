@@ -2,10 +2,13 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using CsvHelper;
+using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Comparison;
 using FrameViewAnalyzer.Analytics.Exports;
 using FrameViewAnalyzer.Analytics.Library;
 using FrameViewAnalyzer.Core.Models;
+using FrameViewAnalyzer.Infrastructure.Csv;
+using FrameViewAnalyzer.Infrastructure.Stores;
 
 namespace FrameViewAnalyzer.Infrastructure.Exports;
 
@@ -27,10 +30,28 @@ public sealed record PackageCaptureImport(
     IReadOnlyDictionary<string, string> AnalysisOptions,
     bool SourceAvailable);
 
-public sealed record PackageImportResult(
+/// <summary>
+/// Proposed merged state for a package import. Nothing is persisted by this
+/// type and no live state is mutated; the caller publishes it through
+/// IExportService.CommitBenchmarkImport, which serializes both documents
+/// completely, version-checks both destinations, and commits the metadata
+/// store and the library store together with rollback. A failure restores
+/// the original files (or removes a newly created one), cleans temporary
+/// files, and throws — the in-memory state is published only after both
+/// writes succeed.
+/// </summary>
+public sealed record PackageImportProposal(
+    LibraryModel Library,
+    IReadOnlyDictionary<string, ManualMetadata> Metadata,
     int Imported,
-    int Skipped,
-    IReadOnlyDictionary<string, ManualMetadata> ManualMetadataByIdentity);
+    int Skipped);
+
+/// <summary>Result of a user-facing package export after digest hydration.</summary>
+public sealed record PackageExportResult(
+    BenchmarkPackageDto Package,
+    int Exported,
+    int Analyzed,
+    int Excluded);
 
 /// <summary>File-writing half of the export system (CSV, JSON, packages).</summary>
 public interface IExportService
@@ -43,13 +64,41 @@ public interface IExportService
 
     PackageValidationResult ValidateBenchmarkPackage(string json);
 
-    PackageImportResult ImportBenchmarkPackage(LibraryModel library, string json);
+    PackageImportProposal ImportBenchmarkPackage(
+        LibraryModel currentLibrary,
+        IReadOnlyDictionary<string, ManualMetadata> currentMetadata,
+        string json);
+
+    /// <summary>
+    /// Commits a package import to both V2 stores as one coordinated
+    /// operation: both documents are fully serialized first, both
+    /// destinations are version-checked, and a failure of the second store
+    /// write rolls the first one back to its original bytes (or removes it
+    /// when it did not previously exist). Throws
+    /// CoordinatedStoreCommitException on a controlled failure and
+    /// CoordinatedStoreRollbackException when the automatic restoration
+    /// itself fails. In-memory state is never published here.
+    /// </summary>
+    void CommitBenchmarkImport(
+        PackageImportProposal proposal,
+        ILibraryStore libraryStore,
+        IManualMetadataStore metadataStore);
+
+    Task<PackageExportResult> PreparePackageAsync(
+        LibraryModel library,
+        IReadOnlyDictionary<string, ManualMetadata> manualLookup,
+        IFrameViewCsvReader reader,
+        ICaptureAnalysisService analysis);
 }
 
 /// <summary>
-/// Writes the export formats. Statistics CSV is a pure table (UTF-8 BOM);
-/// Benchmark JSON embeds the structured sessions and manual metadata; the
-/// portable benchmark package never embeds raw CSV contents.
+/// Writes the export formats atomically (temp file + replace; partial files
+/// are never left behind), implements the package hydration pipeline, and
+/// commits package imports to both V2 stores as one coordinated operation
+/// (serialize both documents, version-check both destinations, write with
+/// rollback). The Statistics CSV is a pure table (UTF-8 BOM, invariant
+/// numbers, proper quoting); Benchmark JSON and packages use snake_case keys
+/// with JSON numbers. The portable package never embeds raw CSV contents.
 /// </summary>
 public sealed class ExportService : IExportService
 {
@@ -69,65 +118,63 @@ public sealed class ExportService : IExportService
         "delta_percent",
     ];
 
-    public int WriteStatisticsCsv(string path, IReadOnlyList<ComparisonRow> rows)
-    {
-        CreateDirectory(path);
-        using var writer = new StreamWriter(path, append: false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
-        using var csv = new CsvWriter(writer, CultureInfo.InvariantCulture);
-        foreach (var field in CsvFields)
-        {
-            csv.WriteField(field);
-        }
-
-        csv.NextRecord();
-        foreach (var row in rows)
-        {
-            csv.WriteField(row.MetricId);
-            csv.WriteField(row.MetricLabel);
-            csv.WriteField(row.Category);
-            csv.WriteField(row.Unit);
-            csv.WriteField(row.StatisticKey);
-            csv.WriteField(row.StatisticLabel);
-            csv.WriteField(row.BaseSession);
-            csv.WriteField(row.BaseValue);
-            csv.WriteField(row.ComparisonSession);
-            csv.WriteField(row.ComparisonValue);
-            csv.WriteField(row.Delta);
-            csv.WriteField(row.DeltaPercent);
-            csv.NextRecord();
-        }
-
-        return rows.Count;
-    }
-
-    public void WriteStatisticsJson(string path, ExportStatisticsDto document)
-    {
-        CreateDirectory(path);
-        var json = JsonSerializer.Serialize(document, JsonExportOptions);
-        File.WriteAllText(path, json + Environment.NewLine, new UTF8Encoding(false));
-    }
-
-    public void WriteBenchmarkPackage(string path, BenchmarkPackageDto package)
-    {
-        CreateDirectory(path);
-        var json = JsonSerializer.Serialize(package, JsonExportOptions);
-        File.WriteAllText(path, json + Environment.NewLine, new UTF8Encoding(false));
-    }
-
     private static readonly JsonSerializerOptions JsonExportOptions = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
-    private static void CreateDirectory(string path)
+    public int WriteStatisticsCsv(string path, IReadOnlyList<ComparisonRow> rows)
     {
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrEmpty(directory))
+        WriteAtomically(path, target =>
         {
-            Directory.CreateDirectory(directory);
-        }
+            using var writer = new StreamWriter(
+                target,
+                append: false,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            using var csv = new CsvWriter(writer, CultureInfo.InvariantCulture);
+            foreach (var field in CsvFields)
+            {
+                csv.WriteField(field);
+            }
+
+            csv.NextRecord();
+            foreach (var row in rows)
+            {
+                csv.WriteField(row.MetricId);
+                csv.WriteField(row.MetricLabel);
+                csv.WriteField(row.Category);
+                csv.WriteField(row.Unit);
+                csv.WriteField(row.StatisticKey);
+                csv.WriteField(row.StatisticLabel);
+                csv.WriteField(row.BaseSession);
+                csv.WriteField(row.BaseValue);
+                csv.WriteField(row.ComparisonSession);
+                csv.WriteField(row.ComparisonValue);
+                csv.WriteField(row.Delta);
+                csv.WriteField(row.DeltaPercent);
+                csv.NextRecord();
+            }
+        });
+
+        return rows.Count;
     }
+
+    public void WriteStatisticsJson(string path, ExportStatisticsDto document) =>
+        WriteAtomically(
+            path,
+            target => File.WriteAllText(
+                target,
+                JsonSerializer.Serialize(document, JsonExportOptions) + Environment.NewLine,
+                new UTF8Encoding(false)));
+
+    public void WriteBenchmarkPackage(string path, BenchmarkPackageDto package) =>
+        WriteAtomically(
+            path,
+            target => File.WriteAllText(
+                target,
+                JsonSerializer.Serialize(package, JsonExportOptions) + Environment.NewLine,
+                new UTF8Encoding(false)));
 
     public PackageValidationResult ValidateBenchmarkPackage(string json)
     {
@@ -216,11 +263,28 @@ public sealed class ExportService : IExportService
         return new PackageValidationResult(valid, errors);
     }
 
-    public PackageImportResult ImportBenchmarkPackage(LibraryModel library, string json)
+    public PackageImportProposal ImportBenchmarkPackage(
+        LibraryModel currentLibrary,
+        IReadOnlyDictionary<string, ManualMetadata> currentMetadata,
+        string json)
     {
         var validation = ValidateBenchmarkPackage(json);
-        var imported = new Dictionary<string, ManualMetadata>(StringComparer.Ordinal);
-        var importedCount = 0;
+
+        // Build the proposed merged state first; publish only after both
+        // stores save successfully (see PackageImportProposal docs).
+        var library = new LibraryModel();
+        foreach (var (identity, record) in currentLibrary.Records)
+        {
+            library.Records[identity] = record;
+        }
+
+        foreach (var (first, second) in currentLibrary.RecentComparisons)
+        {
+            library.RecentComparisons.Add((first, second));
+        }
+
+        var metadata = new Dictionary<string, ManualMetadata>(currentMetadata, StringComparer.Ordinal);
+        var imported = 0;
         var now = LibraryUpdater.NowIso();
         foreach (var capture in validation.Valid)
         {
@@ -258,15 +322,137 @@ public sealed class ExportService : IExportService
                         ? capture.AnalysisOptions
                         : existing.AnalysisOptions,
                 };
-            importedCount++;
+            imported++;
 
             if (capture.ManualMetadata is { IsEmpty: false } manual)
             {
-                imported[identity] = manual;
+                metadata[identity] = manual;
             }
         }
 
-        return new PackageImportResult(importedCount, validation.Errors.Count, imported);
+        return new PackageImportProposal(library, metadata, imported, validation.Errors.Count);
+    }
+
+    public void CommitBenchmarkImport(
+        PackageImportProposal proposal,
+        ILibraryStore libraryStore,
+        IManualMetadataStore metadataStore)
+    {
+        if (metadataStore is not IStoreDestination metadataDestination)
+        {
+            throw new InvalidOperationException(
+                $"The metadata store '{metadataStore.GetType().Name}' does not support coordinated commits.");
+        }
+
+        if (libraryStore is not IStoreDestination libraryDestination)
+        {
+            throw new InvalidOperationException(
+                $"The library store '{libraryStore.GetType().Name}' does not support coordinated commits.");
+        }
+
+        // Stage: serialize BOTH proposed documents completely before either
+        // live file is touched. A serialization failure aborts without any
+        // change; a failed second-store write rolls the first store back.
+        var metadataBytes = JsonManualMetadataStore.SerializeDocument(proposal.Metadata);
+        var libraryBytes = JsonLibraryStore.SerializeDocument(proposal.Library);
+
+        StoreCommitTransaction.Commit(
+            metadataDestination,
+            metadataBytes,
+            libraryDestination,
+            libraryBytes);
+    }
+
+    public async Task<PackageExportResult> PreparePackageAsync(
+        LibraryModel library,
+        IReadOnlyDictionary<string, ManualMetadata> manualLookup,
+        IFrameViewCsvReader reader,
+        ICaptureAnalysisService analysis)
+    {
+        var exported = new List<LibraryRecord>();
+        var analyzed = 0;
+        var excluded = 0;
+        foreach (var identity in library.Records.Keys.OrderBy(id => id, StringComparer.Ordinal))
+        {
+            var record = library.Records[identity];
+            if (!record.StatsSummary.ContainsKey("avg_fps")
+                && record.Available
+                && File.Exists(record.SourcePath))
+            {
+                // Hydrate the digest so the record can satisfy the package
+                // validation requirements.
+                try
+                {
+                    var capture = await reader.LoadCaptureAsync(record.SourcePath).ConfigureAwait(false);
+                    var session = analysis.Analyze(capture);
+                    var currentIdentity = CaptureIdentityResolver.TryBuild(record.SourcePath);
+                    if (currentIdentity == record.Identity)
+                    {
+                        LibraryUpdater.UpdateStats(library, session, identity);
+                        record = library.Records[identity];
+                        analyzed++;
+                    }
+                }
+                catch (Exception error) when (error is IOException
+                    or UnauthorizedAccessException
+                    or InvalidOperationException
+                    or FormatException)
+                {
+                    // Hydration failure: the record cannot be made exportable.
+                }
+            }
+
+            var required = record.SourceName.Length > 0
+                && record.Game.Length > 0
+                && record.Resolution.Length > 0
+                && record.StatsSummary.ContainsKey("avg_fps");
+            if (!required)
+            {
+                excluded++;
+                continue;
+            }
+
+            exported.Add(record);
+        }
+
+        var package = ExportReport.BuildBenchmarkPackage(library, manualLookup, exported);
+        return new PackageExportResult(package, exported.Count, analyzed, excluded);
+    }
+
+    private static void WriteAtomically(string path, Action<string> write)
+    {
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var temporary = path + ".tmp";
+        try
+        {
+            write(temporary);
+            File.Move(temporary, path, overwrite: true);
+        }
+        catch
+        {
+            TryDelete(temporary);
+            throw;
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (IOException)
+        {
+            // Best-effort cleanup.
+        }
     }
 
     private static string Field(JsonElement? element, string name) =>

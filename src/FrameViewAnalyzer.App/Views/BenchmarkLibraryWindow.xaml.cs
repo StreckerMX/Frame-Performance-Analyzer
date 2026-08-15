@@ -1,10 +1,12 @@
 using System.IO;
 using System.Windows;
+using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Exports;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.Core.Models;
 using FrameViewAnalyzer.Infrastructure;
+using FrameViewAnalyzer.Infrastructure.Csv;
 using FrameViewAnalyzer.Infrastructure.Exports;
 using FrameViewAnalyzer.Infrastructure.Legacy;
 using FrameViewAnalyzer.Infrastructure.Stores;
@@ -24,6 +26,8 @@ public partial class BenchmarkLibraryWindow : Window
     private readonly IDialogService _dialogs;
     private readonly ILibraryStore _libraryStore;
     private readonly IManualMetadataStore _manualStore;
+    private readonly IFrameViewCsvReader _reader;
+    private readonly ICaptureAnalysisService _analysis;
 
     public BenchmarkLibraryWindow(
         ILibraryStore libraryStore,
@@ -32,6 +36,8 @@ public partial class BenchmarkLibraryWindow : Window
         ILegacyDataImporter legacyImporter,
         IExportService exportService,
         IDialogService dialogs,
+        IFrameViewCsvReader reader,
+        ICaptureAnalysisService analysis,
         string? captureDirectory = null)
     {
         InitializeComponent();
@@ -43,6 +49,8 @@ public partial class BenchmarkLibraryWindow : Window
         _dialogs = dialogs;
         _libraryStore = libraryStore;
         _manualStore = manualStore;
+        _reader = reader;
+        _analysis = analysis;
         _viewModel = new BenchmarkLibraryViewModel(libraryStore, manualStore, scanner, captureDirectory);
         DataContext = _viewModel;
 
@@ -73,7 +81,7 @@ public partial class BenchmarkLibraryWindow : Window
             MessageBoxImage.Information);
     }
 
-    private void ExportPackage_Click(object sender, RoutedEventArgs e)
+    private async void ExportPackage_Click(object sender, RoutedEventArgs e)
     {
         var path = _dialogs.PickSaveFile(
             "FrameView_benchmarks.json",
@@ -86,13 +94,24 @@ public partial class BenchmarkLibraryWindow : Window
 
         try
         {
-            var package = ExportReport.BuildBenchmarkPackage(
-                _libraryStore.Load(),
-                _manualStore.Load());
-            _exportService.WriteBenchmarkPackage(path, package);
+            var library = _libraryStore.Load();
+            var result = await _exportService.PreparePackageAsync(
+                library,
+                _manualStore.Load(),
+                _reader,
+                _analysis);
+            if (result.Analyzed > 0)
+            {
+                _libraryStore.Save(library);
+            }
+
+            _exportService.WriteBenchmarkPackage(path, result.Package);
             _dialogs.ShowInfo(
                 "Export",
-                $"Package saved with {package.Captures.Count} captures to:\n{path}");
+                $"Package saved to:\n{path}\n\n"
+                + $"Exported: {result.Exported} capture(s)\n"
+                + $"Analyzed to obtain statistics: {result.Analyzed}\n"
+                + $"Excluded (no analyzable statistics): {result.Excluded}");
         }
         catch (Exception error)
         {
@@ -110,28 +129,25 @@ public partial class BenchmarkLibraryWindow : Window
 
         try
         {
-            var library = _libraryStore.Load();
-            var result = _exportService.ImportBenchmarkPackage(
-                library,
+            var proposal = _exportService.ImportBenchmarkPackage(
+                _libraryStore.Load(),
+                _manualStore.Load(),
                 File.ReadAllText(path));
-            _libraryStore.Save(library);
-            if (result.ManualMetadataByIdentity.Count > 0)
-            {
-                var merged = new Dictionary<string, ManualMetadata>(
-                    _manualStore.Load(),
-                    StringComparer.Ordinal);
-                foreach (var (identity, metadata) in result.ManualMetadataByIdentity)
-                {
-                    merged[identity] = metadata;
-                }
 
-                _manualStore.Save(merged);
-            }
+            // Coordinated commit: both stores are serialized first, both
+            // destinations are version-checked, and the two files are written
+            // with rollback — a failure leaves both stores in their original
+            // state and throws instead of claiming success.
+            _exportService.CommitBenchmarkImport(proposal, _libraryStore, _manualStore);
+
+            // Only after both stores are persisted is the live in-memory
+            // state published (the metadata cache re-reads the files).
+            _manualStore.Reload();
 
             await _viewModel.RefreshAsync();
             _dialogs.ShowInfo(
                 "Benchmark package",
-                $"Imported {result.Imported} capture(s), {result.Skipped} skipped.");
+                $"Imported {proposal.Imported} capture(s), {proposal.Skipped} skipped.");
         }
         catch (Exception error)
         {

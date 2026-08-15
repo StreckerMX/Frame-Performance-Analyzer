@@ -9,9 +9,10 @@ using SkiaSharp;
 namespace FrameViewAnalyzer.App.Charting;
 
 /// <summary>
-/// Renders the multi-chart PNG report: one subplot per report metric with
-/// the Base/Comparison series overlaid. Headless (no WPF types), so the
-/// report can be built and saved from tests.
+/// Renders the multi-chart PNG report: a compact context header followed by
+/// one subplot per report metric with the Base/Comparison series overlaid.
+/// Headless (no WPF types), so the report can be built and saved from tests
+/// without touching the interactive chart or its view models.
 /// </summary>
 public static class ReportPlotBuilder
 {
@@ -19,12 +20,26 @@ public static class ReportPlotBuilder
         MetricDefinition Metric,
         IReadOnlyList<MetricSeries> Series);
 
+    /// <summary>Compact benchmark context shown above the plots.</summary>
+    public sealed record ReportHeader(string Title, IReadOnlyList<string> Lines);
+
     public static Multiplot Build(
         IReadOnlyList<ReportGroup> groups,
         ChartStyle style,
+        ReportHeader? header = null,
         int pointBudget = 2000)
     {
         var multiplot = new Multiplot();
+        if (header is not null)
+        {
+            var headerPlot = new Plot();
+            headerPlot.FigureBackground.Color = style.Background;
+            headerPlot.DataBackground.Color = style.Background;
+            headerPlot.HideAxesAndGrid();
+            headerPlot.Title(string.Join("\n", new[] { header.Title }.Concat(header.Lines)), 16);
+            multiplot.Subplots.Add(headerPlot);
+        }
+
         foreach (var group in groups)
         {
             var plot = new Plot();

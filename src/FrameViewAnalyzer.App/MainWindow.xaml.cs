@@ -12,6 +12,7 @@ using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.App.Views;
 using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Infrastructure;
+using FrameViewAnalyzer.Infrastructure.Csv;
 using FrameViewAnalyzer.Infrastructure.Exports;
 using FrameViewAnalyzer.Infrastructure.Legacy;
 using FrameViewAnalyzer.Infrastructure.Stores;
@@ -29,6 +30,8 @@ public partial class MainWindow : Window
     private readonly ILegacyDataImporter _legacyImporter;
     private readonly IExportService _exportService;
     private readonly IDialogService _dialogs;
+    private readonly IFrameViewCsvReader _reader;
+    private readonly ICaptureAnalysisService _analysis;
 
     public MainWindow(
         MainWindowViewModel viewModel,
@@ -40,7 +43,9 @@ public partial class MainWindow : Window
         ISettingsStore settings,
         ILegacyDataImporter legacyImporter,
         IExportService exportService,
-        IDialogService dialogs)
+        IDialogService dialogs,
+        IFrameViewCsvReader reader,
+        ICaptureAnalysisService analysis)
     {
         InitializeComponent();
         _placement = placement;
@@ -52,6 +57,8 @@ public partial class MainWindow : Window
         _legacyImporter = legacyImporter;
         _exportService = exportService;
         _dialogs = dialogs;
+        _reader = reader;
+        _analysis = analysis;
         DataContext = viewModel;
 
         // Restore once the native window exists; save on every close.
@@ -145,6 +152,8 @@ public partial class MainWindow : Window
             _legacyImporter,
             _exportService,
             _dialogs,
+            _reader,
+            _analysis,
             captureDirectory)
         {
             Owner = this,
@@ -262,7 +271,8 @@ public partial class MainWindow : Window
         {
             var multiplot = ReportPlotBuilder.Build(
                 groups,
-                ChartStyle.FromApplicationResources());
+                ChartStyle.FromApplicationResources(),
+                BuildReportHeader(scope, session));
             ReportPlotBuilder.SavePng(multiplot, path, 1600, groups.Count * 520);
             _dialogs.ShowInfo("Export", $"Report saved with {groups.Count} charts to:\n{path}");
         }
@@ -270,6 +280,49 @@ public partial class MainWindow : Window
         {
             _dialogs.ShowError("Export", error.Message);
         }
+    }
+
+    private ReportPlotBuilder.ReportHeader BuildReportHeader(
+        ExportScope scope,
+        SessionAnalysis? singleSession)
+    {
+        var baseSession = scope == ExportScope.Single ? singleSession! : _viewModel.BaseSession!;
+        var manual = _viewModel.ManualMetadataFor(baseSession);
+        var game = manual is { BenchmarkName.Length: > 0 }
+            ? manual.BenchmarkName
+            : manual is { Game.Length: > 0 }
+                ? manual.Game
+                : ExportReport.SessionExportLabel(baseSession);
+        var lines = new List<string>();
+        if (baseSession.Metadata is { } metadata)
+        {
+            var hardware = new List<string>();
+            foreach (var value in new[] { metadata.Resolution, metadata.Gpu, metadata.Cpu })
+            {
+                if (value.Length > 0 && value != "--")
+                {
+                    hardware.Add(value);
+                }
+            }
+
+            if (hardware.Count > 0)
+            {
+                lines.Add(string.Join("  ·  ", hardware));
+            }
+        }
+
+        if (manual is not null && manual.ConfigLine is { } config)
+        {
+            lines.Add(config);
+        }
+
+        if (scope == ExportScope.All && _viewModel.ComparisonSession is { } comparison)
+        {
+            lines.Add($"Base: {ExportReport.SessionExportLabel(baseSession)}");
+            lines.Add($"Comparison: {ExportReport.SessionExportLabel(comparison)}");
+        }
+
+        return new ReportPlotBuilder.ReportHeader(game, lines);
     }
 
     private void ExportCsv_Click(object sender, RoutedEventArgs e)

@@ -114,7 +114,7 @@ public static class ExportReport
         }
 
         return new ExportStatisticsDto(
-            "1",
+            1,
             [.. sessions],
             BuildStatisticsRows(baseSession, comparisonSession));
     }
@@ -182,7 +182,7 @@ public static class ExportReport
 
 /// <summary>Structured statistics document (Benchmark JSON).</summary>
 public sealed record ExportStatisticsDto(
-    string FormatVersion,
+    int FormatVersion,
     IReadOnlyList<ExportSessionDto> Sessions,
     IReadOnlyList<ComparisonRow> Statistics);
 

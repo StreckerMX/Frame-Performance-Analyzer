@@ -10,9 +10,9 @@ test vectors where algorithms must match exactly.
 
 ## Status
 
-**Phase 10 of 15 complete — Benchmark Library + legacy one-way importer.**
+**Phase 11 of 15 complete — Exports.**
 
-Implemented through Phase 10:
+Implemented through Phase 11:
 
 - **Phase 0** — solution skeleton, project layout, strict gates
 - **Phase 1** — FrameView CSV loader + domain models (encodings, missing
@@ -34,11 +34,13 @@ Implemented through Phase 10:
 - **Phase 10** — Benchmark Library (search / filter / sort, Base/Comparison
   loading from the library, A/B selection, recent comparisons, missing-source
   handling, statistics digest) + the legacy one-way importer from the Python
-  application (explicit user-triggered import, V2 data precedence, idempotent)
+  application
+- **Phase 11** — exports: multi-chart PNG report with a compact context
+  header, Statistics CSV (invariant, UTF-8 BOM), Benchmark data JSON, and
+  portable benchmark package export/import with statistics hydration
 
-Remaining future work: **exports / Benchmark JSON**, **BenchmarkDotNet
-optimization**, **parity audit**, and the **release candidate** are **not
-implemented yet**.
+Remaining future work: **BenchmarkDotNet optimization**, **final parity
+audit**, and the **release candidate** are **not implemented yet**.
 
 ## Stack
 
@@ -95,6 +97,11 @@ See `docs/ARCHITECTURE.md` for the architecture proposal and roadmap.
   `metadata.json`, and `library.json` — into the separate v2 stores without
   modifying the Python files; existing V2 data always wins and repeated
   imports are idempotent
+- Exports: multi-chart PNG report (compact context header, all or selected
+  session), Statistics CSV (invariant numbers, UTF-8 BOM), Benchmark data
+  JSON (sessions + statistics + manual metadata), and portable benchmark
+  package export/import (statistics digest hydration, validation, atomic
+  writes)
 
 ## Tests
 
