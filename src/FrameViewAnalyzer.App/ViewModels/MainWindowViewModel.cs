@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.IO;
 using FrameViewAnalyzer.Analytics;
+using FrameViewAnalyzer.Analytics.Library;
 using FrameViewAnalyzer.Analytics.RangeAnalysis;
 using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.App.Services;
@@ -28,6 +29,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IDialogService _dialogs;
     private readonly IRangeAnalysisService _rangeAnalysis;
     private readonly IManualMetadataStore _metadataStore;
+    private readonly ILibraryStore _libraryStore;
 
     [ObservableProperty]
     private string _appearanceMode = "dark";
@@ -95,6 +97,7 @@ public partial class MainWindowViewModel : ObservableObject
         ICaptureAnalysisService analysis,
         IRangeAnalysisService rangeAnalysis,
         IManualMetadataStore metadataStore,
+        ILibraryStore libraryStore,
         IDialogService dialogs)
     {
         _settings = settings;
@@ -104,6 +107,7 @@ public partial class MainWindowViewModel : ObservableObject
         _dialogs = dialogs;
         _rangeAnalysis = rangeAnalysis;
         _metadataStore = metadataStore;
+        _libraryStore = libraryStore;
         Chart = chart;
 
         var mode = Normalize(settings.Load().AppearanceMode);
@@ -121,12 +125,19 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        await LoadBaseFromPathAsync(path);
+    }
+
+    /// <summary>Loads a capture by path (Library "Load as Base").</summary>
+    public async Task LoadBaseFromPathAsync(string path)
+    {
         try
         {
             var session = await LoadSessionAsync(path);
             BaseSession = session;
             RefreshSessionCards();
             Chart.SetSessions(BaseSession, ComparisonSession);
+            IndexSession(session);
             StatusText = $"CAPTURE OPENED  ·  {session.Capture.DisplayName}  ·  {ResolutionOf(session)}";
         }
         catch (Exception error)
@@ -152,17 +163,101 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        await LoadComparisonFromPathAsync(path);
+    }
+
+    /// <summary>Loads a comparison by path (Library "Load as Comparison").</summary>
+    public async Task LoadComparisonFromPathAsync(string path)
+    {
+        if (BaseSession is null)
+        {
+            _dialogs.ShowInfo(
+                "Benchmark Library",
+                "Load a base session before loading a comparison.");
+            return;
+        }
+
         try
         {
             var session = await LoadSessionAsync(path);
             ComparisonSession = session;
             RefreshSessionCards();
             Chart.SetSessions(BaseSession, ComparisonSession);
+            IndexSession(session);
+            RecordComparison();
             StatusText = $"COMPARISON OPENED  ·  {session.Capture.DisplayName}  ·  {ResolutionOf(session)}";
         }
         catch (Exception error)
         {
             _dialogs.ShowError("CSV loading error", error.Message);
+        }
+    }
+
+    private void IndexSession(SessionAnalysis session)
+    {
+        try
+        {
+            var identity = CaptureIdentityResolver.TryBuild(session.Capture.Path);
+            if (identity is null)
+            {
+                return;
+            }
+
+            var metadata = session.Metadata;
+            var info = new CaptureInfo(
+                session.Capture.Path,
+                Path.GetFileName(session.Capture.Path),
+                metadata?.Application ?? string.Empty,
+                metadata?.Resolution ?? string.Empty,
+                metadata?.Gpu ?? string.Empty,
+                metadata?.Cpu ?? string.Empty,
+                DurationSeconds: null);
+
+            var library = _libraryStore.Load();
+            var indexer = new LibraryIndexer();
+            if (indexer.Upsert(library, info, LibraryUpdater.NowIso()))
+            {
+                LibraryUpdater.UpdateStats(library, session, identity);
+                _libraryStore.Save(library);
+            }
+        }
+        catch (Exception error) when (error is IOException
+            or UnauthorizedAccessException
+            or InvalidOperationException)
+        {
+            // Library bookkeeping is best-effort; loading must never fail.
+        }
+    }
+
+    private void RecordComparison()
+    {
+        try
+        {
+            var baseIdentity = BaseSession is null
+                ? null
+                : CaptureIdentityResolver.TryBuild(BaseSession.Capture.Path);
+            var comparisonIdentity = ComparisonSession is null
+                ? null
+                : CaptureIdentityResolver.TryBuild(ComparisonSession.Capture.Path);
+            if (baseIdentity is null || comparisonIdentity is null)
+            {
+                return;
+            }
+
+            var library = _libraryStore.Load();
+            library.RecentComparisons.Clear();
+            library.RecentComparisons.AddRange(
+                LibraryUpdater.WithComparison(
+                    library.RecentComparisons,
+                    baseIdentity,
+                    comparisonIdentity));
+            _libraryStore.Save(library);
+        }
+        catch (Exception error) when (error is IOException
+            or UnauthorizedAccessException
+            or InvalidOperationException)
+        {
+            // Library bookkeeping is best-effort.
         }
     }
 

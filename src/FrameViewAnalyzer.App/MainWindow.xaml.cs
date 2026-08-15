@@ -6,6 +6,9 @@ using FrameViewAnalyzer.Analytics.RangeAnalysis;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.App.Views;
+using FrameViewAnalyzer.Infrastructure;
+using FrameViewAnalyzer.Infrastructure.Legacy;
+using FrameViewAnalyzer.Infrastructure.Stores;
 
 namespace FrameViewAnalyzer.App;
 
@@ -13,15 +16,30 @@ public partial class MainWindow : Window
 {
     private readonly IWindowPlacementService _placement;
     private readonly MainWindowViewModel _viewModel;
+    private readonly ILibraryStore _libraryStore;
+    private readonly IManualMetadataStore _manualMetadataStore;
+    private readonly CaptureFolderScanner _scanner;
+    private readonly ISettingsStore _settings;
+    private readonly ILegacyDataImporter _legacyImporter;
 
     public MainWindow(
         MainWindowViewModel viewModel,
         IWindowPlacementService placement,
-        IThemeService themes)
+        IThemeService themes,
+        ILibraryStore libraryStore,
+        IManualMetadataStore manualMetadataStore,
+        CaptureFolderScanner scanner,
+        ISettingsStore settings,
+        ILegacyDataImporter legacyImporter)
     {
         InitializeComponent();
         _placement = placement;
         _viewModel = viewModel;
+        _libraryStore = libraryStore;
+        _manualMetadataStore = manualMetadataStore;
+        _scanner = scanner;
+        _settings = settings;
+        _legacyImporter = legacyImporter;
         DataContext = viewModel;
 
         // Restore once the native window exists; save on every close.
@@ -103,5 +121,27 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
         }
+    }
+
+    private void Library_Click(object sender, RoutedEventArgs e)
+    {
+        var captureDirectory = _settings.Load().CaptureDirectory;
+        var library = new BenchmarkLibraryWindow(
+            _libraryStore,
+            _manualMetadataStore,
+            _scanner,
+            _legacyImporter,
+            captureDirectory)
+        {
+            Owner = this,
+        };
+        library.LoadBaseRequested += async path => await _viewModel.LoadBaseFromPathAsync(path);
+        library.LoadComparisonRequested += async path => await _viewModel.LoadComparisonFromPathAsync(path);
+        library.CompareRequested += async (first, second) =>
+        {
+            await _viewModel.LoadBaseFromPathAsync(first);
+            await _viewModel.LoadComparisonFromPathAsync(second);
+        };
+        library.ShowDialog();
     }
 }

@@ -10,9 +10,9 @@ test vectors where algorithms must match exactly.
 
 ## Status
 
-**Phase 8 of 15 complete — Analyze features.**
+**Phase 10 of 15 complete — Benchmark Library + legacy one-way importer.**
 
-Implemented through Phase 8:
+Implemented through Phase 10:
 
 - **Phase 0** — solution skeleton, project layout, strict gates
 - **Phase 1** — FrameView CSV loader + domain models (encodings, missing
@@ -28,9 +28,17 @@ Implemented through Phase 8:
   deltas, slot promotion when the Base is removed
 - **Phase 8** — Analyze menu: Full capture, Worst performance region (10 s),
   Most stable region (10 s), Largest performance drop, Largest A/B difference
+- **Phase 9** — manual benchmark metadata, stable capture identity, detected
+  metadata prefill, v2 metadata persistence, Base/Comparison metadata editor
+  integration
+- **Phase 10** — Benchmark Library (search / filter / sort, Base/Comparison
+  loading from the library, A/B selection, recent comparisons, missing-source
+  handling, statistics digest) + the legacy one-way importer from the Python
+  application (explicit user-triggered import, V2 data precedence, idempotent)
 
-Phases 9+ (metadata, Benchmark Library, exports, performance, parity audit,
-release candidate) are **not implemented yet**.
+Remaining future work: **exports / Benchmark JSON**, **BenchmarkDotNet
+optimization**, **parity audit**, and the **release candidate** are **not
+implemented yet**.
 
 ## Stack
 
@@ -74,8 +82,23 @@ See `docs/ARCHITECTURE.md` for the architecture proposal and roadmap.
 - Analyze menu: jump the chart to the full capture, the worst 10-second
   performance region, the most stable 10-second region, the largest
   performance drop, or the region of largest A/B divergence
+- Manual benchmark metadata: benchmark name, game/scene, resolution, graphics
+  preset, upscaler (+ quality), Frame Generation, Ray Tracing, driver
+  version, notes, and tags — persisted per capture identity with detected
+  prefill in the metadata editor
+- Benchmark Library: persistent index over the capture folder with search,
+  game/resolution/GPU/tag filters, date/name sorting, availability tracking
+  (missing sources stay listed), Load as Base / Load as Comparison, A/B
+  selection, recent comparisons, and an FPS statistics digest per record
+- Legacy import: a one-way, user-triggered importer reads the Python
+  application's stores — `%APPDATA%\FrameViewAnalyzer\settings.json`,
+  `metadata.json`, and `library.json` — into the separate v2 stores without
+  modifying the Python files; existing V2 data always wins and repeated
+  imports are idempotent
 
-## Build & test
+## Tests
+
+349/349 tests pass on the Release build with 0 errors and 0 warnings.
 
 ```powershell
 dotnet restore FrameViewAnalyzer.sln

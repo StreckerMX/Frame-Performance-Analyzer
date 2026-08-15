@@ -4,7 +4,9 @@ using FrameViewAnalyzer.Analytics.Comparison;
 using FrameViewAnalyzer.Analytics.RangeAnalysis;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
+using FrameViewAnalyzer.Infrastructure;
 using FrameViewAnalyzer.Infrastructure.Csv;
+using FrameViewAnalyzer.Infrastructure.Legacy;
 using FrameViewAnalyzer.Infrastructure.Stores;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,6 +31,12 @@ public partial class App : Application
         services.AddSingleton<IRangeAnalysisService, RangeAnalysisService>();
         services.AddSingleton<ISettingsStore>(_ => new JsonSettingsStore());
         services.AddSingleton<IManualMetadataStore>(_ => new JsonManualMetadataStore());
+        services.AddSingleton<ILibraryStore>(_ => new JsonLibraryStore());
+        services.AddSingleton<CaptureFolderScanner>();
+        services.AddSingleton<ILegacyDataImporter>(provider => new LegacyDataImporter(
+            provider.GetRequiredService<ISettingsStore>(),
+            provider.GetRequiredService<IManualMetadataStore>(),
+            provider.GetRequiredService<ILibraryStore>()));
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IWindowPlacementService, WindowPlacementService>();
         services.AddSingleton<IDialogService, DialogService>();

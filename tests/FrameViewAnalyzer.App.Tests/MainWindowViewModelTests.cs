@@ -79,6 +79,7 @@ public class MainWindowViewModelTests
             analysis,
             new RangeAnalysisService(),
             new JsonManualMetadataStore(Path.Combine(directory, "metadata.json")),
+            new JsonLibraryStore(Path.Combine(directory, "library.json")),
             dialogs);
         return (viewModel, settings, themes, dialogs, directory);
     }
