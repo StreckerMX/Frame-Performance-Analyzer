@@ -317,7 +317,9 @@ public partial class MainWindowViewModel : ObservableObject
         {
             _metadataStore.Set(identity, metadata);
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        catch (Exception error) when (error is IOException
+            or UnauthorizedAccessException
+            or InvalidOperationException)
         {
             _dialogs.ShowError("Benchmark metadata", $"Metadata could not be saved: {error.Message}");
             return;

@@ -57,16 +57,26 @@ public sealed class JsonManualMetadataStore : IManualMetadataStore
 
     public void Set(string identity, ManualMetadata? metadata)
     {
+        // Build the would-be entries and persist first: a save that fails
+        // safely (unknown store version) must not corrupt the in-memory
+        // dictionary either.
+        var next = new Dictionary<string, ManualMetadata>(_entries, StringComparer.Ordinal);
         if (metadata is null || metadata.IsEmpty)
         {
-            _entries.Remove(identity);
+            next.Remove(identity);
         }
         else
         {
-            _entries[identity] = metadata;
+            next[identity] = metadata;
         }
 
-        Save(_entries);
+        Save(next);
+
+        _entries.Clear();
+        foreach (var (key, value) in next)
+        {
+            _entries[key] = value;
+        }
     }
 
     public IReadOnlyDictionary<string, ManualMetadata> Load()
@@ -111,6 +121,18 @@ public sealed class JsonManualMetadataStore : IManualMetadataStore
 
     public void Save(IReadOnlyDictionary<string, ManualMetadata> entries)
     {
+        // Version gate: a store written by a newer application version must
+        // never be downgraded or overwritten. Saving fails safely and the
+        // unknown-version file stays byte-for-byte untouched.
+        var existingVersion = TryReadStoreVersion();
+        if (existingVersion is { } version && version != StoreFormatVersion)
+        {
+            throw new InvalidOperationException(
+                $"The metadata store at '{_path}' uses format version {version}, "
+                + "which this version of the application does not support. "
+                + "The file was left unchanged.");
+        }
+
         var directory = Path.GetDirectoryName(_path);
         if (!string.IsNullOrEmpty(directory))
         {
@@ -142,6 +164,36 @@ public sealed class JsonManualMetadataStore : IManualMetadataStore
         var temporary = _path + ".tmp";
         File.WriteAllBytes(temporary, stream.ToArray());
         File.Move(temporary, _path, overwrite: true);
+    }
+
+    /// <summary>
+    /// Format version of the file on disk, or null when it does not exist or
+    /// cannot be read as a versioned JSON document (tolerated as empty).
+    /// </summary>
+    private int? TryReadStoreVersion()
+    {
+        try
+        {
+            if (!File.Exists(_path))
+            {
+                return null;
+            }
+
+            using var document = JsonDocument.Parse(File.ReadAllText(_path));
+            var root = document.RootElement;
+            return root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("format_version", out var version)
+                && version.ValueKind == JsonValueKind.Number
+                    ? version.GetInt32()
+                    : null;
+        }
+        catch (Exception error) when (error is IOException
+            or UnauthorizedAccessException
+            or JsonException
+            or InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     private static ManualMetadata ParseMetadata(JsonElement payload)

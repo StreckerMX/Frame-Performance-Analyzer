@@ -16,6 +16,9 @@ public partial class MetadataEditorWindow : Window
     public MetadataEditorWindow(SessionAnalysis session, ManualMetadata current)
     {
         InitializeComponent();
+        // Never grow taller than the working area (small screens / high DPI):
+        // the field body is inside a ScrollViewer, so Save/Cancel stay visible.
+        MaxHeight = SystemParameters.WorkArea.Height - 24;
         _viewModel = MetadataEditorViewModel.From(session, current);
         DataContext = _viewModel;
         _viewModel.SaveRequested += (_, metadata) =>

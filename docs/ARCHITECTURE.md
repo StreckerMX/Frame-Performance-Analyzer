@@ -50,7 +50,9 @@ JSON later without architectural change.
   `ComparisonRow`, `BenchmarkSummary`.
 - `CaptureData`: struct-of-arrays (`double[] TimeSeconds/FrametimeMs/
   GpuUtilPercent` + per-metric `double[]` columns). No dict-of-dicts.
-- `ManualMetadata`: the only mutable `ObservableObject` (editor binding).
+- `ManualMetadata`: immutable Core domain record (fields + tags + config
+  line); the editor binds through the mutable `MetadataEditorViewModel`
+  `ObservableObject` instead.
 - Separate persistence DTOs (`SettingsDocument`, `MetadataStoreDocument`,
   `LibraryStoreDocument`, `BenchmarkPackageDocument`) with tolerant converters.
 - `MetricDirection` enum drives tail selection (1% Low vs 1% High) and

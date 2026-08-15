@@ -160,6 +160,122 @@ public class ManualMetadataStoreTests
         Assert.Null(CaptureIdentityResolver.TryBuild("Z:/definitely/missing/file.csv"));
     }
 
+    [Fact]
+    public void Unknown_store_version_loads_safely_as_empty()
+    {
+        var path = TempPath();
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(
+                path,
+                """{"format_version": 99, "entries": {"x": {"metadata": {"game": "GTA"}}}}""" + Environment.NewLine);
+
+            var store = new JsonManualMetadataStore(path);
+
+            Assert.Empty(store.Load());
+            Assert.Null(store.Get("x"));
+        }
+        finally
+        {
+            DeleteDirectory(Path.GetDirectoryName(path)!);
+        }
+    }
+
+    [Fact]
+    public void Saving_an_unknown_version_store_fails_without_overwriting()
+    {
+        var path = TempPath();
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var original =
+                """{"format_version": 99, "entries": {"x": {"metadata": {"game": "GTA"}}}}""" + Environment.NewLine;
+            File.WriteAllText(path, original);
+            var store = new JsonManualMetadataStore(path);
+
+            var error = Assert.Throws<InvalidOperationException>(
+                () => store.Set("y", new ManualMetadata(Game: "New Game")));
+
+            Assert.Contains("format version 99", error.Message);
+            Assert.Equal(original, File.ReadAllText(path));
+            Assert.False(File.Exists(path + ".tmp"));
+        }
+        finally
+        {
+            DeleteDirectory(Path.GetDirectoryName(path)!);
+        }
+    }
+
+    [Fact]
+    public void Unknown_version_bytes_remain_byte_for_byte_untouched()
+    {
+        var path = TempPath();
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var originalBytes = System.Text.Encoding.UTF8.GetBytes(
+                """{"format_version": 77, "entries": {"a": {"metadata": {"tags": ["x"]}}}}""" + Environment.NewLine);
+            File.WriteAllBytes(path, originalBytes);
+            var store = new JsonManualMetadataStore(path);
+
+            try
+            {
+                store.Set("a", new ManualMetadata(Notes: "n"));
+            }
+            catch (InvalidOperationException)
+            {
+                // Expected: the unknown store must not be touched.
+            }
+
+            Assert.Equal(originalBytes, File.ReadAllBytes(path));
+        }
+        finally
+        {
+            DeleteDirectory(Path.GetDirectoryName(path)!);
+        }
+    }
+
+    [Fact]
+    public void Current_version_save_still_succeeds_atomically()
+    {
+        var path = TempPath();
+        try
+        {
+            var store = new JsonManualMetadataStore(path);
+            store.Set("first", new ManualMetadata(Game: "GTA V"));
+
+            store.Set("first", new ManualMetadata(Game: "Updated"));
+
+            var reloaded = new JsonManualMetadataStore(path).Get("first");
+            Assert.NotNull(reloaded);
+            Assert.Equal("Updated", reloaded!.Game);
+        }
+        finally
+        {
+            DeleteDirectory(Path.GetDirectoryName(path)!);
+        }
+    }
+
+    [Fact]
+    public void First_save_with_no_file_creates_the_store()
+    {
+        var path = TempPath();
+        try
+        {
+            var store = new JsonManualMetadataStore(path);
+
+            store.Set("new", new ManualMetadata(Resolution: "4K"));
+
+            Assert.True(File.Exists(path));
+            Assert.Equal("4K", new JsonManualMetadataStore(path).Get("new")!.Resolution);
+        }
+        finally
+        {
+            DeleteDirectory(Path.GetDirectoryName(path)!);
+        }
+    }
+
     private static void DeleteDirectory(string path)
     {
         try
