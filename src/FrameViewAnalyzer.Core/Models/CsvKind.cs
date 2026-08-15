@@ -1,4 +1,4 @@
-namespace FrameViewAnalyzer.Infrastructure.Csv;
+namespace FrameViewAnalyzer.Core.Models;
 
 /// <summary>
 /// Classification of a FrameView CSV file: detailed per-frame log,

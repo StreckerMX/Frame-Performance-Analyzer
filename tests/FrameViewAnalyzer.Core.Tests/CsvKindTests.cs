@@ -1,6 +1,6 @@
-using FrameViewAnalyzer.Infrastructure.Csv;
+using FrameViewAnalyzer.Core.Models;
 
-namespace FrameViewAnalyzer.Infrastructure.Tests;
+namespace FrameViewAnalyzer.Core.Tests;
 
 public class CsvKindTests
 {
