@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\FrameViewAnalyzer.Core\FrameViewAnalyzer.Core.csproj" />
+    <ProjectReference Include="..\FrameViewAnalyzer.Analytics\FrameViewAnalyzer.Analytics.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
