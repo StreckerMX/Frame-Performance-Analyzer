@@ -1,23 +1,21 @@
-﻿using System.Text;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
+﻿using System.Windows;
+using FrameViewAnalyzer.App.Services;
+using FrameViewAnalyzer.App.ViewModels;
 
 namespace FrameViewAnalyzer.App;
 
-/// <summary>
-/// Interaction logic for MainWindow.xaml
-/// </summary>
 public partial class MainWindow : Window
 {
-    public MainWindow()
+    private readonly IWindowPlacementService _placement;
+
+    public MainWindow(MainWindowViewModel viewModel, IWindowPlacementService placement)
     {
         InitializeComponent();
+        _placement = placement;
+        DataContext = viewModel;
+
+        // Restore once the native window exists; save on every close.
+        SourceInitialized += (_, _) => _placement.Restore(this);
+        Closing += (_, _) => _placement.Save(this);
     }
 }
