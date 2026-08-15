@@ -58,8 +58,12 @@
                            Margin="0,3,0,0" />
             </StackPanel>
 
-            <!-- Theme selector -->
+            <!-- Theme selector + Library -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="Library"
+                        Margin="0,0,12,0"
+                        Click="Library_Click"
+                        Style="{StaticResource GhostButtonStyle}" />
                 <RadioButton Content="Dark"
                              GroupName="Theme"
                              IsChecked="{Binding IsDark, Mode=TwoWay}"
