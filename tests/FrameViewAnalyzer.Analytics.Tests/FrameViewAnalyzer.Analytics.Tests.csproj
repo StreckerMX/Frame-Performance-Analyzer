@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FrameViewAnalyzer.Analytics\FrameViewAnalyzer.Analytics.csproj" />
+    <ProjectReference Include="..\..\src\FrameViewAnalyzer.Infrastructure\FrameViewAnalyzer.Infrastructure.csproj" />
+    <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
