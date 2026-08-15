@@ -1,0 +1,29 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Light-mode overrides. Merged on top of Colors.xaml at runtime only. -->
+    <SolidColorBrush x:Key="WindowBrush" Color="#EEF1F4" />
+    <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="PanelBrush" Color="#F6F8FA" />
+    <SolidColorBrush x:Key="PanelAltBrush" Color="#E9EDF1" />
+    <SolidColorBrush x:Key="ButtonBrush" Color="#E1E6EB" />
+    <SolidColorBrush x:Key="ButtonHoverBrush" Color="#D3DBE2" />
+    <SolidColorBrush x:Key="CardBorderBrush" Color="#CCD4DA" />
+    <SolidColorBrush x:Key="TextBrush" Color="#141B22" />
+    <SolidColorBrush x:Key="TextSoftBrush" Color="#2C3740" />
+    <SolidColorBrush x:Key="MutedBrush" Color="#5B6872" />
+    <SolidColorBrush x:Key="AccentBrush" Color="#4A7A00" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#3B6200" />
+    <SolidColorBrush x:Key="AccentDimBrush" Color="#E4EFD2" />
+    <SolidColorBrush x:Key="ChartBackgroundBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="GridBrush" Color="#DDE4E9" />
+    <SolidColorBrush x:Key="InputBackgroundBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="SuccessBrush" Color="#1C6B3A" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#B03A3A" />
+    <SolidColorBrush x:Key="WarningBrush" Color="#8A5A00" />
+    <SolidColorBrush x:Key="DisabledBrush" Color="#97A3AD" />
+    <SolidColorBrush x:Key="SeriesABrush" Color="#4A7A00" />
+    <SolidColorBrush x:Key="SeriesBBrush" Color="#1A6F9E" />
+    <SolidColorBrush x:Key="SelectionBrush" Color="#D9EBC6" />
+    <SolidColorBrush x:Key="TooltipBackgroundBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="TooltipBorderBrush" Color="#C6CFD6" />
+</ResourceDictionary>
