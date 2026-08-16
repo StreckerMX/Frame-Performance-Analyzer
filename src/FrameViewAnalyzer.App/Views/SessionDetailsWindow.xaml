@@ -23,10 +23,7 @@
             <ItemsControl ItemsSource="{Binding Sections}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Background="{DynamicResource CardBrush}"
-                                BorderBrush="{DynamicResource CardBorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="10"
+                        <Border Style="{StaticResource CardStyle}"
                                 Padding="14,12"
                                 Margin="0,0,0,10">
                             <StackPanel>

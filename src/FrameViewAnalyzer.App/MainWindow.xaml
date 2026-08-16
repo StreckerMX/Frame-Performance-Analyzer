@@ -19,20 +19,29 @@
         <KeyBinding Key="E" Modifiers="Control+Shift" Command="{Binding ExportStatisticsCsvCommand}" />
     </Window.InputBindings>
     <Grid Margin="20">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-        <!-- Main content column -->
-        <Grid Grid.Column="0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+        <!-- Upper dashboard: identity, capture toolbar, session cards, KPI strip,
+             with the Analysis Range rail on the right. -->
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Dashboard content column -->
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
             <!-- Identity header -->
             <Grid Grid.Row="0" Margin="0,2,0,12">
@@ -264,17 +273,9 @@
             </Border>
         </Grid>
 
-        <!-- Chart card -->
-        <Grid Grid.Row="3">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-
-            <!-- Visible-range statistics strip -->
-            <Border Grid.Row="0"
-                    Margin="0,0,0,10"
+            <!-- Visible-range statistics strip (upper dashboard; the chart
+                 below spans the full window width). -->
+            <Border Grid.Row="3"
                     Style="{StaticResource CardStyle}"
                     Padding="14,10">
                 <ItemsControl ItemsSource="{Binding Chart.KpiTiles}">
@@ -317,8 +318,71 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </Border>
+            </Grid>
 
-            <!-- Chart toolbar -->
+            <!-- Analysis rail (upper-right of the dashboard) -->
+            <ScrollViewer Grid.Column="1"
+                          Width="300"
+                          Margin="16,0,0,0"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <Border Style="{StaticResource CardStyle}" Padding="16,14">
+                        <StackPanel>
+                            <TextBlock Text="ANALYSIS RANGE" Style="{StaticResource SectionLabelStyle}" />
+                            <CheckBox Margin="0,10,0,0"
+                                      Content="Automatic (full session)"
+                                      IsChecked="{Binding AnalysisRange.AutoGpuThresholdEnabled}"
+                                      IsEnabled="{Binding AnalysisRange.IsEnabled}"
+                                      Style="{StaticResource DarkCheckBoxStyle}" />
+                            <TextBlock Margin="0,12,0,0"
+                                       Text="{Binding AnalysisRange.GpuThresholdLabel}"
+                                       FontSize="{DynamicResource FontSize.Small}"
+                                       Foreground="{DynamicResource TextSoftBrush}" />
+                            <Slider Minimum="0"
+                                    Maximum="80"
+                                    Value="{Binding AnalysisRange.GpuThreshold, UpdateSourceTrigger=PropertyChanged}"
+                                    IsEnabled="{Binding AnalysisRange.ManualGpuThresholdEnabled}"
+                                    IsSnapToTickEnabled="False"
+                                    TickFrequency="1"
+                                    Style="{StaticResource DarkSliderStyle}" />
+                            <TextBlock Margin="0,12,0,0"
+                                       Text="{Binding AnalysisRange.TrimLabel}"
+                                       FontSize="{DynamicResource FontSize.Small}"
+                                       Foreground="{DynamicResource TextSoftBrush}" />
+                            <Slider Minimum="0"
+                                    Maximum="10"
+                                    Value="{Binding AnalysisRange.TrimBufferSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                    IsEnabled="{Binding AnalysisRange.IsEnabled}"
+                                    TickFrequency="0.5"
+                                    Style="{StaticResource DarkSliderStyle}" />
+                            <CheckBox Margin="0,10,0,0"
+                                      Content="Exclude loading screens / FPS cullers"
+                                      IsChecked="{Binding AnalysisRange.ExcludeTransitionsEnabled}"
+                                      IsEnabled="{Binding AnalysisRange.IsEnabled}"
+                                      Style="{StaticResource DarkCheckBoxStyle}" />
+                            <TextBlock Margin="0,12,0,0"
+                                       Text="{Binding AnalysisRange.FilterHelpText}"
+                                       TextWrapping="Wrap"
+                                       FontSize="{DynamicResource FontSize.Small}"
+                                       Foreground="{DynamicResource MutedBrush}" />
+                            <Border Margin="0,12,0,0"
+                                    Background="{DynamicResource PanelAltBrush}"
+                                    BorderBrush="{DynamicResource CardBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="10,8">
+                                <TextBlock Text="{Binding AnalysisRange.AnalysisSummaryText}"
+                                           TextWrapping="Wrap"
+                                           FontSize="{DynamicResource FontSize.Small}"
+                                           Foreground="{DynamicResource TextSoftBrush}" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+            <!-- Chart toolbar (full window width) -->
             <Grid Grid.Row="1" Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -389,10 +453,9 @@
             <Border Grid.Row="2" Style="{StaticResource CardStyle}" Padding="10">
                 <views:SessionChartView x:Name="ChartView" />
             </Border>
-        </Grid>
 
-        <!-- Status bar -->
-        <Grid Grid.Row="4" Margin="0,8,0,0">
+        <!-- Status bar (full window width) -->
+        <Grid Grid.Row="3" Margin="0,8,0,0">
             <TextBlock Text="{Binding StatusText}"
                        Foreground="{DynamicResource TextSoftBrush}"
                        FontSize="{DynamicResource FontSize.Small}" />
@@ -401,68 +464,5 @@
                        Foreground="{DynamicResource MutedBrush}"
                        FontSize="{DynamicResource FontSize.Small}" />
         </Grid>
-        </Grid>
-
-        <!-- Analysis rail -->
-        <ScrollViewer Grid.Column="1"
-                      Width="300"
-                      Margin="16,0,0,0"
-                      VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <Border Style="{StaticResource CardStyle}" Padding="16,14">
-                    <StackPanel>
-                        <TextBlock Text="ANALYSIS RANGE" Style="{StaticResource SectionLabelStyle}" />
-                        <CheckBox Margin="0,10,0,0"
-                                  Content="Automatic (full session)"
-                                  IsChecked="{Binding AnalysisRange.AutoGpuThresholdEnabled}"
-                                  IsEnabled="{Binding AnalysisRange.IsEnabled}"
-                                  Style="{StaticResource DarkCheckBoxStyle}" />
-                        <TextBlock Margin="0,12,0,0"
-                                   Text="{Binding AnalysisRange.GpuThresholdLabel}"
-                                   FontSize="{DynamicResource FontSize.Small}"
-                                   Foreground="{DynamicResource TextSoftBrush}" />
-                        <Slider Minimum="0"
-                                Maximum="80"
-                                Value="{Binding AnalysisRange.GpuThreshold, UpdateSourceTrigger=PropertyChanged}"
-                                IsEnabled="{Binding AnalysisRange.ManualGpuThresholdEnabled}"
-                                IsSnapToTickEnabled="False"
-                                TickFrequency="1"
-                                Style="{StaticResource DarkSliderStyle}" />
-                        <TextBlock Margin="0,12,0,0"
-                                   Text="{Binding AnalysisRange.TrimLabel}"
-                                   FontSize="{DynamicResource FontSize.Small}"
-                                   Foreground="{DynamicResource TextSoftBrush}" />
-                        <Slider Minimum="0"
-                                Maximum="10"
-                                Value="{Binding AnalysisRange.TrimBufferSeconds, UpdateSourceTrigger=PropertyChanged}"
-                                IsEnabled="{Binding AnalysisRange.IsEnabled}"
-                                TickFrequency="0.5"
-                                Style="{StaticResource DarkSliderStyle}" />
-                        <CheckBox Margin="0,10,0,0"
-                                  Content="Exclude loading screens / FPS cullers"
-                                  IsChecked="{Binding AnalysisRange.ExcludeTransitionsEnabled}"
-                                  IsEnabled="{Binding AnalysisRange.IsEnabled}"
-                                  Style="{StaticResource DarkCheckBoxStyle}" />
-                        <TextBlock Margin="0,12,0,0"
-                                   Text="{Binding AnalysisRange.FilterHelpText}"
-                                   TextWrapping="Wrap"
-                                   FontSize="{DynamicResource FontSize.Small}"
-                                   Foreground="{DynamicResource MutedBrush}" />
-                        <Border Margin="0,12,0,0"
-                                Background="{DynamicResource PanelAltBrush}"
-                                BorderBrush="{DynamicResource CardBorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="10,8">
-                            <TextBlock Text="{Binding AnalysisRange.AnalysisSummaryText}"
-                                       TextWrapping="Wrap"
-                                       FontSize="{DynamicResource FontSize.Small}"
-                                       Foreground="{DynamicResource TextSoftBrush}" />
-                        </Border>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </ScrollViewer>
-
     </Grid>
 </Window>
