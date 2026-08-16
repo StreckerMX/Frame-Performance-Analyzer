@@ -2,16 +2,16 @@
 
 A native Windows desktop application for analyzing and comparing **NVIDIA FrameView** capture data.
 
-[![Release](https://img.shields.io/github/v/release/StreckerMX/frameview-analyzer-wpf?label=release)](https://github.com/StreckerMX/frameview-analyzer-wpf/releases/latest)
+[![Release](https://img.shields.io/github/v/release/StreckerMX/FrameView-Analyzer?label=release)](https://github.com/StreckerMX/FrameView-Analyzer/releases/latest)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/)
-[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D4)](https://github.com/StreckerMX/frameview-analyzer-wpf/releases/latest)
-[![License](https://img.shields.io/github/license/StreckerMX/frameview-analyzer-wpf)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D4)](https://github.com/StreckerMX/FrameView-Analyzer/releases/latest)
+[![License](https://img.shields.io/github/license/StreckerMX/FrameView-Analyzer)](LICENSE)
 
 FrameView Analyzer turns FrameView CSV captures into an interactive performance workspace. Load a benchmark run, inspect frame-rate and telemetry data over time, compare two sessions side by side, isolate problem regions, attach benchmark metadata, and export presentation-ready results.
 
 ## Download
 
-Download the latest stable build from **[GitHub Releases](https://github.com/StreckerMX/frameview-analyzer-wpf/releases/latest)**.
+Download the latest stable build from **[GitHub Releases](https://github.com/StreckerMX/FrameView-Analyzer/releases/latest)**.
 
 For the current stable release:
 
@@ -62,8 +62,8 @@ CSV loading includes tolerant handling for common encoding and numeric-format va
 The project targets **.NET 10** and uses WPF.
 
 ```powershell
-git clone https://github.com/StreckerMX/frameview-analyzer-wpf.git
-cd frameview-analyzer-wpf
+git clone https://github.com/StreckerMX/FrameView-Analyzer.git
+cd FrameView-Analyzer
 
 dotnet restore FrameViewAnalyzer.sln
 dotnet build FrameViewAnalyzer.sln --configuration Release
