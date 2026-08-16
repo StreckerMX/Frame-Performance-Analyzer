@@ -11,7 +11,8 @@
         ShowInTaskbar="False"
         Background="{DynamicResource WindowBrush}"
         Foreground="{DynamicResource TextBrush}"
-        FontFamily="{DynamicResource FontFamily.App}">
+        FontFamily="{DynamicResource FontFamily.App}"
+        Icon="/FrameViewAnalyzer.App;component/assets/frameview-analyzer.ico">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
         <converters:InverseBooleanConverter x:Key="InverseBool" />
@@ -50,19 +51,19 @@
                       Margin="8,0,0,0"
                       ItemsSource="{Binding GameOptions}"
                       SelectedItem="{Binding SelectedGame}"
-                      FontSize="{DynamicResource FontSize.Small}" />
+                      Style="{StaticResource DarkComboBoxStyle}" />
             <ComboBox Grid.Column="3"
                       MinWidth="120"
                       Margin="8,0,0,0"
                       ItemsSource="{Binding ResolutionOptions}"
                       SelectedItem="{Binding SelectedResolution}"
-                      FontSize="{DynamicResource FontSize.Small}" />
+                      Style="{StaticResource DarkComboBoxStyle}" />
             <ComboBox Grid.Column="4"
                       MinWidth="130"
                       Margin="8,0,0,0"
                       ItemsSource="{Binding GpuOptions}"
                       SelectedItem="{Binding SelectedGpu}"
-                      FontSize="{DynamicResource FontSize.Small}" />
+                      Style="{StaticResource DarkComboBoxStyle}" />
         </Grid>
 
         <Grid Grid.Row="1" Margin="0,10,0,0">
@@ -87,16 +88,12 @@
                              Margin="8,0,0,0"
                              GroupName="Sort"
                              IsChecked="{Binding SortByDate}"
-                             Foreground="{DynamicResource TextSoftBrush}"
-                             FontSize="{DynamicResource FontSize.Small}"
-                             VerticalContentAlignment="Center" />
+                             Style="{StaticResource SegmentedRadioStyle}" />
                 <RadioButton Content="Name"
                              Margin="10,0,0,0"
                              GroupName="Sort"
                              IsChecked="{Binding SortByDate, Converter={StaticResource InverseBool}}"
-                             Foreground="{DynamicResource TextSoftBrush}"
-                             FontSize="{DynamicResource FontSize.Small}"
-                             VerticalContentAlignment="Center" />
+                             Style="{StaticResource SegmentedRadioStyle}" />
             </StackPanel>
             <TextBlock Grid.Column="2"
                        Text="{Binding CountText}"

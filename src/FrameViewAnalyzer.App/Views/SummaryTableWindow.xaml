@@ -102,10 +102,7 @@
                    Margin="0,0,0,10" />
 
         <Border Grid.Row="1"
-                Background="{DynamicResource CardBrush}"
-                BorderBrush="{DynamicResource CardBorderBrush}"
-                BorderThickness="1"
-                CornerRadius="10">
+                Style="{StaticResource CardStyle}">
             <DataGrid x:Name="SummaryGrid"
                       ItemsSource="{Binding Rows}"
                       AutoGenerateColumns="False"

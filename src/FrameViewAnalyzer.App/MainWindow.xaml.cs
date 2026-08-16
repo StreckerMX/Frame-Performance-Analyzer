@@ -85,6 +85,7 @@ public partial class MainWindow : Window
             {
                 Owner = this,
             };
+            WindowThemeBootstrap.Attach(window, _themes);
             window.Show();
         };
         viewModel.ExportPngReportRequested += (_, _) => ExportPng_Click(this, new RoutedEventArgs());
@@ -159,6 +160,7 @@ public partial class MainWindow : Window
         MainWindowViewModel.MetadataEditorRequest request)
     {
         var editor = new MetadataEditorWindow(request.Session, request.Current) { Owner = this };
+        WindowThemeBootstrap.Attach(editor, _themes);
         editor.Saved += metadata => _viewModel.PersistMetadata(request.Session, metadata);
         editor.ShowDialog();
     }
@@ -195,6 +197,7 @@ public partial class MainWindow : Window
         {
             Owner = this,
         };
+        WindowThemeBootstrap.Attach(window, _themes);
         window.ShowDialog();
     }
 
@@ -214,6 +217,7 @@ public partial class MainWindow : Window
         {
             Owner = this,
         };
+        WindowThemeBootstrap.Attach(library, _themes);
         library.LoadBaseRequested += async path => await _viewModel.LoadBaseFromPathAsync(path);
         library.LoadComparisonRequested += async path => await _viewModel.LoadComparisonFromPathAsync(path);
         library.CompareRequested += async (first, second) =>
@@ -246,6 +250,7 @@ public partial class MainWindow : Window
         }
 
         var dialog = new ExportReportWindow(options) { Owner = this };
+        WindowThemeBootstrap.Attach(dialog, _themes);
         dialog.ExportRequested += (scope, option) => PerformPngExport(scope, option);
         dialog.ShowDialog();
     }

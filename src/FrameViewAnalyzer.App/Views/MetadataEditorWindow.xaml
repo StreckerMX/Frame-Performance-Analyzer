@@ -9,7 +9,8 @@
         ShowInTaskbar="False"
         Background="{DynamicResource WindowBrush}"
         Foreground="{DynamicResource TextBrush}"
-        FontFamily="{DynamicResource FontFamily.App}">
+        FontFamily="{DynamicResource FontFamily.App}"
+        Icon="/FrameViewAnalyzer.App;component/assets/frameview-analyzer.ico">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
