@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Deterministic release packaging for FrameView Analyzer (Phase 14 RC).
+    Deterministic release packaging for FrameView Analyzer.
 
 .DESCRIPTION
     Restores, builds (Release), runs the full test suite, publishes the
@@ -42,7 +42,7 @@ $dotnet = (Get-Command dotnet).Source
 if (-not $dotnet) { throw 'dotnet was not found on PATH.' }
 
 # Single source of truth for the version: Directory.Build.props
-# (VersionPrefix + VersionSuffix → "2.0.0-rc.1" for the RC).
+# (VersionPrefix → "2.0.0" for the stable release).
 $version = (& $dotnet msbuild $appProject -getProperty:Version).Trim()
 if (-not $version) { throw 'Could not resolve the product version from the project.' }
 Write-Host "==> packaging version: $version"

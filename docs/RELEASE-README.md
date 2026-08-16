@@ -1,6 +1,6 @@
-# FrameView Analyzer — Release Candidate (Phase 14)
+# FrameView Analyzer 2.0.0
 
-**Version:** 2.0.0-rc.1 (release candidate — not the final stable release)
+**Version:** 2.0.0 (stable release)
 
 FrameView Analyzer is a Windows desktop application for analyzing NVIDIA
 FrameView captures: load one or two FrameView CSVs, filter GPU-active seconds,
@@ -18,12 +18,11 @@ harmonic FPS bins, and per-metric charts.
 
 ## How to launch
 
-1. Unzip `FrameViewAnalyzer-v2.0.0-rc.1-win-x64.zip`.
+1. Unzip `FrameViewAnalyzer-v2.0.0-win-x64.zip`.
 2. Double-click `FrameViewAnalyzer.exe`.
 
-Windows SmartScreen may warn about an unknown publisher for the release
-candidate. Choose **More info → Run anyway** if you trust the source of the
-download.
+Windows SmartScreen may warn about an unknown publisher. Choose
+**More info → Run anyway** if you trust the source of the download.
 
 ## Supported files
 
