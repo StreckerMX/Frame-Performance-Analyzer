@@ -195,7 +195,7 @@ coordinated commit/rollback semantics (strictly stronger than Python).
 
 ## 16. Verification
 
-- 439/439 tests green (golden Python-parity fixtures included).
+- 502/502 tests green (golden Python-parity fixtures included).
 - Release build 0 errors / 0 warnings.
 - This document is generated from a full two-codebase inventory; exact
   labels/keys/defaults were compared against source.

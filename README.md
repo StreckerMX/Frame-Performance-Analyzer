@@ -10,9 +10,9 @@ test vectors where algorithms must match exactly.
 
 ## Status
 
-**Phase 14 of 15 complete — Release Candidate.**
+**Complete — FrameView Analyzer 2.0.0.**
 
-Implemented through Phase 14:
+Implemented through Phase 15:
 
 - **Phase 0** — solution skeleton, project layout, strict gates
 - **Phase 1** — FrameView CSV loader + domain models (encodings, missing
@@ -51,10 +51,14 @@ Implemented through Phase 14:
   deterministic packaging script (`scripts/package-release.ps1`),
   third-party notices, and release documentation. The RC ZIP requires no
   .NET installation and no `DOTNET_ROOT`.
+- **Phase 15** — final main-window UI polish: dashboard redesign aligned with
+  the target layout, 16:9 window sizing, dark/light theme polish (including
+  the native Windows title bar via DWM caption colors), KPI delta formatting,
+  comparison metadata wrapping, and stable-release preparation.
 
-Remaining future work: the **final stable release** (Phase 15) — publishing
-and tagging after separate review — is **not done yet**. No GitHub Release
-and no version tag exist for the RC.
+**Stable release:** `2.0.0` — self-contained win-x64 package
+(`FrameViewAnalyzer-v2.0.0-win-x64.zip`); see `docs/RELEASE-README.md` for
+requirements, launch, and uninstall instructions.
 
 ## Stack
 

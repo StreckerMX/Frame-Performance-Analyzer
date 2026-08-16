@@ -150,6 +150,7 @@ validation/import, golden-file statistics certified against the Python app.
 | 12 | BenchmarkDotNet + optimization vs baselines |
 | 13 | Feature-parity audit (incl. deferred summary-table decision) |
 | 14 | Release candidate (single-file ZIP) |
+| 15 | Main-window UI polish + stable release preparation |
 
 ### Development gates (every phase)
 

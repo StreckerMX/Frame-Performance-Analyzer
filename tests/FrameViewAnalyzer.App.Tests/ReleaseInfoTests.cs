@@ -6,11 +6,10 @@ namespace FrameViewAnalyzer.App.Tests;
 public class ReleaseInfoTests
 {
     [Fact]
-    public void Informational_version_is_the_release_candidate_semver()
+    public void Informational_version_is_the_stable_semver()
     {
-        // The single authoritative version source is Directory.Build.props;
-        // the RC is deliberately not presented as a final stable release.
-        Assert.Equal("2.0.0-rc.1", ReleaseInfo.InformationalVersion);
+        // The single authoritative version source is Directory.Build.props.
+        Assert.Equal("2.0.0", ReleaseInfo.InformationalVersion);
     }
 
     [Fact]
