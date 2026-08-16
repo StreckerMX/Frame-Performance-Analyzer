@@ -108,7 +108,13 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
         _manualLookup = _manualStore.Load();
         if (!string.IsNullOrEmpty(_captureDirectory))
         {
-            await _indexer.RefreshAsync(_library, _captureDirectory, _scanner).ConfigureAwait(false);
+            // Deliberately NO ConfigureAwait(false): the continuation rebuilds
+            // ObservableCollections that are bound to ComboBoxes/ItemsControls
+            // in the Library window. WPF CollectionViews throw
+            // NotSupportedException when their source collection changes from
+            // a non-Dispatcher thread, so the rebuild must resume on the UI
+            // thread that started the refresh.
+            await _indexer.RefreshAsync(_library, _captureDirectory, _scanner);
             TrySave();
         }
 

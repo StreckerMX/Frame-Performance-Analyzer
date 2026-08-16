@@ -75,6 +75,7 @@
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Content="Export ▾"
                         Margin="0,0,12,0"
+                        views:DropdownMenu.OpenOnLeftClick="True"
                         Style="{StaticResource GhostButtonStyle}">
                     <Button.ContextMenu>
                         <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
@@ -113,6 +114,7 @@
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0"
                     Content="Capture folder ▾"
+                    views:DropdownMenu.OpenOnLeftClick="True"
                     Style="{StaticResource GhostButtonStyle}">
                 <Button.ContextMenu>
                     <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
@@ -350,10 +352,12 @@
                 <ToggleButton Grid.Column="3"
                               Margin="8,0,0,0"
                               Content="Drag pan"
+                              ToolTip="Turn off Drag pan to drag-select a time range."
                               IsChecked="{Binding Chart.PanEnabled}"
                               Style="{StaticResource ToggleButtonStyle}" />
                 <Button Grid.Column="5"
                         Content="Analyze ▾"
+                        views:DropdownMenu.OpenOnLeftClick="True"
                         Style="{StaticResource GhostButtonStyle}">
                     <Button.ContextMenu>
                         <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">

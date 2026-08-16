@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using FrameViewAnalyzer.Analytics.Comparison;
 using FrameViewAnalyzer.Analytics.Library;
+using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Core.Formatting;
 using FrameViewAnalyzer.Core.Metrics;
 using FrameViewAnalyzer.Core.Models;
@@ -90,6 +91,46 @@ public static class ExportReport
         return string.IsNullOrEmpty(resolution) || resolution == "--"
             ? game
             : $"{game} — {resolution}";
+    }
+
+    /// <summary>
+    /// Explicit role line for the report header, e.g. "Base: GTA5 Enhanced —
+    /// 3840x2160". Single-session reports must identify their session role
+    /// just like the All Sessions report does.
+    /// </summary>
+    public static string SessionRoleLine(SessionRole role, string label) =>
+        role == SessionRole.Base ? $"Base: {label}" : $"Comparison: {label}";
+
+    /// <summary>
+    /// The role lines for the report header, driven by the authoritative
+    /// export selection. A selected-session export uses the role carried by
+    /// its <see cref="ExportSessionOption"/> (never re-derived by identity
+    /// comparison); the All Sessions export always identifies the Base
+    /// session and adds the Comparison line when one is loaded.
+    /// </summary>
+    public static IReadOnlyList<string> RoleLines(
+        ExportScope scope,
+        SessionAnalysis baseSession,
+        SessionAnalysis? comparisonSession,
+        ExportSessionOption? selected)
+    {
+        if (scope == ExportScope.Single && selected is not null)
+        {
+            return [SessionRoleLine(selected.Role, SessionExportLabel(selected.Session))];
+        }
+
+        var lines = new List<string>
+        {
+            SessionRoleLine(SessionRole.Base, SessionExportLabel(baseSession)),
+        };
+        if (comparisonSession is not null)
+        {
+            lines.Add(SessionRoleLine(
+                SessionRole.Comparison,
+                SessionExportLabel(comparisonSession)));
+        }
+
+        return lines;
     }
 
     /// <summary>The statistics rows reusing the comparison service output.</summary>

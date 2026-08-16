@@ -215,21 +215,40 @@ public partial class MainWindow : Window
             return;
         }
 
-        var options = new List<(SessionAnalysis Session, string Label)>
+        var options = new List<ExportSessionOption>
         {
-            (baseSession, ExportReport.SessionExportLabel(baseSession)),
+            new(SessionRole.Base, SessionPickerLabel(baseSession), baseSession),
         };
         if (_viewModel.ComparisonSession is { } comparison)
         {
-            options.Add((comparison, ExportReport.SessionExportLabel(comparison)));
+            options.Add(new ExportSessionOption(
+                SessionRole.Comparison,
+                SessionPickerLabel(comparison),
+                comparison));
         }
 
         var dialog = new ExportReportWindow(options) { Owner = this };
-        dialog.ExportRequested += (scope, session) => PerformPngExport(scope, session);
+        dialog.ExportRequested += (scope, option) => PerformPngExport(scope, option);
         dialog.ShowDialog();
     }
 
-    private void PerformPngExport(ExportScope scope, SessionAnalysis? session)
+    /// <summary>
+    /// Best human-readable name for the session picker: manual benchmark name
+    /// first, then the metadata/display-name based export label; never an
+    /// absolute path.
+    /// </summary>
+    private string SessionPickerLabel(SessionAnalysis session)
+    {
+        var manual = _viewModel.ManualMetadataFor(session);
+        if (manual is { BenchmarkName.Length: > 0 })
+        {
+            return manual.BenchmarkName;
+        }
+
+        return ExportReport.SessionExportLabel(session);
+    }
+
+    private void PerformPngExport(ExportScope scope, ExportSessionOption? selected)
     {
         var baseSession = _viewModel.BaseSession;
         if (baseSession is null)
@@ -237,7 +256,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (scope == ExportScope.Single && session is null)
+        var selectedSession = selected?.Session;
+        if (scope == ExportScope.Single && selectedSession is null)
         {
             return;
         }
@@ -257,10 +277,13 @@ public partial class MainWindow : Window
             var seriesList = new List<MetricSeries>();
             if (scope == ExportScope.Single)
             {
-                var singleSeries = SeriesBuilder.Build(session!, metricId);
+                // The selected option's role is authoritative: a
+                // Comparison-selected export must be stamped and styled as
+                // Comparison, never defaulted to Base.
+                var singleSeries = SeriesBuilder.Build(selectedSession!, metricId);
                 if (singleSeries.Y.Length > 0)
                 {
-                    seriesList.Add(singleSeries with { Role = SessionRole.Base });
+                    seriesList.Add(singleSeries with { Role = selected!.Role });
                 }
             }
             else
@@ -297,7 +320,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var stemSession = scope == ExportScope.Single ? session! : baseSession;
+        var stemSession = scope == ExportScope.Single ? selected!.Session : baseSession;
         var initialFile = ExportReport.BuildFileStem(stemSession, metricIds) + ".png";
         var path = _dialogs.PickSaveFile(initialFile, "PNG (*.png)|*.png", ".png");
         if (path is null)
@@ -307,11 +330,10 @@ public partial class MainWindow : Window
 
         try
         {
-            var multiplot = ReportPlotBuilder.Build(
-                groups,
-                ChartStyle.FromApplicationResources(),
-                BuildReportHeader(scope, session));
-            ReportPlotBuilder.SavePng(multiplot, path, 1600, groups.Count * 520);
+            var multiplot = ReportPlotBuilder.Build(groups, ChartStyle.FromApplicationResources());
+            var header = BuildReportHeader(scope, selected);
+            var height = groups.Count * 520 + (header is null ? 0 : 110);
+            ReportPlotBuilder.SavePng(multiplot, ChartStyle.FromApplicationResources(), header, path, 1600, height);
             _dialogs.ShowInfo("Export", $"Report saved with {groups.Count} charts to:\n{path}");
         }
         catch (Exception error)
@@ -322,17 +344,19 @@ public partial class MainWindow : Window
 
     private ReportPlotBuilder.ReportHeader BuildReportHeader(
         ExportScope scope,
-        SessionAnalysis? singleSession)
+        ExportSessionOption? selected)
     {
-        var baseSession = scope == ExportScope.Single ? singleSession! : _viewModel.BaseSession!;
-        var manual = _viewModel.ManualMetadataFor(baseSession);
+        var headerSession = scope == ExportScope.Single && selected is not null
+            ? selected.Session
+            : _viewModel.BaseSession!;
+        var manual = _viewModel.ManualMetadataFor(headerSession);
         var game = manual is { BenchmarkName.Length: > 0 }
             ? manual.BenchmarkName
             : manual is { Game.Length: > 0 }
                 ? manual.Game
-                : ExportReport.SessionExportLabel(baseSession);
+                : ExportReport.SessionExportLabel(headerSession);
         var lines = new List<string>();
-        if (baseSession.Metadata is { } metadata)
+        if (headerSession.Metadata is { } metadata)
         {
             var hardware = new List<string>();
             foreach (var value in new[] { metadata.Resolution, metadata.Gpu, metadata.Cpu })
@@ -354,10 +378,16 @@ public partial class MainWindow : Window
             lines.Add(config);
         }
 
-        if (scope == ExportScope.All && _viewModel.ComparisonSession is { } comparison)
+        // Role lines come from the authoritative export selection: the
+        // selected option for Single, the loaded slots for All. Both scopes
+        // identify the Base session; All adds Comparison when one is loaded.
+        foreach (var line in ExportReport.RoleLines(
+                     scope,
+                     headerSession,
+                     _viewModel.ComparisonSession,
+                     selected))
         {
-            lines.Add($"Base: {ExportReport.SessionExportLabel(baseSession)}");
-            lines.Add($"Comparison: {ExportReport.SessionExportLabel(comparison)}");
+            lines.Add(line);
         }
 
         return new ReportPlotBuilder.ReportHeader(game, lines);

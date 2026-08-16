@@ -14,6 +14,12 @@
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Regression tests drive the real interaction lifecycle through the
+         internal gesture seams (Begin/Update/End range selection). -->
+    <InternalsVisibleTo Include="FrameViewAnalyzer.App.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>

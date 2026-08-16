@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using FrameViewAnalyzer.App.ViewModels;
 
 namespace FrameViewAnalyzer.App.Views;
@@ -54,5 +55,20 @@ public partial class SummaryTableWindow : Window
     {
         e.Handled = true;
         _viewModel.SortBy(e.Column.DisplayIndex);
+    }
+
+    /// <summary>
+    /// Explicit close for the modeless summary window. IsCancel does not
+    /// apply to modeless windows, so the Close button must close directly.
+    /// </summary>
+    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            Close();
+            e.Handled = true;
+        }
     }
 }

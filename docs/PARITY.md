@@ -53,7 +53,7 @@
 | Dashed per-series average line | yes | yes | ✔ |
 | FPS axis starts at 0 | yes | yes | ✔ |
 | Cursor-anchored wheel zoom (0.75/1.35, min 2 s) | yes | yes | ✔ |
-| Drag pan + area zoom when pan disabled | yes | pan only (no SpanSelector area zoom) | ⚠ minor |
+| Drag pan + area zoom when pan disabled | yes | yes — horizontal drag range selection with Drag pan off (min 1 s, clamped to full bounds) | ✔ |
 | Reset zoom / Auto zoom | yes | yes | ✔ |
 | Tooltip: time + per-series value, tolerance `max(0.65, span/120)` | yes | yes | ✔ |
 | Tooltip edge clamping | 4-corner + re-clamp | border overlay | ⚠ cosmetic |
@@ -187,21 +187,21 @@ coordinated commit/rollback semantics (strictly stronger than Python).
 | G10 | `analysis_options` persisted with library statistics | **PASS** — `LibraryUpdater.UpdateStats` writes digest + options atomically together; scans never erase; package export/import retain them |
 | G11 | Serilog logging | **PASS** — local rolling-file logging at `%LOCALAPPDATA%\FrameViewAnalyzer\logs\` (daily rolling + 10 MB size rollover + 7-day retention); startup/version, controlled startup failure, dispatcher/AppDomain/unobserved-task handlers, and persistence/import/export failure coverage. No intentional CSV-content, benchmark-metadata, or capture-path logging: controlled failures log operation + exception type only (never the exception object). Unexpected failures retain complete local exception diagnostics, which may contain OS/.NET-provided details such as paths. Logs remain local; no telemetry or network sink. Log-directory creation failure falls back to a no-op logger and never blocks startup. |
 | G6 | Help card / Learn more | **ACCEPTED DEVIATION** — non-blocking omission (ties into G1/G3; may be added later without schema impact) |
-| G8 | Area/span zoom (SpanSelector) | **ACCEPTED DEVIATION** — cursor-anchored wheel zoom and drag pan cover the same workflow; area zoom is a redundant interaction path |
-| G9 | AppUserModelID + executable icon packaging | **DEFERRED TO PHASE 14** — packaging-time identity, not runtime behavior. Remaining work: set AppUserModelID + window/executable icon during single-file packaging. |
+| G8 | Area/span zoom (SpanSelector) | **PASS** — horizontal drag range selection implemented (superseding the earlier accepted deviation): active when Drag pan is disabled, translucent overlay clamped to canonical full-series bounds, minimum span 1 s, backwards drags normalized |
+| G9 | AppUserModelID + executable icon packaging | **PASS** (Phase 14) — stable `StreckerMX.FrameViewAnalyzer` AppUserModelID applied before the first window shows; window + executable icon wired and embedded in the self-contained single-file publish |
 | — | Single-series fill-under-curve | **ACCEPTED DEVIATION** — purely cosmetic pixel difference; both apps show mean lines and identical series |
 | — | Dynamic metric ID hash (FNV-1a vs BLAKE2s-4) | **ACCEPTED DEVIATION** — IDs are per-session display keys, never persisted or exchanged; stability within a run is guaranteed |
 | — | UI strings not centralized in `Resources/StringResources` | **ACCEPTED DEVIATION for the first release** — strings live in XAML/ViewModel literals (English-only); centralization is a post-release refactor with no behavioral impact. Audited 2026-08-15: no `Resources/StringResources` exists in the App project. |
 
 ## 16. Verification
 
-- 434/434 tests green (golden Python-parity fixtures included).
+- 439/439 tests green (golden Python-parity fixtures included).
 - Release build 0 errors / 0 warnings.
 - This document is generated from a full two-codebase inventory; exact
   labels/keys/defaults were compared against source.
 
 ## 17. Final state
 
-Every audited feature ends in exactly one of **PASS**, **ACCEPTED DEVIATION**
-(with the why stated above), or **DEFERRED TO PHASE 14** (G9 only). No
-unresolved high-severity parity gaps remain.
+Every audited feature ends in exactly one of **PASS** or
+**ACCEPTED DEVIATION** (with the why stated above). No deferred Phase 14
+items and no unresolved high-severity parity gaps remain.

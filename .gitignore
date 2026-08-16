@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Phase 14: keep the one release publish profile tracked despite the *.pubxml rule.
+!src/FrameViewAnalyzer.App/Properties/PublishProfiles/Release-win-x64.pubxml
