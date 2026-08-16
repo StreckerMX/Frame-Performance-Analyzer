@@ -264,9 +264,7 @@ public partial class SessionChartView : UserControl
         // Drag pan is OFF: begin a horizontal time-range selection.
         var position = e.GetPosition(ChartHost);
         var coordinates = ChartHost.Plot.GetCoordinates((float)position.X, (float)position.Y);
-        _selectStartX = ClampToFullRange(coordinates.X);
-        ChartHost.CaptureMouse();
-        HideTooltip();
+        BeginRangeSelection(coordinates.X);
         e.Handled = true;
     }
 
@@ -283,24 +281,84 @@ public partial class SessionChartView : UserControl
             return;
         }
 
-        if (_selectStartX is not null && _selectionOverlay is not null)
+        // _selectStartX is the authoritative gesture state: EVERY mouse-up
+        // while a selection is active finalizes it, even when no mouse move
+        // ever created an overlay (a plain click must still release the mouse
+        // capture and clear the start). The end coordinate comes from the
+        // actual mouse-up position, not from the last MouseMove event.
+        if (_selectStartX is not null)
         {
-            // The overlay already holds normalized (ordered, clamped) bounds.
-            var selection = ChartViewport.NormalizeRangeSelection(
-                _selectionOverlay.X1,
-                _selectionOverlay.X2,
-                _fullLimits);
-            CancelSelection();
-
-            // Selections shorter than 1 second are ignored (cancelled).
-            if (selection is not null)
-            {
-                ApplyZoomToWindow(selection.Value.Left, selection.Value.Right);
-            }
-
+            var position = e.GetPosition(ChartHost);
+            var coordinates = ChartHost.Plot.GetCoordinates((float)position.X, (float)position.Y);
+            EndRangeSelection(coordinates.X);
             e.Handled = true;
+            return;
         }
     }
+
+    /// <summary>Begins a horizontal range-selection gesture at a clamped start X.</summary>
+    internal void BeginRangeSelection(double startX)
+    {
+        _selectStartX = ClampToFullRange(startX);
+        ChartHost.CaptureMouse();
+        HideTooltip();
+    }
+
+    /// <summary>
+    /// Updates the translucent selection overlay for the current pointer X.
+    /// No-op when no gesture is active, so a move after a completed click can
+    /// never resurrect selection state.
+    /// </summary>
+    internal void UpdateRangeSelection(double endX)
+    {
+        if (_selectStartX is null || _metric is null)
+        {
+            return;
+        }
+
+        var clamped = ClampToFullRange(endX);
+        var minX = System.Math.Min(_selectStartX.Value, clamped);
+        var maxX = System.Math.Max(_selectStartX.Value, clamped);
+
+        if (_selectionOverlay is not null)
+        {
+            ChartHost.Plot.Remove(_selectionOverlay);
+        }
+
+        var style = ChartStyle.FromApplicationResources();
+        _selectionOverlay = ChartHost.Plot.Add.HorizontalSpan(minX, maxX);
+        _selectionOverlay.FillColor = style.SeriesA.WithAlpha(0.18);
+        ChartHost.Refresh();
+    }
+
+    /// <summary>
+    /// Finalizes an active gesture from the mouse-up X: clamps, normalizes,
+    /// and ALWAYS cancels (clears the start, removes any overlay, releases
+    /// the capture). Normalized spans >= 1 second are applied as a zoom;
+    /// shorter ones are silently ignored. No-op when no gesture is active.
+    /// </summary>
+    internal void EndRangeSelection(double endX)
+    {
+        if (_selectStartX is null)
+        {
+            return;
+        }
+
+        var startX = _selectStartX.Value;
+        var selection = ChartViewport.NormalizeRangeSelection(
+            startX,
+            ClampToFullRange(endX),
+            _fullLimits);
+        CancelSelection();
+
+        if (selection is not null)
+        {
+            ApplyZoomToWindow(selection.Value.Left, selection.Value.Right);
+        }
+    }
+
+    /// <summary>Whether a range-selection gesture is currently active.</summary>
+    internal bool IsRangeSelectionActive => _selectStartX is not null;
 
     private double ClampToFullRange(double x) =>
         System.Math.Clamp(x, _fullLimits.Left, _fullLimits.Right);
@@ -342,24 +400,22 @@ public partial class SessionChartView : UserControl
 
         if (_selectStartX is not null && _metric is not null)
         {
+            // Defensive invariant: selection state must never exist while the
+            // left button is no longer pressed. The gesture is finalized on
+            // mouse-up; if stale state ever survives, cancel it instead of
+            // drawing a new overlay.
+            if (e.LeftButton != MouseButtonState.Pressed)
+            {
+                CancelSelection();
+                return;
+            }
+
             // Update the translucent selection overlay, clamped to the
             // canonical full-series X bounds; suppress the tooltip while
             // actively selecting.
             HideTooltip();
             var coordinates = ChartHost.Plot.GetCoordinates((float)position.X, (float)position.Y);
-            var endX = ClampToFullRange(coordinates.X);
-            var minX = System.Math.Min(_selectStartX.Value, endX);
-            var maxX = System.Math.Max(_selectStartX.Value, endX);
-
-            if (_selectionOverlay is not null)
-            {
-                ChartHost.Plot.Remove(_selectionOverlay);
-            }
-
-            var style = ChartStyle.FromApplicationResources();
-            _selectionOverlay = ChartHost.Plot.Add.HorizontalSpan(minX, maxX);
-            _selectionOverlay.FillColor = style.SeriesA.WithAlpha(0.18);
-            ChartHost.Refresh();
+            UpdateRangeSelection(coordinates.X);
             e.Handled = true;
             return;
         }
