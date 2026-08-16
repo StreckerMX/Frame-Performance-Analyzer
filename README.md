@@ -1,81 +1,101 @@
-# FrameView Analyzer (WPF)
+# FrameView Analyzer
 
-Native C#/.NET/WPF rewrite of **FrameView Analyzer** — a Windows desktop tool
-that analyzes NVIDIA FrameView capture CSVs (frame times, GPU/CPU telemetry,
-latency) with a Base/Comparison workflow.
+A native Windows desktop application for analyzing and comparing **NVIDIA FrameView** capture data.
 
-The original Python application (`StreckerMX/frameview-analyzer`) is the
-functional reference; behavior is verified against golden fixtures and ported
-test vectors where algorithms must match exactly.
+[![Release](https://img.shields.io/github/v/release/StreckerMX/frameview-analyzer-wpf?label=release)](https://github.com/StreckerMX/frameview-analyzer-wpf/releases/latest)
+[![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/)
+[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D4)](https://github.com/StreckerMX/frameview-analyzer-wpf/releases/latest)
+[![License](https://img.shields.io/github/license/StreckerMX/frameview-analyzer-wpf)](LICENSE)
 
-## Status
+FrameView Analyzer turns FrameView CSV captures into an interactive performance workspace. Load a benchmark run, inspect frame-rate and telemetry data over time, compare two sessions side by side, isolate problem regions, attach benchmark metadata, and export presentation-ready results.
 
-**Complete — FrameView Analyzer 2.0.0.**
+## Download
 
-Implemented through Phase 15:
+Download the latest stable build from **[GitHub Releases](https://github.com/StreckerMX/frameview-analyzer-wpf/releases/latest)**.
 
-- **Phase 0** — solution skeleton, project layout, strict gates
-- **Phase 1** — FrameView CSV loader + domain models (encodings, missing
-  values, capture naming, display names)
-- **Phase 2** — analytics engine (GPU filtering, loading-screen detection,
-  FPS outliers, harmonic FPS bins, 1% / 0.1% lows, min/max)
-- **Phase 3** — analytics test parity with Python (golden fixtures)
-- **Phase 4** — WPF shell, dark/light themes, window placement, settings
-- **Phase 5** — single-session ScottPlot chart with LTTB/MinMax decimation
-- **Phase 6** — visible-range statistics, wheel zoom, drag pan, tooltip,
-  Reset/Auto zoom
-- **Phase 7** — Base/Comparison sessions, session cards, KPI tiles with
-  deltas, slot promotion when the Base is removed
-- **Phase 8** — Analyze menu: Full capture, Worst performance region (10 s),
-  Most stable region (10 s), Largest performance drop, Largest A/B difference
-- **Phase 9** — manual benchmark metadata, stable capture identity, detected
-  metadata prefill, v2 metadata persistence, Base/Comparison metadata editor
-  integration
-- **Phase 10** — Benchmark Library (search / filter / sort, Base/Comparison
-  loading from the library, A/B selection, recent comparisons, missing-source
-  handling, statistics digest) + the legacy one-way importer from the Python
-  application
-- **Phase 11** — exports: multi-chart PNG report with a compact context
-  header, Statistics CSV (invariant, UTF-8 BOM), Benchmark data JSON, and
-  portable benchmark package export/import with statistics hydration
-- **Phase 12** — BenchmarkDotNet suite (CSV parsing, analytics, comparison,
-  decimation) with corrected baselines and measured optimizations: −55% / −99%
-  allocations on Compare, −40% allocations on Analyze
-  (see `docs/PERFORMANCE.md`)
-- **Phase 13** — feature-parity audit and closure (`docs/PARITY.md`): Session
-  Details window, analysis-range controls, Summary CSV table, keyboard
-  shortcuts, capture-folder workflow, persisted analysis options, omitted-load
-  gap visualization, and Serilog file logging
-- **Phase 14** — release candidate: `2.0.0-rc.1` versioning, AppUserModelID +
-  final icon integration, self-contained single-file win-x64 publish profile,
-  deterministic packaging script (`scripts/package-release.ps1`),
-  third-party notices, and release documentation. The RC ZIP requires no
-  .NET installation and no `DOTNET_ROOT`.
-- **Phase 15** — final main-window UI polish: dashboard redesign aligned with
-  the target layout, 16:9 window sizing, dark/light theme polish (including
-  the native Windows title bar via DWM caption colors), KPI delta formatting,
-  comparison metadata wrapping, and stable-release preparation.
+For the current stable release:
 
-**Stable release:** `2.0.0` — self-contained win-x64 package
-(`FrameViewAnalyzer-v2.0.0-win-x64.zip`); see `docs/RELEASE-README.md` for
-requirements, launch, and uninstall instructions.
+1. Download `FrameViewAnalyzer-v2.0.0-win-x64.zip`.
+2. Extract the archive.
+3. Run `FrameViewAnalyzer.exe`.
 
-## Stack
+The application is distributed as a **self-contained Windows x64 build**, so installing the .NET runtime separately is not required.
 
-- C# on **.NET 10**
-- **WPF** + **CommunityToolkit.Mvvm** (MVVM)
-- **ScottPlot 5** for charting
-- **CsvHelper** for CSV input, **System.Text.Json** for settings
-- **xUnit** for tests
+> Windows SmartScreen may show an unknown-publisher warning because the executable is not code-signed.
 
-## Solution structure
+## Features
+
+- **Interactive performance charts** with metric switching, hover inspection, cursor-anchored zoom, drag pan, range selection, and automatic zoom.
+- **Base vs. Comparison workflow** for overlaying two captures and reviewing KPI deltas between benchmark runs.
+- **Visible-range statistics** including Average FPS, 1% Low, 0.1% Low, Maximum, Minimum, and visible duration.
+- **Automatic analysis tools** for full capture, worst-performance region, most stable region, largest performance drop, and largest A/B difference.
+- **Capture filtering** with GPU-active range detection, edge trimming, transition/loading-screen exclusion, and FPS outlier handling.
+- **Benchmark metadata** for game, scene, resolution, graphics preset, upscaler, Frame Generation, Ray Tracing, driver version, notes, and tags.
+- **Benchmark Library** with search, filters, sorting, availability tracking, recent comparisons, and direct Base/Comparison loading.
+- **Exports** for PNG reports, Statistics CSV, benchmark JSON, and portable benchmark packages.
+- **Dark and light themes** with native Windows title-bar integration and a responsive full-width dashboard.
+
+## Supported input
+
+FrameView Analyzer is designed for NVIDIA FrameView capture logs, including standard `*_Log.csv` session files.
+
+CSV loading includes tolerant handling for common encoding and numeric-format variations found in real-world captures.
+
+## Typical workflow
+
+1. Select your FrameView capture folder.
+2. Load a capture as the **Base** session.
+3. Optionally load a second capture as **Comparison**.
+4. Choose a metric and inspect the chart or select a visible time range.
+5. Use **Analyze** to jump to interesting regions automatically.
+6. Add metadata if you want the result stored in the Benchmark Library.
+7. Export a report or benchmark data when finished.
+
+## Requirements
+
+- **Windows 11 x64 recommended**
+- Self-contained release build: **no separate .NET installation required**
+- NVIDIA FrameView CSV captures
+
+## Building from source
+
+The project targets **.NET 10** and uses WPF.
+
+```powershell
+git clone https://github.com/StreckerMX/frameview-analyzer-wpf.git
+cd frameview-analyzer-wpf
+
+dotnet restore FrameViewAnalyzer.sln
+dotnet build FrameViewAnalyzer.sln --configuration Release
+dotnet test FrameViewAnalyzer.sln --configuration Release
+```
+
+Run the application from source:
+
+```powershell
+dotnet run --project src/FrameViewAnalyzer.App --configuration Debug
+```
+
+## Technology
+
+- C# / .NET 10
+- WPF
+- CommunityToolkit.Mvvm
+- ScottPlot 5
+- CsvHelper
+- System.Text.Json
+- Serilog
+- xUnit
+
+## Project structure
 
 ```text
 src/
-  FrameViewAnalyzer.Core/            domain models + pure math (no dependencies)
-  FrameViewAnalyzer.Analytics/       analysis engine (→ Core)
-  FrameViewAnalyzer.Infrastructure/  CSV IO, stores (→ Core, Analytics)
-  FrameViewAnalyzer.App/             WPF composition root + Views/ViewModels
+  FrameViewAnalyzer.Core/            Domain models and pure math
+  FrameViewAnalyzer.Analytics/       Performance analysis engine
+  FrameViewAnalyzer.Infrastructure/  CSV I/O and persistent stores
+  FrameViewAnalyzer.App/             WPF application and presentation layer
+
 tests/
   FrameViewAnalyzer.Core.Tests/
   FrameViewAnalyzer.Analytics.Tests/
@@ -83,63 +103,20 @@ tests/
   FrameViewAnalyzer.App.Tests/
 ```
 
-See `docs/ARCHITECTURE.md` for the architecture proposal and roadmap.
+More technical documentation is available in [`docs/`](docs/), including the architecture, parity audit, performance notes, and release documentation.
 
-## Features
+## Verification
 
-- Load NVIDIA FrameView `*_Log.csv` captures (UTF-8 with legacy-encoding
-  fallback, decimal-comma tolerant)
-- Analysis engine: automatic GPU threshold, edge trimming, transition
-  exclusion, harmonic FPS, percentiles
-- Chart: any metric, decimation for large captures, wheel zoom (cursor
-  anchored), drag pan, hover tooltip with nearest real samples, Reset/Auto
-  zoom
-- Visible-range KPI strip: average FPS, 1% low, 0.1% low, max, min, visible
-  time — recomputed for the zoomed range
-- Base/Comparison: load two captures, combined session cards with the FPS
-  delta, overlaid series with legend, per-tile comparison values and
-  direction-aware deltas, comparison promotion when the Base is removed
-- Analyze menu: jump the chart to the full capture, the worst 10-second
-  performance region, the most stable 10-second region, the largest
-  performance drop, or the region of largest A/B divergence
-- Manual benchmark metadata: benchmark name, game/scene, resolution, graphics
-  preset, upscaler (+ quality), Frame Generation, Ray Tracing, driver
-  version, notes, and tags — persisted per capture identity with detected
-  prefill in the metadata editor
-- Benchmark Library: persistent index over the capture folder with search,
-  game/resolution/GPU/tag filters, date/name sorting, availability tracking
-  (missing sources stay listed), Load as Base / Load as Comparison, A/B
-  selection, recent comparisons, and an FPS statistics digest per record
-- Legacy import: a one-way, user-triggered importer reads the Python
-  application's stores — `%APPDATA%\FrameViewAnalyzer\settings.json`,
-  `metadata.json`, and `library.json` — into the separate v2 stores without
-  modifying the Python files; existing V2 data always wins and repeated
-  imports are idempotent
-- Exports: multi-chart PNG report (compact context header, all or selected
-  session), Statistics CSV (invariant numbers, UTF-8 BOM), Benchmark data
-  JSON (sessions + statistics + manual metadata), and portable benchmark
-  package export/import (statistics digest hydration, validation, atomic
-  writes)
+The stable `2.0.0` release is validated with **502 automated tests**, a clean Release build, and a self-contained startup smoke test without a locally installed .NET runtime.
 
-## Tests
+Each release also includes a `.sha256` file for verifying the downloadable ZIP.
 
-349/349 tests pass on the Release build with 0 errors and 0 warnings.
+## License
 
-```powershell
-dotnet restore FrameViewAnalyzer.sln
-dotnet build FrameViewAnalyzer.sln --configuration Release
-dotnet test FrameViewAnalyzer.sln --configuration Release
-```
+FrameView Analyzer is released under the [MIT License](LICENSE).
 
-Run the app:
+## Acknowledgements
 
-```powershell
-dotnet run --project src/FrameViewAnalyzer.App --configuration Debug
-```
+FrameView Analyzer uses NVIDIA FrameView capture data and open-source libraries including ScottPlot, CsvHelper, CommunityToolkit.Mvvm, and Serilog.
 
-## Layout notes
-
-The window enforces a minimum size (`980 × 700` logical units) so the session
-cards, six KPI tiles, toolbar, and Analyze menu stay reachable; WPF is
-per-monitor DPI aware. At minimum width, KPI values use a smaller display
-size and ellipsize rather than push the layout.
+This project is independent and is not affiliated with or endorsed by NVIDIA Corporation.
