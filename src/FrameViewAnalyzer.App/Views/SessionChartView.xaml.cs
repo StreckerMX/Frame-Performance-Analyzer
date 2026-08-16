@@ -39,6 +39,11 @@ public partial class SessionChartView : UserControl
     public SessionChartView()
     {
         InitializeComponent();
+
+        // The empty plot must never flash the default white ScottPlot
+        // background before the first series render; apply the theme upfront.
+        ApplyPlotBackground();
+
         ChartHost.UserInputProcessor.IsEnabled = false;
         ChartHost.MouseWheel += OnMouseWheel;
         ChartHost.MouseMove += OnMouseMove;
@@ -66,7 +71,16 @@ public partial class SessionChartView : UserControl
         _crosshair = null;
         HideTooltip();
         ChartHost.Plot.Clear();
+        ApplyPlotBackground();
         ChartHost.Refresh();
+    }
+
+    /// <summary>Keeps the plot surface on the current theme colors.</summary>
+    private void ApplyPlotBackground()
+    {
+        var style = ChartStyle.FromApplicationResources();
+        ChartHost.Plot.FigureBackground.Color = style.Background;
+        ChartHost.Plot.DataBackground.Color = style.Background;
     }
 
     public void ApplyInteractions(bool wheelZoomEnabled, bool panEnabled, bool markersVisible)

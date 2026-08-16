@@ -105,9 +105,15 @@ public static class ChartPlotBuilder
 
         if (showLegend)
         {
+            // Legend lives inside the plot, bottom-right, with a subtle
+            // outline — matching the reference screenshot.
             plot.ShowLegend();
+            plot.Legend.Alignment = Alignment.LowerRight;
+            plot.Legend.Margin = new PixelPadding(10);
             plot.Legend.BackgroundColor = style.Background.WithAlpha(0.92);
             plot.Legend.FontColor = style.Foreground;
+            plot.Legend.OutlineColor = style.Grid;
+            plot.Legend.OutlineWidth = 1;
         }
         else
         {

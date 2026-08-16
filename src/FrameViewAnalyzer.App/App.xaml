@@ -8,6 +8,7 @@
                 <ResourceDictionary Source="/FrameViewAnalyzer.App;component/Themes/Colors.xaml" />
                 <ResourceDictionary Source="/FrameViewAnalyzer.App;component/Themes/Typography.xaml" />
                 <ResourceDictionary Source="/FrameViewAnalyzer.App;component/Themes/Buttons.xaml" />
+                <ResourceDictionary Source="/FrameViewAnalyzer.App;component/Themes/Panels.xaml" />
                 <!-- LightTheme.xaml is merged at runtime by ThemeService. -->
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
