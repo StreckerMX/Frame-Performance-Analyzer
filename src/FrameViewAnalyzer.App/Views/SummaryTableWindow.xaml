@@ -10,7 +10,84 @@
         Background="{DynamicResource WindowBrush}"
         Foreground="{DynamicResource TextBrush}"
         FontFamily="{DynamicResource FontFamily.App}"
-        Icon="/FrameViewAnalyzer.App;component/assets/frameview-analyzer.ico">
+        Icon="/FrameViewAnalyzer.App;component/assets/frameview-analyzer.ico"
+        PreviewKeyDown="Window_PreviewKeyDown">
+    <Window.Resources>
+        <!-- Theme-aware DataGrid styling: header text must stay readable in
+             both themes, with the sort indicator and selection preserved. -->
+        <Style x:Key="SummaryGridColumnHeaderStyle" TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,1,1" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="FontSize" Value="{DynamicResource FontSize.Small}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridColumnHeader">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter Grid.Column="0"
+                                                  VerticalAlignment="Center"
+                                                  Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}" />
+                                <Path x:Name="SortArrow"
+                                      Grid.Column="1"
+                                      Width="8"
+                                      Height="8"
+                                      Margin="6,0,0,0"
+                                      VerticalAlignment="Center"
+                                      Stretch="Uniform"
+                                      Fill="{TemplateBinding Foreground}"
+                                      Visibility="Collapsed"
+                                      Data="M0,0 L4,7 L8,0 Z" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="SortDirection" Value="Ascending">
+                                <Setter TargetName="SortArrow" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="SortArrow" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleY="-1" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="SortDirection" Value="Descending">
+                                <Setter TargetName="SortArrow" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="DataGridCell">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+                    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style TargetType="DataGridRow">
+            <Setter Property="Background" Value="{DynamicResource PanelAltBrush}" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -47,6 +124,7 @@
                       BorderThickness="0"
                       RowBackground="{DynamicResource PanelAltBrush}"
                       AlternatingRowBackground="{DynamicResource PanelBrush}"
+                      ColumnHeaderStyle="{StaticResource SummaryGridColumnHeaderStyle}"
                       Foreground="{DynamicResource TextBrush}"
                       FontSize="{DynamicResource FontSize.Small}"
                       Sorting="SummaryGrid_Sorting" />
@@ -57,7 +135,7 @@
                     HorizontalAlignment="Right"
                     Margin="0,10,0,0">
             <Button Content="Close"
-                    IsCancel="True"
+                    Click="Close_Click"
                     MinWidth="90"
                     Style="{StaticResource PrimaryButtonStyle}" />
         </StackPanel>

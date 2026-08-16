@@ -41,6 +41,7 @@
             <ComboBox x:Name="SessionOptions"
                       Margin="20,8,0,0"
                       DisplayMemberPath="Label"
+                      SelectionChanged="SessionOptions_SelectionChanged"
                       FontSize="{DynamicResource FontSize.Small}" />
         </StackPanel>
 
@@ -56,6 +57,7 @@
                     Click="Cancel_Click"
                     Style="{StaticResource SecondaryButtonStyle}" />
             <Button Content="Export"
+                    x:Name="ExportButton"
                     Margin="8,0,0,0"
                     Click="Export_Click"
                     Style="{StaticResource PrimaryButtonStyle}" />

@@ -27,6 +27,10 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Must run before the first window is shown so Windows taskbar
+        // grouping and notification identity use the stable application ID.
+        AppUserModelId.ApplyToCurrentProcess();
+
         Log.Logger = AppLog.Initialize();
         DispatcherUnhandledException += (_, args) =>
             Log.Error(args.Exception, "Unhandled dispatcher exception");
@@ -69,7 +73,9 @@ public partial class App : Application
 
             var window = _services.GetRequiredService<MainWindow>();
             window.Show();
-            Log.Information("FrameView Analyzer started");
+            Log.Information(
+                "FrameView Analyzer {Version} started",
+                ReleaseInfo.InformationalVersion);
         }
         catch (Exception error)
         {

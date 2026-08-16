@@ -44,15 +44,17 @@ public class ReportPlotBuilderTests
         Path.Combine(Path.GetTempPath(), "fva-report-" + Guid.NewGuid().ToString("N") + ".png");
 
     [Fact]
-    public void Build_creates_the_header_plus_one_subplot_per_group()
+    public void Build_creates_exactly_one_subplot_per_group_with_no_header_plot()
     {
         var multiplot = ReportPlotBuilder.Build(
             [FpsGroup(), FrametimeGroup()],
-            ChartStyle.FromApplicationResources(),
-            Header());
+            ChartStyle.FromApplicationResources());
 
-        Assert.True(multiplot.Subplots.Count >= 3);
+        // The header is drawn as text by SavePng — it must never occupy a
+        // plot panel, so there is no empty default-axes chart in the report.
+        Assert.Equal(2, multiplot.Subplots.Count);
         Assert.NotNull(multiplot.Subplots.GetPlot(0));
+        Assert.NotNull(multiplot.Subplots.GetPlot(1));
     }
 
     [Fact]
@@ -61,14 +63,14 @@ public class ReportPlotBuilderTests
         var path = TempPng();
         try
         {
+            var style = ChartStyle.FromApplicationResources();
             var multiplot = ReportPlotBuilder.Build(
                 [new ReportPlotBuilder.ReportGroup(
                     CoreMetricCatalog.CoreById["fps"],
                     [FpsGroup().Series[0]])],
-                ChartStyle.FromApplicationResources(),
-                Header());
+                style);
 
-            ReportPlotBuilder.SavePng(multiplot, path, 800, 520);
+            ReportPlotBuilder.SavePng(multiplot, style, Header(), path, 800, 630);
 
             AssertValidPng(path);
         }
@@ -84,12 +86,12 @@ public class ReportPlotBuilderTests
         var path = TempPng();
         try
         {
+            var style = ChartStyle.FromApplicationResources();
             var multiplot = ReportPlotBuilder.Build(
                 [FpsGroup(), FrametimeGroup()],
-                ChartStyle.FromApplicationResources(),
-                Header());
+                style);
 
-            ReportPlotBuilder.SavePng(multiplot, path, 800, 1040);
+            ReportPlotBuilder.SavePng(multiplot, style, Header(), path, 800, 1150);
 
             AssertValidPng(path);
         }
@@ -109,13 +111,55 @@ public class ReportPlotBuilderTests
 
         var multiplot = ReportPlotBuilder.Build(
             [FpsGroup()],
-            ChartStyle.FromApplicationResources(),
-            Header());
-        Assert.True(multiplot.Subplots.Count >= 2);
+            ChartStyle.FromApplicationResources());
+        Assert.Equal(1, multiplot.Subplots.Count);
 
         Assert.Equal(beforeSelected, viewModel.SelectedMetric);
         Assert.Equal(beforeHasData, viewModel.HasData);
         Assert.Equal(beforeMetrics, viewModel.Metrics.Count);
+    }
+
+    [Fact]
+    public void Report_panels_span_the_full_width_with_content_on_the_right()
+    {
+        var path = TempPng();
+        try
+        {
+            var style = ChartStyle.FromApplicationResources();
+            var multiplot = ReportPlotBuilder.Build(
+                [FpsGroup(), FrametimeGroup()],
+                style);
+
+            ReportPlotBuilder.SavePng(multiplot, style, Header(), path, 800, 1150);
+
+            using var bitmap = SKBitmap.Decode(path);
+            Assert.NotNull(bitmap);
+
+            // Chart backgrounds are near-black; grid lines, series, and axis
+            // labels are brighter. Count scan rows below the header that have
+            // ANY non-background pixel in the rightmost 40% of the image —
+            // narrow left-column charts would leave that region empty.
+            var rowsWithRightSideContent = 0;
+            for (var y = 200; y < bitmap.Height; y += 20)
+            {
+                for (var x = (int)(bitmap.Width * 0.6); x < bitmap.Width; x += 10)
+                {
+                    var pixel = bitmap.GetPixel(x, y);
+                    if (pixel.Red > 8 || pixel.Green > 8 || pixel.Blue > 8)
+                    {
+                        rowsWithRightSideContent++;
+                        break;
+                    }
+                }
+            }
+
+            Assert.True(rowsWithRightSideContent > 5,
+                $"Right side of the report is empty ({rowsWithRightSideContent} rows with content) — panels are not full-width.");
+        }
+        finally
+        {
+            TryDelete(path);
+        }
     }
 
     private static void AssertValidPng(string path)

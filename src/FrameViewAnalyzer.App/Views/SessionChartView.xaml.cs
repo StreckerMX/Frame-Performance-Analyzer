@@ -28,6 +28,8 @@ public partial class SessionChartView : UserControl
     private bool _markersVisible;
     private Point? _panAnchor;
     private AxisLimits _panStartLimits;
+    private double? _selectStartX;
+    private HorizontalSpan? _selectionOverlay;
     private Crosshair? _crosshair;
     private bool _suppressViewChanged;
 
@@ -48,15 +50,17 @@ public partial class SessionChartView : UserControl
 
     public void ShowData(MetricDefinition metric, IReadOnlyList<MetricSeries> seriesList)
     {
+        CancelSelection();
         _metric = metric;
         _seriesList = seriesList;
         HideTooltip();
-        Render();
+        Render(fitToData: true);
         NotifyViewChanged();
     }
 
     public void Clear()
     {
+        CancelSelection();
         _metric = null;
         _seriesList = [];
         _crosshair = null;
@@ -67,8 +71,16 @@ public partial class SessionChartView : UserControl
 
     public void ApplyInteractions(bool wheelZoomEnabled, bool panEnabled, bool markersVisible)
     {
+        var panToggled = _panEnabled != panEnabled;
         _wheelZoomEnabled = wheelZoomEnabled;
         _panEnabled = panEnabled;
+        if (panToggled)
+        {
+            // Pan and range selection must never fight over the drag gesture:
+            // switching modes cancels any in-progress selection.
+            CancelSelection();
+        }
+
         var reRender = _markersVisible != markersVisible;
         _markersVisible = markersVisible;
         if (reRender)
@@ -88,6 +100,7 @@ public partial class SessionChartView : UserControl
 
     public void ResetZoom()
     {
+        CancelSelection();
         if (_seriesList.Count == 0)
         {
             return;
@@ -102,18 +115,21 @@ public partial class SessionChartView : UserControl
 
     public void AutoZoom()
     {
+        CancelSelection();
         if (_metric is null || _seriesList.Count == 0)
         {
             return;
         }
 
-        var limits = ChartHost.Plot.Axes.GetLimits();
-        var fitted = ChartViewport.AutoZoomToSeries(limits, _seriesList, _metric.Id == "fps");
+        // Auto Zoom recovers the canonical full-series bounds, never the
+        // currently rendered/decimated viewport subset.
+        var fitted = ChartViewport.FullSeriesLimits(_seriesList, _metric.Id == "fps");
         if (fitted is null)
         {
             return;
         }
 
+        _fullLimits = fitted.Value;
         _suppressViewChanged = true;
         ChartHost.Plot.Axes.SetLimits(fitted.Value);
         ChartHost.Refresh();
@@ -143,6 +159,16 @@ public partial class SessionChartView : UserControl
         minimum = System.Math.Max(minimum, _fullLimits.Left);
         maximum = System.Math.Min(maximum, _fullLimits.Right);
 
+        ApplyZoomToWindow(minimum, maximum);
+    }
+
+    private void ApplyZoomToWindow(double minimum, double maximum)
+    {
+        if (_metric is null || _seriesList.Count == 0)
+        {
+            return;
+        }
+
         var current = ChartHost.Plot.Axes.GetLimits();
         var next = ChartViewport.AutoZoomToSeries(
             new AxisLimits(minimum, maximum, current.Bottom, current.Top),
@@ -156,7 +182,7 @@ public partial class SessionChartView : UserControl
         NotifyViewChanged();
     }
 
-    private void Render()
+    private void Render(bool fitToData = false)
     {
         if (_metric is null || _seriesList.Count == 0)
         {
@@ -165,10 +191,26 @@ public partial class SessionChartView : UserControl
 
         var style = ChartStyle.FromApplicationResources();
         var budget = System.Math.Max(200, (int)(ActualWidth > 10 ? ActualWidth : 800) * 2);
+
+        // Rebuilding the plot resets the axes; preserve the current view unless
+        // this is a data change that must establish a fresh canonical fit.
+        var previousLimits = ChartHost.Plot.Axes.GetLimits();
         ChartPlotBuilder.Build(
             ChartHost.Plot, _metric, _seriesList, style, budget, _markersVisible);
 
-        _fullLimits = ChartHost.Plot.Axes.GetLimits();
+        if (fitToData)
+        {
+            var fitted = ChartViewport.FullSeriesLimits(_seriesList, _metric.Id == "fps");
+            if (fitted is not null)
+            {
+                _fullLimits = fitted.Value;
+                ChartHost.Plot.Axes.SetLimits(fitted.Value);
+            }
+        }
+        else
+        {
+            ChartHost.Plot.Axes.SetLimits(previousLimits);
+        }
 
         _crosshair = ChartHost.Plot.Add.Crosshair(0, 0);
         _crosshair.IsVisible = false;
@@ -205,25 +247,78 @@ public partial class SessionChartView : UserControl
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (!_panEnabled || _seriesList.Count == 0)
+        if (_seriesList.Count == 0 || _metric is null)
         {
             return;
         }
 
-        _panAnchor = e.GetPosition(ChartHost);
-        _panStartLimits = ChartHost.Plot.Axes.GetLimits();
+        if (_panEnabled)
+        {
+            _panAnchor = e.GetPosition(ChartHost);
+            _panStartLimits = ChartHost.Plot.Axes.GetLimits();
+            ChartHost.CaptureMouse();
+            HideTooltip();
+            return;
+        }
+
+        // Drag pan is OFF: begin a horizontal time-range selection.
+        var position = e.GetPosition(ChartHost);
+        var coordinates = ChartHost.Plot.GetCoordinates((float)position.X, (float)position.Y);
+        _selectStartX = ClampToFullRange(coordinates.X);
         ChartHost.CaptureMouse();
         HideTooltip();
+        e.Handled = true;
     }
 
     private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (_panAnchor is null)
+        if (_panAnchor is not null)
         {
+            _panAnchor = null;
+            if (ChartHost.IsMouseCaptured)
+            {
+                ChartHost.ReleaseMouseCapture();
+            }
+
             return;
         }
 
-        _panAnchor = null;
+        if (_selectStartX is not null && _selectionOverlay is not null)
+        {
+            // The overlay already holds normalized (ordered, clamped) bounds.
+            var selection = ChartViewport.NormalizeRangeSelection(
+                _selectionOverlay.X1,
+                _selectionOverlay.X2,
+                _fullLimits);
+            CancelSelection();
+
+            // Selections shorter than 1 second are ignored (cancelled).
+            if (selection is not null)
+            {
+                ApplyZoomToWindow(selection.Value.Left, selection.Value.Right);
+            }
+
+            e.Handled = true;
+        }
+    }
+
+    private double ClampToFullRange(double x) =>
+        System.Math.Clamp(x, _fullLimits.Left, _fullLimits.Right);
+
+    /// <summary>
+    /// Removes the temporary selection overlay and any in-progress selection.
+    /// Called on mode switches, zoom resets, session/metric changes, and clear.
+    /// </summary>
+    private void CancelSelection()
+    {
+        if (_selectionOverlay is not null)
+        {
+            ChartHost.Plot.Remove(_selectionOverlay);
+            _selectionOverlay = null;
+            ChartHost.Refresh();
+        }
+
+        _selectStartX = null;
         if (ChartHost.IsMouseCaptured)
         {
             ChartHost.ReleaseMouseCapture();
@@ -242,6 +337,30 @@ public partial class SessionChartView : UserControl
             var delta = anchorCoordinates.X - coordinates.X;
             ChartHost.Plot.Axes.SetLimits(ChartViewport.PanTo(_panStartLimits, _fullLimits, delta));
             ChartHost.Refresh();
+            return;
+        }
+
+        if (_selectStartX is not null && _metric is not null)
+        {
+            // Update the translucent selection overlay, clamped to the
+            // canonical full-series X bounds; suppress the tooltip while
+            // actively selecting.
+            HideTooltip();
+            var coordinates = ChartHost.Plot.GetCoordinates((float)position.X, (float)position.Y);
+            var endX = ClampToFullRange(coordinates.X);
+            var minX = System.Math.Min(_selectStartX.Value, endX);
+            var maxX = System.Math.Max(_selectStartX.Value, endX);
+
+            if (_selectionOverlay is not null)
+            {
+                ChartHost.Plot.Remove(_selectionOverlay);
+            }
+
+            var style = ChartStyle.FromApplicationResources();
+            _selectionOverlay = ChartHost.Plot.Add.HorizontalSpan(minX, maxX);
+            _selectionOverlay.FillColor = style.SeriesA.WithAlpha(0.18);
+            ChartHost.Refresh();
+            e.Handled = true;
             return;
         }
 

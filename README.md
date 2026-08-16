@@ -10,9 +10,9 @@ test vectors where algorithms must match exactly.
 
 ## Status
 
-**Phase 13 of 15 complete — feature-parity audit and parity closure.**
+**Phase 14 of 15 complete — Release Candidate.**
 
-Implemented through Phase 13:
+Implemented through Phase 14:
 
 - **Phase 0** — solution skeleton, project layout, strict gates
 - **Phase 1** — FrameView CSV loader + domain models (encodings, missing
@@ -46,9 +46,15 @@ Implemented through Phase 13:
   Details window, analysis-range controls, Summary CSV table, keyboard
   shortcuts, capture-folder workflow, persisted analysis options, omitted-load
   gap visualization, and Serilog file logging
+- **Phase 14** — release candidate: `2.0.0-rc.1` versioning, AppUserModelID +
+  final icon integration, self-contained single-file win-x64 publish profile,
+  deterministic packaging script (`scripts/package-release.ps1`),
+  third-party notices, and release documentation. The RC ZIP requires no
+  .NET installation and no `DOTNET_ROOT`.
 
-Remaining future work: the **release candidate** (Phase 14) is **not
-implemented yet**.
+Remaining future work: the **final stable release** (Phase 15) — publishing
+and tagging after separate review — is **not done yet**. No GitHub Release
+and no version tag exist for the RC.
 
 ## Stack
 
