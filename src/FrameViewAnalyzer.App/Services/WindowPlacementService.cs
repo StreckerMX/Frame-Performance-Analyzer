@@ -67,9 +67,10 @@ public sealed class WindowPlacementService : IWindowPlacementService
 
     private static void CenterOnWorkArea(Window window)
     {
+        // 16:9 fallback proportions, matching the reference dashboard layout.
         var work = SystemParameters.WorkArea;
         window.Width = Math.Min(1760, work.Width * 0.88);
-        window.Height = Math.Min(1040, work.Height * 0.88);
+        window.Height = Math.Min(1040, window.Width * 9.0 / 16.0);
         window.Left = work.Left + (work.Width - window.Width) / 2;
         window.Top = work.Top + (work.Height - window.Height) / 2;
     }

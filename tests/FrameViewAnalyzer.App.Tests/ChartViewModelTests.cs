@@ -172,7 +172,7 @@ public class ChartViewModelTests
 
         var averageTile = viewModel.KpiTiles[0];
         Assert.Equal("100.0 → 50.0", averageTile.Value);
-        Assert.Equal("▼ -50.0%", averageTile.DeltaText);
+        Assert.Equal("↓ 50.0%", averageTile.DeltaText);
         Assert.Equal(ImprovementKind.Regression, averageTile.Kind);
 
         var timeTile = viewModel.KpiTiles[5];
@@ -190,7 +190,7 @@ public class ChartViewModelTests
 
         var averageTile = viewModel.KpiTiles[0];
         Assert.Equal(ImprovementKind.Improvement, averageTile.Kind);
-        Assert.Equal("▲ +100.0%", averageTile.DeltaText);
+        Assert.Equal("↑ 100.0%", averageTile.DeltaText);
     }
 
     [Fact]

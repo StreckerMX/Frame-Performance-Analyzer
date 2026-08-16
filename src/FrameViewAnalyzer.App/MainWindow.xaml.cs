@@ -22,6 +22,7 @@ namespace FrameViewAnalyzer.App;
 public partial class MainWindow : Window
 {
     private readonly IWindowPlacementService _placement;
+    private readonly IThemeService _themes;
     private readonly MainWindowViewModel _viewModel;
     private readonly ILibraryStore _libraryStore;
     private readonly IManualMetadataStore _manualMetadataStore;
@@ -49,6 +50,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _placement = placement;
+        _themes = themes;
         _viewModel = viewModel;
         _libraryStore = libraryStore;
         _manualMetadataStore = manualMetadataStore;
@@ -61,8 +63,13 @@ public partial class MainWindow : Window
         _analysis = analysis;
         DataContext = viewModel;
 
-        // Restore once the native window exists; save on every close.
-        SourceInitialized += (_, _) => _placement.Restore(this);
+        // Restore once the native window exists; save on every close. The
+        // native caption theme is painted as soon as the HWND is available.
+        SourceInitialized += (_, _) =>
+        {
+            _placement.Restore(this);
+            ApplyTitleBarTheme();
+        };
         Closing += (_, _) => _placement.Save(this);
 
         // Presentation glue: forward chart data, interaction toggles, and
@@ -84,9 +91,20 @@ public partial class MainWindow : Window
         viewModel.ExportStatisticsCsvRequested += (_, _) => ExportCsv_Click(this, new RoutedEventArgs());
         viewModel.ExportBenchmarkJsonRequested += (_, _) => ExportJson_Click(this, new RoutedEventArgs());
         ChartView.ViewChanged += bounds => viewModel.Chart.UpdateVisibleRange(bounds);
-        themes.Changed += (_, _) => ChartView.RefreshStyle();
+        themes.Changed += (_, _) =>
+        {
+            ChartView.RefreshStyle();
+            ApplyTitleBarTheme();
+        };
         OnChartPropertyChanged(this, new PropertyChangedEventArgs(nameof(ChartViewModel.Series)));
         SyncInteractions();
+    }
+
+    /// <summary>Paints the native caption to match the current app theme.</summary>
+    private void ApplyTitleBarTheme()
+    {
+        var isDark = !string.Equals(_themes.Current, "light", StringComparison.OrdinalIgnoreCase);
+        WindowTitleBarTheme.Apply(this, isDark);
     }
 
     private void OnChartPropertyChanged(object? sender, PropertyChangedEventArgs e)

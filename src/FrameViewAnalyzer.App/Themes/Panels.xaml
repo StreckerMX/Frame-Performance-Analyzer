@@ -1,0 +1,40 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+      Reusable surface styles: rounded dark cards used across the main window.
+      Colors come from Colors.xaml (DynamicResource) so both themes apply.
+    -->
+
+    <!-- Standard rounded card (chart card, analysis panel). -->
+    <Style x:Key="CardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+    </Style>
+
+    <!-- Session card (Base / Comparison log). -->
+    <Style x:Key="SessionCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="16,14" />
+    </Style>
+
+    <!-- Small uppercase section label (BASE LOG / ANALYSIS RANGE). -->
+    <Style x:Key="SectionLabelStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Tiny}" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <!-- Segmented track that hosts the Dark/Light radios. -->
+    <Style x:Key="SegmentedTrackStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource ButtonBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="Padding" Value="2" />
+    </Style>
+</ResourceDictionary>
