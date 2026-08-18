@@ -1,8 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.IO;
 using System.Windows;
-using System.Windows.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using FrameViewAnalyzer.App.ViewModels;
 
@@ -14,41 +12,17 @@ public partial class MultiBenchmarkSelectionWindow : Window
 
     public MultiBenchmarkSelectionWindow(
         IReadOnlyList<CaptureOption> captures,
-        IReadOnlyList<string>? selectedPaths = null,
-        string? referencePath = null)
+        IReadOnlyList<string>? selectedPaths = null)
     {
         InitializeComponent();
         _viewModel = new MultiBenchmarkSelectionViewModel(
             captures,
-            selectedPaths ?? [],
-            referencePath);
+            selectedPaths ?? []);
         DataContext = _viewModel;
     }
 
     public IReadOnlyList<string> SelectedPaths =>
         _viewModel.Choices.Where(choice => choice.IsSelected).Select(choice => choice.Path).ToList();
-
-    public string? ReferencePath =>
-        _viewModel.Choices.FirstOrDefault(choice => choice.IsReference)?.Path;
-
-    private void Reference_Checked(object sender, RoutedEventArgs e)
-    {
-        if (sender is not RadioButton { DataContext: MultiBenchmarkChoiceViewModel selected })
-        {
-            return;
-        }
-
-        selected.IsSelected = true;
-        foreach (var choice in _viewModel.Choices)
-        {
-            if (!ReferenceEquals(choice, selected))
-            {
-                choice.IsReference = false;
-            }
-        }
-
-        _viewModel.RefreshSummary();
-    }
 
     private void SelectAll_Click(object sender, RoutedEventArgs e)
     {
@@ -64,7 +38,6 @@ public partial class MultiBenchmarkSelectionWindow : Window
     {
         foreach (var choice in _viewModel.Choices)
         {
-            choice.IsReference = false;
             choice.IsSelected = false;
         }
 
@@ -96,29 +69,16 @@ internal partial class MultiBenchmarkSelectionViewModel : ObservableObject
 
     public MultiBenchmarkSelectionViewModel(
         IReadOnlyList<CaptureOption> captures,
-        IReadOnlyList<string> selectedPaths,
-        string? referencePath)
+        IReadOnlyList<string> selectedPaths)
     {
         var selected = new HashSet<string>(selectedPaths, StringComparer.OrdinalIgnoreCase);
         foreach (var capture in captures)
         {
             var choice = new MultiBenchmarkChoiceViewModel(
                 capture,
-                selected.Contains(capture.Path),
-                string.Equals(capture.Path, referencePath, StringComparison.OrdinalIgnoreCase));
+                selected.Contains(capture.Path));
             choice.PropertyChanged += Choice_PropertyChanged;
             Choices.Add(choice);
-        }
-
-        // If a restored selection has no reference, prefer its first checked
-        // benchmark rather than forcing the user to rediscover the state.
-        if (!Choices.Any(choice => choice.IsReference))
-        {
-            var first = Choices.FirstOrDefault(choice => choice.IsSelected);
-            if (first is not null)
-            {
-                first.IsReference = true;
-            }
         }
 
         RefreshSummary();
@@ -139,12 +99,6 @@ internal partial class MultiBenchmarkSelectionViewModel : ObservableObject
             return false;
         }
 
-        if (!Choices.Any(choice => choice.IsSelected && choice.IsReference))
-        {
-            ValidationText = "Choose one selected benchmark as the reference.";
-            return false;
-        }
-
         ValidationText = string.Empty;
         return true;
     }
@@ -152,29 +106,13 @@ internal partial class MultiBenchmarkSelectionViewModel : ObservableObject
     public void RefreshSummary()
     {
         var count = Choices.Count(choice => choice.IsSelected);
-        var reference = Choices.FirstOrDefault(choice => choice.IsReference)?.Display;
-        SelectionSummary = reference is null
-            ? $"{count} benchmark(s) selected  ·  No reference"
-            : $"{count} benchmark(s) selected  ·  Reference: {reference}";
+        SelectionSummary = $"{count} benchmark(s) selected  ·  All compared equally";
         ValidationText = string.Empty;
     }
 
     private void Choice_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (sender is not MultiBenchmarkChoiceViewModel choice)
-        {
-            return;
-        }
-
-        if (e.PropertyName == nameof(MultiBenchmarkChoiceViewModel.IsSelected)
-            && !choice.IsSelected
-            && choice.IsReference)
-        {
-            choice.IsReference = false;
-        }
-
-        if (e.PropertyName is nameof(MultiBenchmarkChoiceViewModel.IsSelected)
-            or nameof(MultiBenchmarkChoiceViewModel.IsReference))
+        if (e.PropertyName == nameof(MultiBenchmarkChoiceViewModel.IsSelected))
         {
             RefreshSummary();
         }
@@ -186,16 +124,12 @@ internal partial class MultiBenchmarkChoiceViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
-    [ObservableProperty]
-    private bool _isReference;
-
-    public MultiBenchmarkChoiceViewModel(CaptureOption capture, bool isSelected, bool isReference)
+    public MultiBenchmarkChoiceViewModel(CaptureOption capture, bool isSelected)
     {
         Path = capture.Path;
         Display = capture.Display;
         FileName = System.IO.Path.GetFileName(capture.Path);
         _isSelected = isSelected;
-        _isReference = isReference && isSelected;
     }
 
     public string Path { get; }
@@ -203,12 +137,4 @@ internal partial class MultiBenchmarkChoiceViewModel : ObservableObject
     public string Display { get; }
 
     public string FileName { get; }
-
-    partial void OnIsReferenceChanged(bool value)
-    {
-        if (value)
-        {
-            IsSelected = true;
-        }
-    }
 }
