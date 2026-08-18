@@ -13,16 +13,6 @@ namespace FrameViewAnalyzer.App.Charting;
 /// </summary>
 public static class ChartPlotBuilder
 {
-    private static readonly string[] MultiPalette =
-    [
-        "#E69F00",
-        "#CC79A7",
-        "#56B4E9",
-        "#F0E442",
-        "#D55E00",
-        "#009E73",
-    ];
-
     /// <summary>
     /// Per-metric plot kind: FPS series are uniformly one-second spaced, so
     /// gap-free FPS data renders as SignalXY (constant-time rendering);
@@ -47,27 +37,23 @@ public static class ChartPlotBuilder
     }
 
     /// <summary>
-    /// Pair mode preserves the theme's A/B colors. Multi mode keeps those two
-    /// anchors and then uses a compact color-blind-friendly palette so every
-    /// checked benchmark remains distinguishable in the legend and chart.
+    /// Pair mode preserves the theme's Base/Comparison colors. Multi mode uses
+    /// the shared benchmark palette, with every checked benchmark styled as an
+    /// equal peer rather than giving the first line reference semantics.
     /// </summary>
     public static ScottPlot.Color SeriesColor(
         ChartStyle style,
         int index,
         int seriesCount,
-        SessionRole role)
+        SessionRole role,
+        bool isMultiWorkspace = false)
     {
-        if (seriesCount <= 2)
+        if (!isMultiWorkspace && seriesCount <= 2)
         {
             return role == SessionRole.Base ? style.SeriesA : style.SeriesB;
         }
 
-        return index switch
-        {
-            0 => style.SeriesA,
-            1 => style.SeriesB,
-            _ => ScottPlot.Color.FromHex(MultiPalette[(index - 2) % MultiPalette.Length]),
-        };
+        return MultiSeriesPalette.ColorAt(index);
     }
 
     public static void Build(
@@ -98,11 +84,21 @@ public static class ChartPlotBuilder
         GapOverlay.Apply(plot, seriesList, style);
 
         var showLegend = seriesList.Count > 1;
+        var isMultiWorkspace = seriesList.Count > 1
+            && seriesList.All(series => !series.IsReference && series.Role == SessionRole.Comparison);
+
         for (var index = 0; index < seriesList.Count; index++)
         {
             var series = seriesList[index];
-            var isReference = index == 0;
-            var color = SeriesColor(style, index, seriesList.Count, series.Role);
+            var color = SeriesColor(
+                style,
+                series.WorkspaceIndex,
+                seriesList.Count,
+                series.Role,
+                isMultiWorkspace);
+            var lineWidth = isMultiWorkspace
+                ? 1.9f
+                : series.Role == SessionRole.Base ? 2.15f : 1.8f;
 
             // Real omitted ranges must be detected from the original series
             // before decimation. LTTB/min-max intentionally skip samples, and
@@ -116,7 +112,7 @@ public static class ChartPlotBuilder
             {
                 var signal = plot.Add.SignalXY(gapX, gapY);
                 signal.Color = color;
-                signal.LineWidth = isReference ? 2.15f : 1.8f;
+                signal.LineWidth = lineWidth;
                 signal.LegendText = series.LabelOrDefault;
                 signal.MarkerSize = showMarkers ? 4f : 0f;
                 signal.MarkerColor = color;
@@ -125,7 +121,7 @@ public static class ChartPlotBuilder
             {
                 var scatter = plot.Add.Scatter(gapX, gapY);
                 scatter.Color = color;
-                scatter.LineWidth = isReference ? 2.15f : 1.8f;
+                scatter.LineWidth = lineWidth;
                 scatter.LegendText = series.LabelOrDefault;
                 scatter.MarkerSize = showMarkers ? 4f : 0f;
                 scatter.MarkerColor = color;
