@@ -76,6 +76,9 @@ public class MultiWorkspaceTests
                 Assert.Equal("200.0 FPS", value.Value);
                 Assert.True(value.IsBest);
                 Assert.Contains("+100.0%", value.DeltaText);
+                Assert.DoesNotContain("next", value.DeltaText, StringComparison.OrdinalIgnoreCase);
+                Assert.True(value.HasComparedColor);
+                Assert.Equal(average.SeriesValues[0].ColorHex, value.ComparedColorHex);
             });
         Assert.Equal(3, average.SeriesValues.Select(value => value.ColorHex).Distinct().Count());
     }
