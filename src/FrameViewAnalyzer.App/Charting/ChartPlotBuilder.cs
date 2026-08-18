@@ -72,8 +72,12 @@ public static class ChartPlotBuilder
             var isBase = series.Role == SessionRole.Base;
             var color = isBase ? style.SeriesA : style.SeriesB;
 
+            // Real omitted ranges must be detected from the original series
+            // before decimation. LTTB/min-max intentionally skip samples, and
+            // those visualization-only skips must never become NaN line breaks.
+            var sourceGaps = SeriesGeometry.FindGaps(series.X);
             var (decimatedX, decimatedY) = Decimation.Select(series.X, series.Y, pointBudget);
-            var (gapX, gapY) = SeriesGeometry.InsertGapBreaks(decimatedX, decimatedY);
+            var (gapX, gapY) = SeriesGeometry.InsertGapBreaks(decimatedX, decimatedY, sourceGaps);
             var kind = ChooseKind(metric, decimatedX);
 
             if (kind == PlotKind.SignalXY)
