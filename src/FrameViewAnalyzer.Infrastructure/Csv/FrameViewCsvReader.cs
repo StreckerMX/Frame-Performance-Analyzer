@@ -9,10 +9,10 @@ using FrameViewAnalyzer.Core.Text;
 namespace FrameViewAnalyzer.Infrastructure.Csv;
 
 /// <summary>
-/// Default reader. Encodings: strict UTF-8 (BOM-aware) → Windows-1252 with
-/// exception fallback (undefined bytes fail, like Python's cp1252 codec) →
-/// ISO-8859-1 (maps every byte). Cells are trimmed and missing fields become
-/// empty strings.
+/// Default reader for supported performance CSVs. Encodings: strict UTF-8
+/// (BOM-aware) → Windows-1252 with exception fallback (undefined bytes fail,
+/// like Python's cp1252 codec) → ISO-8859-1 (maps every byte). Cells are
+/// trimmed and missing fields become empty strings.
 /// </summary>
 public sealed class FrameViewCsvReader : IFrameViewCsvReader
 {
@@ -48,32 +48,8 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
         Encoding.GetEncoding(28591, EncoderFallback.ReplacementFallback, DecoderFallback.ExceptionFallback),
     ];
 
-    public CsvKind DetectKind(IReadOnlyList<string> headers, string fileName)
-    {
-        var normalized = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var header in headers)
-        {
-            normalized.Add(header.Trim());
-        }
-
-        if (normalized.Contains("TimeInSeconds") || normalized.Contains("MsBetweenPresents"))
-        {
-            return CsvKind.Log;
-        }
-
-        if (normalized.Contains("Avg FPS") && normalized.Contains("Log Name"))
-        {
-            return CsvKind.Summary;
-        }
-
-        if (!string.IsNullOrEmpty(fileName)
-            && fileName.Contains("summary", StringComparison.OrdinalIgnoreCase))
-        {
-            return CsvKind.Summary;
-        }
-
-        return CsvKind.Unknown;
-    }
+    public CsvKind DetectKind(IReadOnlyList<string> headers, string fileName) =>
+        DetectKindCore(headers, fileName);
 
     public async Task<CaptureData> LoadCaptureAsync(
         string path,
@@ -181,6 +157,11 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
 
                 var headers = RowFields(csv);
                 var timeIndex = Array.IndexOf(headers, "TimeInSeconds");
+                if (timeIndex < 0)
+                {
+                    timeIndex = Array.IndexOf(headers, CaptureSourceDetector.NvidiaAppTimeHeader);
+                }
+
                 var presentsIndex = Array.IndexOf(headers, "MsBetweenPresents");
                 if (timeIndex < 0 && presentsIndex < 0)
                 {
@@ -281,12 +262,12 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
         {
             Path = fullPath,
             DisplayName = CaptureFileNaming.SanitizeDisplayName(fileName),
-            Kind = DetectKindStatic(headers, fileName),
+            Kind = DetectKindCore(headers, fileName),
             Headers = headers,
             Columns = Array.Empty<string[]>(),
         };
 
-    private static CsvKind DetectKindStatic(IReadOnlyList<string> headers, string fileName)
+    private static CsvKind DetectKindCore(IReadOnlyList<string> headers, string fileName)
     {
         var normalized = new HashSet<string>(StringComparer.Ordinal);
         foreach (var header in headers)
@@ -294,7 +275,9 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
             normalized.Add(header.Trim());
         }
 
-        if (normalized.Contains("TimeInSeconds") || normalized.Contains("MsBetweenPresents"))
+        if (normalized.Contains("TimeInSeconds")
+            || normalized.Contains("MsBetweenPresents")
+            || CaptureSourceDetector.IsNvidiaAppPerformanceLog(headers))
         {
             return CsvKind.Log;
         }

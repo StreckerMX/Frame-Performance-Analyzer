@@ -15,13 +15,14 @@ public sealed class CaptureAnalysisService : ICaptureAnalysisService
         if (capture.Kind != CsvKind.Log)
         {
             throw new ArgumentException(
-                "Session analysis requires a detailed FrameView log (*_Log.csv).");
+                "Session analysis requires a supported detailed performance log CSV.");
         }
 
         options ??= new AnalysisOptions();
         var samples = ParsedSampleBuilder.Build(capture);
         var catalog = MetricCatalogBuilder.Build(capture);
-        var bins = BinBuilder.BuildSummaries(samples);
+        var sampledFps = CaptureSourceDetector.IsNvidiaAppPerformanceLog(capture);
+        var bins = BinBuilder.BuildSummaries(samples, sampledFps);
         var rowsByBin = BinBuilder.BuildRowsByBin(samples);
         return Assemble(capture, catalog, samples, bins, rowsByBin, options);
     }
@@ -52,11 +53,15 @@ public sealed class CaptureAnalysisService : ICaptureAnalysisService
             threshold = FilterProfileDetector.ComputeAutoGpuThreshold(samples);
         }
 
+        var minimumSamplesPerBin = CaptureSourceDetector.IsNvidiaAppPerformanceLog(capture)
+            ? 1
+            : AnalysisConstants.MinFramesPerBin;
         var profile = FilterProfileDetector.Detect(
             bins,
             threshold,
             options.TrimBufferSeconds,
-            options.ExcludeTransitions);
+            options.ExcludeTransitions,
+            minimumSamplesPerBin);
 
         var metadata = ExtractMetadata(
             capture,
@@ -83,7 +88,8 @@ public sealed class CaptureAnalysisService : ICaptureAnalysisService
 
     /// <summary>
     /// Detected metadata from the capture's constant columns plus durations
-    /// derived from the active window. Mirrors the Python reference.
+    /// derived from the active window. Mirrors the Python reference for
+    /// FrameView captures and uses the same duration model for other sources.
     /// </summary>
     public static SessionMetadata? ExtractMetadata(
         CaptureData capture,

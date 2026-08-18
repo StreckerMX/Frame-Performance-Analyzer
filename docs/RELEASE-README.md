@@ -1,11 +1,21 @@
-# FrameView Analyzer 2.0.1
+# FrameView Analyzer 2.1.0
 
-**Version:** 2.0.1 (stable release)
+**Version:** 2.1.0 (stable release)
 
 FrameView Analyzer is a Windows desktop application for analyzing NVIDIA
-FrameView captures: load one or two FrameView CSVs, filter GPU-active seconds,
-exclude loading transitions, and compare captures with percentile lows,
-harmonic FPS bins, and per-metric charts.
+performance captures from FrameView and the NVIDIA App performance overlay.
+It can load one or two captures, filter GPU-active seconds, exclude loading
+transitions, compare sessions, and chart the metrics available in each source.
+
+## What's new in 2.1.0
+
+- Adds support for `NVIDIA_App_Performance_Log_*.csv` files exported by the NVIDIA App performance overlay.
+- Treats NVIDIA App CSV rows as low-rate telemetry samples instead of pretending they are rendered frames.
+- Charts NVIDIA sampled FPS, exported 1% Low, latency, GPU/CPU utilization, clocks, temperatures, power, voltage, fan speed, and other numeric telemetry when present.
+- Keeps the existing FrameView per-frame harmonic-FPS analysis unchanged.
+- Applies source-aware loading/transition filtering and minimum-sample rules.
+- Discovers NVIDIA App performance logs in the selected capture folder.
+- Includes regression coverage for source detection, folder discovery, duration parsing, sampled FPS binning, and telemetry series.
 
 ## System requirements
 
@@ -18,18 +28,22 @@ harmonic FPS bins, and per-metric charts.
 
 ## How to launch
 
-1. Unzip `FrameViewAnalyzer-v2.0.1-win-x64.zip`.
+1. Unzip `FrameViewAnalyzer-v2.1.0-win-x64.zip`.
 2. Double-click `FrameViewAnalyzer.exe`.
 
 Windows SmartScreen may warn about an unknown publisher. Choose
-**More info → Run anyway** if you trust the source of the download.
+**More info > Run anyway** if you trust the source of the download.
 
 ## Supported files
 
-- **FrameView Log CSVs** (`FrameView_*.csv`) — opened as the Base or
-  Comparison capture and analyzed normally.
-- **FrameView Summary CSVs** (`FrameView_Summary.csv`) — opened as a
-  read-only table view; they never occupy the analysis slots.
+- **FrameView Log CSVs** (`*_Log.csv`) - opened as the Base or Comparison capture and analyzed from per-frame timing data.
+- **NVIDIA App Performance Logs** (`NVIDIA_App_Performance_Log_*.csv`) - opened as the Base or Comparison capture and analyzed as sampled telemetry.
+- **FrameView Summary CSVs** (`FrameView_Summary.csv`) - opened as a read-only table view; they never occupy the analysis slots.
+
+NVIDIA App performance logs have lower temporal precision than FrameView logs.
+Their exported FPS values are sampled telemetry, not frame-by-frame data, so
+FrameView Analyzer does not synthesize per-frame precision that is absent from
+the source file.
 
 ## Where data is stored
 
@@ -44,7 +58,7 @@ kept locally, roll daily, and are retained for 7 days. The application has
 
 ## How to uninstall
 
-1. Delete the extracted folder (and the ZIP).
+1. Delete the extracted folder and the ZIP.
 2. Optionally delete the data folders listed above to remove all traces.
 
 ## Known deviations

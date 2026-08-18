@@ -1,11 +1,12 @@
 using FrameViewAnalyzer.Core.Metrics;
+using FrameViewAnalyzer.Core.Models;
 
 namespace FrameViewAnalyzer.Analytics.Series;
 
 /// <summary>
-/// Builds per-bin metric series for a session. FPS points come from the
-/// harmonic bin summaries; other metrics average the per-frame values of
-/// each valid bin. Bins with fewer than three usable values are skipped.
+/// Builds per-bin metric series for a session. FrameView FPS points come from
+/// harmonic per-frame summaries. Sampled telemetry sources use their
+/// source-aware bin summaries. Other metrics average usable values per bin.
 /// </summary>
 public static class SeriesBuilder
 {
@@ -41,6 +42,9 @@ public static class SeriesBuilder
             return (new MetricSeries(metric, [], []), []);
         }
 
+        var minimumSamplesPerBin = CaptureSourceDetector.IsNvidiaAppPerformanceLog(session.Capture)
+            ? 1
+            : AnalysisConstants.MinFramesPerBin;
         var origin = session.Window.Start;
         var xs = new List<double>();
         var ys = new List<double>();
@@ -54,7 +58,7 @@ public static class SeriesBuilder
                     continue;
                 }
 
-                if (summary.FrameCount < AnalysisConstants.MinFramesPerBin
+                if (summary.FrameCount < minimumSamplesPerBin
                     || summary.Fps is null
                     || summary.Fps <= 0
                     || summary.Fps > AnalysisConstants.FpsChartCap)
@@ -103,7 +107,7 @@ public static class SeriesBuilder
                     }
                 }
 
-                if (count < AnalysisConstants.MinFramesPerBin)
+                if (count < minimumSamplesPerBin)
                 {
                     continue;
                 }

@@ -10,8 +10,8 @@ public sealed class DialogService : IDialogService
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Select a FrameView CSV",
-            Filter = "FrameView CSV (*.csv)|*.csv|All files (*.*)|*.*",
+            Title = "Select a performance CSV",
+            Filter = "Performance CSV (*.csv)|*.csv|All files (*.*)|*.*",
         };
         if (!string.IsNullOrEmpty(initialDirectory))
         {

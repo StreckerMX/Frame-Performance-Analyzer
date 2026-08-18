@@ -23,6 +23,7 @@ public static partial class MetricCatalogBuilder
 
         var catalog = new List<MetricDefinition>();
         var usedColumns = new HashSet<string>(StringComparer.Ordinal);
+        var isNvidiaAppLog = CaptureSourceDetector.IsNvidiaAppPerformanceLog(capture);
 
         foreach (var metric in CoreMetricCatalog.CoreMetrics)
         {
@@ -45,7 +46,8 @@ public static partial class MetricCatalogBuilder
         {
             if (CoreMetricCatalog.SkipColumns.Contains(header)
                 || CoreMetricCatalog.TimeColumnKeys.Contains(header)
-                || usedColumns.Contains(header))
+                || usedColumns.Contains(header)
+                || (isNvidiaAppLog && (header == "PID" || header == "FPS")))
             {
                 continue;
             }
@@ -58,10 +60,10 @@ public static partial class MetricCatalogBuilder
             catalog.Add(new MetricDefinition(
                 Id: ColumnMetricId(header),
                 Label: header,
-                Unit: GuessUnit(header),
-                Category: GuessCategory(header),
+                Unit: isNvidiaAppLog ? GuessNvidiaUnit(header) : GuessUnit(header),
+                Category: isNvidiaAppLog ? GuessNvidiaCategory(header) : GuessCategory(header),
                 ColumnKeys: [header],
-                Direction: MetricDirection.Undefined));
+                Direction: isNvidiaAppLog ? GuessNvidiaDirection(header) : MetricDirection.Undefined));
         }
 
         return catalog;
@@ -93,6 +95,8 @@ public static partial class MetricCatalogBuilder
         return $"col_{slug}_{digest:x8}";
     }
 
+    // Keep the established FrameView heuristics unchanged so existing
+    // dynamic-column parity and stable display behavior are unaffected.
     public static string GuessUnit(string column)
     {
         if (Regex.IsMatch(column, @"\(%\)|Util%", RegexOptions.IgnoreCase))
@@ -159,6 +163,65 @@ public static partial class MetricCatalogBuilder
         }
 
         return "Other";
+    }
+
+    private static string GuessNvidiaUnit(string column)
+    {
+        if (column.StartsWith("FPS", StringComparison.OrdinalIgnoreCase))
+        {
+            return "FPS";
+        }
+
+        if (Regex.IsMatch(column, @"Milli\s*Volts|\bmV\b", RegexOptions.IgnoreCase))
+        {
+            return "mV";
+        }
+
+        if (Regex.IsMatch(column, @"\bRPM\b", RegexOptions.IgnoreCase))
+        {
+            return "RPM";
+        }
+
+        if (Regex.IsMatch(column, @"\(msec\)", RegexOptions.IgnoreCase))
+        {
+            return "ms";
+        }
+
+        if (column.Contains("Frequency", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MHz";
+        }
+
+        return GuessUnit(column);
+    }
+
+    private static string GuessNvidiaCategory(string column)
+    {
+        if (column.StartsWith("FPS", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Performance";
+        }
+
+        return GuessCategory(column);
+    }
+
+    private static MetricDirection GuessNvidiaDirection(string column)
+    {
+        var upper = column.ToUpperInvariant();
+        if (upper.StartsWith("FPS", StringComparison.Ordinal))
+        {
+            return MetricDirection.HigherIsBetter;
+        }
+
+        if (upper.Contains("LATENCY")
+            || upper.Contains("TEMP")
+            || upper.Contains("POWER")
+            || upper.Contains("PWR"))
+        {
+            return MetricDirection.LowerIsBetter;
+        }
+
+        return MetricDirection.Undefined;
     }
 
     private static uint Fnv1a32(byte[] bytes)
