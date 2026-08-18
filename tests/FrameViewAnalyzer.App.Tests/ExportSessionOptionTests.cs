@@ -1,5 +1,6 @@
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Exports;
+using FrameViewAnalyzer.App.Charting;
 using FrameViewAnalyzer.App.Views;
 using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Core.Metrics;
@@ -18,8 +19,31 @@ public class ExportSessionOptionTests
 
         Assert.Equal("Base — GTA5 Enhanced", baseOption.Label);
         Assert.Equal("Comparison — GTA5 Enhanced", comparisonOption.Label);
+        Assert.Equal("Base: GTA5 Enhanced", baseOption.HeaderLine);
+        Assert.Equal("Comparison: GTA5 Enhanced", comparisonOption.HeaderLine);
         Assert.DoesNotContain(@"C:\", baseOption.Label);
         Assert.DoesNotContain('\\', comparisonOption.Label);
+    }
+
+    [Fact]
+    public void Multi_session_is_an_unprefixed_peer_with_a_stable_workspace_color()
+    {
+        var option = new ExportSessionOption(
+            SessionRole.Comparison,
+            "GTA5 Enhanced",
+            Session(),
+            WorkspaceIndex: 2,
+            IsMultiPeer: true);
+        var checklist = new ExportSessionChecklistItem(option);
+
+        Assert.Equal("GTA5 Enhanced", option.Label);
+        Assert.Equal("Benchmark: GTA5 Enhanced", option.HeaderLine);
+        Assert.True(option.IsMultiPeer);
+        Assert.Equal(2, option.WorkspaceIndex);
+        Assert.True(checklist.IsMultiPeer);
+        Assert.Equal(MultiSeriesPalette.HexAt(2), checklist.ColorHex);
+        Assert.DoesNotContain("Base", option.Label, StringComparison.Ordinal);
+        Assert.DoesNotContain("Comparison", option.Label, StringComparison.Ordinal);
     }
 
     [Theory]
