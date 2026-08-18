@@ -3,9 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:converters="clr-namespace:FrameViewAnalyzer.App.Converters"
         Title="Benchmark Library"
-        Width="920"
+        Width="980"
         Height="680"
-        MinWidth="760"
+        MinWidth="800"
         MinHeight="520"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
@@ -192,6 +192,12 @@
                                                   IsChecked="{Binding IsAbSelected, Mode=OneWay}"
                                                   IsEnabled="{Binding Available}"
                                                   Style="{StaticResource ToggleButtonStyle}" />
+                                    <Button Content="Remove"
+                                            Margin="8,0,0,0"
+                                            Command="{Binding DataContext.RequestRemoveCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip="Remove from Library without deleting the source CSV"
+                                            Style="{StaticResource GhostButtonStyle}" />
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -209,10 +215,11 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0"
-                       Text="Pick one capture as Base and another as Comparison, or toggle A/B twice to compare."
+                       Text="Remove hides a Library record without deleting its CSV. A/B remains available until Multi mode replaces it."
                        FontSize="{DynamicResource FontSize.Tiny}"
                        Foreground="{DynamicResource MutedBrush}"
-                       VerticalAlignment="Center" />
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap" />
             <Button Grid.Column="1"
                     Content="Export package"
                     Margin="0,0,8,0"
