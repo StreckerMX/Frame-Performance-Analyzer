@@ -10,7 +10,7 @@ namespace FrameViewAnalyzer.App.Charting;
 
 /// <summary>
 /// Renders the multi-chart PNG report: a compact context header followed by
-/// one subplot per report metric with the Base/Comparison series overlaid.
+/// one subplot per report metric with the selected benchmark series overlaid.
 /// Headless (no WPF types), so the report can be built and saved from tests
 /// without touching the interactive chart or its view models.
 /// </summary>
@@ -18,7 +18,8 @@ public static class ReportPlotBuilder
 {
     public sealed record ReportGroup(
         MetricDefinition Metric,
-        IReadOnlyList<MetricSeries> Series);
+        IReadOnlyList<MetricSeries> Series,
+        bool IsMultiWorkspace = false);
 
     /// <summary>Compact benchmark context shown above the plots.</summary>
     public sealed record ReportHeader(string Title, IReadOnlyList<string> Lines);
@@ -63,11 +64,15 @@ public static class ReportPlotBuilder
 
             foreach (var series in group.Series)
             {
-                var color = series.Role == SessionRole.Base ? style.SeriesA : style.SeriesB;
+                var color = group.IsMultiWorkspace
+                    ? MultiSeriesPalette.ColorAt(series.WorkspaceIndex)
+                    : series.Role == SessionRole.Base ? style.SeriesA : style.SeriesB;
                 var (decimatedX, decimatedY) = Decimation.Select(series.X, series.Y, pointBudget);
                 var signal = plot.Add.SignalXY(decimatedX, decimatedY);
                 signal.Color = color;
-                signal.LineWidth = series.Role == SessionRole.Base ? 2.15f : 1.8f;
+                signal.LineWidth = group.IsMultiWorkspace
+                    ? 1.9f
+                    : series.Role == SessionRole.Base ? 2.15f : 1.8f;
                 signal.LegendText = series.LabelOrDefault;
             }
 
