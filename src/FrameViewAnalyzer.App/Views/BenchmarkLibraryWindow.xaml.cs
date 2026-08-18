@@ -14,9 +14,9 @@ using FrameViewAnalyzer.Infrastructure.Stores;
 namespace FrameViewAnalyzer.App.Views;
 
 /// <summary>
-/// Benchmark Library browser: search, filters, sorting, A/B selection, the
-/// recent-comparisons bar, non-destructive record removal, legacy import, and
-/// package export/import. Loading requests are forwarded to the owner.
+/// Benchmark Library browser: search, filters, sorting, Multi selection,
+/// recent Pair comparisons, non-destructive record removal, legacy import,
+/// and package export/import. Loading requests are forwarded to the owner.
 /// </summary>
 public partial class BenchmarkLibraryWindow : Window
 {
@@ -57,6 +57,11 @@ public partial class BenchmarkLibraryWindow : Window
         _viewModel.LoadBaseRequested += path => LoadBaseRequested?.Invoke(path);
         _viewModel.LoadComparisonRequested += path => LoadComparisonRequested?.Invoke(path);
         _viewModel.CompareRequested += (first, second) => CompareRequested?.Invoke(first, second);
+        _viewModel.CompareSelectedRequested += paths =>
+        {
+            CompareSelectedRequested?.Invoke(paths);
+            Close();
+        };
         _viewModel.RemoveRequested += ConfirmRemoveFromLibrary;
 
         Loaded += async (_, _) => await _viewModel.RefreshAsync();
@@ -66,7 +71,11 @@ public partial class BenchmarkLibraryWindow : Window
 
     public event Action<string>? LoadComparisonRequested;
 
+    /// <summary>Recent two-capture comparison; remains a Pair workflow.</summary>
     public event Action<string, string>? CompareRequested;
+
+    /// <summary>Selected Library captures to load as equal peers in Multi.</summary>
+    public event Action<IReadOnlyList<string>>? CompareSelectedRequested;
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
