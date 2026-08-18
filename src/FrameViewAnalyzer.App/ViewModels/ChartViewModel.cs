@@ -14,13 +14,12 @@ namespace FrameViewAnalyzer.App.ViewModels;
 /// <summary>
 /// Chart-side state: the base/comparison sessions, the metric catalog, the
 /// selected metric, its full-resolution series for both sessions, interaction
-/// toggles, and the visible-range KPI tiles. Rendering lives in the chart
-/// layer; this view model only carries data.
+/// toggles, and the metric-aware visible-range KPI tiles. Rendering lives in
+/// the chart layer; this view model only carries data.
 /// </summary>
 public partial class ChartViewModel : ObservableObject
 {
-    private MetricSeries? _fpsSeries;
-    private MetricSeries? _fpsComparisonSeries;
+    private ScottPlot.AxisLimits? _visibleBounds;
 
     [ObservableProperty]
     private SessionAnalysis? _session;
@@ -51,15 +50,9 @@ public partial class ChartViewModel : ObservableObject
 
     public ObservableCollection<MetricDefinition> Metrics { get; } = [];
 
-    public ObservableCollection<KpiTileViewModel> KpiTiles { get; } =
-    [
-        new("AVERAGE FPS"),
-        new("1% LOW"),
-        new("0.1% LOW"),
-        new("MAXIMUM"),
-        new("MINIMUM"),
-        new("VISIBLE TIME"),
-    ];
+    public ObservableCollection<KpiTileViewModel> KpiTiles { get; } = [];
+
+    public ChartViewModel() => ConfigureKpiTiles(CoreMetricCatalog.CoreById["fps"]);
 
     public int SampleCount => Session?.Samples.Count ?? 0;
 
@@ -95,6 +88,7 @@ public partial class ChartViewModel : ObservableObject
 
         Session = baseSession;
         ComparisonSession = comparisonSession;
+        _visibleBounds = null;
 
         var keepSelection = Metrics.FirstOrDefault(metric => metric.Id == SelectedMetric?.Id);
         Metrics.Clear();
@@ -105,6 +99,7 @@ public partial class ChartViewModel : ObservableObject
 
         SelectedMetric = keepSelection ?? (Metrics.Count > 0 ? Metrics[0] : null);
         RefreshSeries();
+        ConfigureKpiTiles(SelectedMetric);
         UpdateVisibleRange(null);
     }
 
@@ -114,10 +109,10 @@ public partial class ChartViewModel : ObservableObject
         ComparisonSession = null;
         Metrics.Clear();
         SelectedMetric = null;
-        _fpsSeries = null;
-        _fpsComparisonSeries = null;
+        _visibleBounds = null;
         RefreshSeries();
-        UpdateVisibleRange(null);
+        ConfigureKpiTiles(CoreMetricCatalog.CoreById["fps"]);
+        ResetKpiValues();
     }
 
     /// <summary>
@@ -143,87 +138,211 @@ public partial class ChartViewModel : ObservableObject
         return true;
     }
 
-    /// <summary>Recomputes the KPI tiles for the visible range (null = full).</summary>
+    /// <summary>
+    /// Recomputes statistics for the selected metric over the visible range.
+    /// The same X bounds are retained when the user switches metrics, so KPI
+    /// values continue to describe exactly the currently inspected time span.
+    /// </summary>
     public void UpdateVisibleRange(ScottPlot.AxisLimits? bounds)
     {
-        if (_fpsSeries is null || _fpsSeries.X.Length == 0)
+        _visibleBounds = bounds;
+        var metric = SelectedMetric;
+        if (metric is null || (Series is null && ComparisonSeries is null))
         {
-            foreach (var tile in KpiTiles)
-            {
-                tile.Apply("--");
-            }
-
+            ResetKpiValues();
             return;
         }
 
-        var metric = CoreMetricCatalog.CoreById["fps"];
+        var populated = new[] { Series, ComparisonSeries }
+            .Where(series => series is { X.Length: > 0 })
+            .Cast<MetricSeries>()
+            .ToList();
+        if (populated.Count == 0)
+        {
+            ResetKpiValues();
+            return;
+        }
+
         var (minX, maxX) = bounds is { } range
             ? (range.Left, range.Right)
-            : (_fpsSeries.X[0], _fpsSeries.X[^1]);
-        var (baseStats, baseCount) = VisibleRangeCalculator.Compute(metric, _fpsSeries.X, _fpsSeries.Y, minX, maxX);
+            : (populated.Min(series => series.X[0]), populated.Max(series => series.X[^1]));
+
+        MetricStatistics? baseStats = null;
+        var baseCount = 0;
+        if (Series is { X.Length: > 0 } baseSeries)
+        {
+            (baseStats, baseCount) = VisibleRangeCalculator.Compute(
+                metric, baseSeries.X, baseSeries.Y, minX, maxX);
+        }
 
         MetricStatistics? comparisonStats = null;
         var comparisonCount = 0;
-        if (_fpsComparisonSeries is not null && _fpsComparisonSeries.X.Length > 0)
+        if (ComparisonSeries is { X.Length: > 0 } comparisonSeries)
         {
             (comparisonStats, comparisonCount) = VisibleRangeCalculator.Compute(
-                metric, _fpsComparisonSeries.X, _fpsComparisonSeries.Y, minX, maxX);
+                metric, comparisonSeries.X, comparisonSeries.Y, minX, maxX);
         }
 
-        var comparisonMode = comparisonStats is not null;
-
-        ApplyTile(KpiTiles[0], baseStats?.Avg, comparisonStats?.Avg, comparisonMode, formatFps: true);
-        ApplyTile(KpiTiles[1], baseStats?.P1, comparisonStats?.P1, comparisonMode, formatFps: true);
-        ApplyTile(KpiTiles[2], baseStats?.P01, comparisonStats?.P01, comparisonMode, formatFps: true);
-        ApplyTile(KpiTiles[3], baseStats?.Max, comparisonStats?.Max, comparisonMode, formatFps: false);
-        ApplyTile(KpiTiles[4], baseStats?.Min, comparisonStats?.Min, comparisonMode, formatFps: false);
-
-        if (comparisonMode && comparisonCount != baseCount)
+        var fields = CoreMetricCatalog.StatFields(metric.Id);
+        for (var index = 0; index < fields.Count; index++)
         {
-            KpiTiles[5].Apply(
-                DisplayText.FormatDurationHuman(baseCount),
-                $"vs {DisplayText.FormatDurationHuman(comparisonCount)}",
-                ImprovementKind.None);
+            var (key, _) = fields[index];
+            ApplyMetricTile(
+                KpiTiles[index],
+                metric,
+                key,
+                ValueFor(baseStats, key),
+                ValueFor(comparisonStats, key));
         }
-        else
-        {
-            KpiTiles[5].Apply(DisplayText.FormatDurationHuman(baseCount));
-        }
+
+        ApplyVisibleTimeTile(KpiTiles[^1], baseStats, baseCount, comparisonStats, comparisonCount);
     }
 
-    private static void ApplyTile(
+    private static void ApplyMetricTile(
         KpiTileViewModel tile,
+        MetricDefinition metric,
+        string statisticKey,
         double? baseValue,
-        double? comparisonValue,
-        bool comparisonMode,
-        bool formatFps)
+        double? comparisonValue)
     {
-        if (!comparisonMode || comparisonValue is null)
+        if (baseValue is null && comparisonValue is null)
         {
-            tile.Apply(FormatValue(baseValue, formatFps));
+            tile.Apply("--");
+            return;
+        }
+
+        if (baseValue is null)
+        {
+            tile.Apply(FormatValue(metric, statisticKey, comparisonValue));
+            return;
+        }
+
+        if (comparisonValue is null)
+        {
+            tile.Apply(FormatValue(metric, statisticKey, baseValue));
             return;
         }
 
         var deltaKind = CoreMetricCatalog.ClassifyImprovement(
-            MetricDirection.HigherIsBetter, baseValue, comparisonValue);
+            metric.Direction, baseValue, comparisonValue);
         var (delta, deltaPercent) = ComparisonService.ComputeDelta(baseValue, comparisonValue);
         tile.Apply(
-            $"{FormatValue(baseValue, formatFps)} → {FormatValue(comparisonValue, formatFps)}",
+            $"{FormatValue(metric, statisticKey, baseValue)} → {FormatValue(metric, statisticKey, comparisonValue)}",
             ComparisonText.FormatDelta(delta, deltaPercent, deltaKind),
             deltaKind);
     }
 
-    private static string FormatValue(double? value, bool formatFps)
+    private static void ApplyVisibleTimeTile(
+        KpiTileViewModel tile,
+        MetricStatistics? baseStats,
+        int baseCount,
+        MetricStatistics? comparisonStats,
+        int comparisonCount)
+    {
+        var hasBase = baseStats is not null;
+        var hasComparison = comparisonStats is not null;
+        if (!hasBase && !hasComparison)
+        {
+            tile.Apply("--");
+            return;
+        }
+
+        if (!hasBase)
+        {
+            tile.Apply(DisplayText.FormatDurationHuman(comparisonCount));
+            return;
+        }
+
+        if (!hasComparison || comparisonCount == baseCount)
+        {
+            tile.Apply(DisplayText.FormatDurationHuman(baseCount));
+            return;
+        }
+
+        tile.Apply(
+            DisplayText.FormatDurationHuman(baseCount),
+            $"vs {DisplayText.FormatDurationHuman(comparisonCount)}",
+            ImprovementKind.None);
+    }
+
+    private static string FormatValue(
+        MetricDefinition metric,
+        string statisticKey,
+        double? value)
     {
         if (value is null)
         {
             return "--";
         }
 
-        return formatFps ? $"{value:F1}" : $"{value:F1} FPS";
+        // Preserve the compact FPS presentation already used by the app.
+        if (metric.Id == "fps")
+        {
+            return statisticKey is "max" or "min"
+                ? $"{value:F1} FPS"
+                : $"{value:F1}";
+        }
+
+        return string.IsNullOrWhiteSpace(metric.Unit)
+            ? $"{value:F1}"
+            : $"{value:F1} {metric.Unit}";
     }
 
-    partial void OnSelectedMetricChanged(MetricDefinition? value) => RefreshSeries();
+    private void ConfigureKpiTiles(MetricDefinition? metric)
+    {
+        var selected = metric ?? CoreMetricCatalog.CoreById["fps"];
+        var fields = CoreMetricCatalog.StatFields(selected.Id);
+        var labels = fields
+            .Select(field => KpiLabel(selected, field.Key, field.Label))
+            .Append("VISIBLE TIME")
+            .ToList();
+
+        if (KpiTiles.Count == labels.Count
+            && KpiTiles.Select(tile => tile.Label).SequenceEqual(labels, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        KpiTiles.Clear();
+        foreach (var label in labels)
+        {
+            KpiTiles.Add(new KpiTileViewModel(label));
+        }
+    }
+
+    private static string KpiLabel(MetricDefinition metric, string key, string catalogLabel) =>
+        key switch
+        {
+            "avg" when metric.Id == "fps" => "AVERAGE FPS",
+            "max" => "MAX",
+            "min" => "MIN",
+            _ => catalogLabel.ToUpperInvariant(),
+        };
+
+    private void ResetKpiValues()
+    {
+        foreach (var tile in KpiTiles)
+        {
+            tile.Apply("--");
+        }
+    }
+
+    private static double? ValueFor(MetricStatistics? stats, string key) => key switch
+    {
+        "avg" => stats?.Avg,
+        "min" => stats?.Min,
+        "max" => stats?.Max,
+        "p1" => stats?.P1,
+        "p01" => stats?.P01,
+        _ => null,
+    };
+
+    partial void OnSelectedMetricChanged(MetricDefinition? value)
+    {
+        ConfigureKpiTiles(value);
+        RefreshSeries();
+        UpdateVisibleRange(_visibleBounds);
+    }
 
     private void RefreshSeries()
     {
@@ -259,11 +378,6 @@ public partial class ChartViewModel : ObservableObject
         {
             ComparisonSeries = null;
         }
-
-        _fpsSeries = SeriesBuilder.Build(Session, "fps");
-        _fpsComparisonSeries = ComparisonSession is null
-            ? null
-            : SeriesBuilder.Build(ComparisonSession, "fps");
 
         HasData = Series is not null || ComparisonSeries is not null;
     }
