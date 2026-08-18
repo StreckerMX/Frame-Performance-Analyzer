@@ -4,6 +4,7 @@ using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Comparison;
 using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.Analytics.Statistics;
+using FrameViewAnalyzer.App.Charting;
 using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Core.Formatting;
 using FrameViewAnalyzer.Core.Metrics;
@@ -12,9 +13,8 @@ using FrameViewAnalyzer.Core.Models;
 namespace FrameViewAnalyzer.App.ViewModels;
 
 /// <summary>
-/// One analyzed session shown by the chart workspace. The reference session is
-/// always normalized to index 0; Pair mode therefore remains a two-item
-/// workspace while Multi mode can provide any number of additional sessions.
+/// One analyzed session shown by the chart workspace. Pair mode may declare a
+/// Base reference; Multi mode deliberately treats every item as an equal peer.
 /// </summary>
 public sealed record ChartWorkspaceSession(
     SessionAnalysis Session,
@@ -22,16 +22,16 @@ public sealed record ChartWorkspaceSession(
     bool IsReference = false);
 
 /// <summary>
-/// Chart-side state: the active workspace sessions, metric catalog, selected
+/// Chart-side state: active workspace sessions, metric catalog, selected
 /// metric, full-resolution series, interaction toggles, and metric-aware
-/// visible-range KPI tiles. Rendering lives in the chart layer; this view
-/// model only carries data.
+/// visible-range KPI tiles. Rendering lives in the chart layer.
 /// </summary>
 public partial class ChartViewModel : ObservableObject
 {
     private ScottPlot.AxisLimits? _visibleBounds;
     private IReadOnlyList<ChartWorkspaceSession> _workspaceSessions = [];
     private IReadOnlyList<MetricSeries> _seriesList = [];
+    private bool _isMultiWorkspace;
 
     [ObservableProperty]
     private SessionAnalysis? _session;
@@ -70,13 +70,13 @@ public partial class ChartViewModel : ObservableObject
 
     public int SeriesPointCount => Series?.X.Length ?? 0;
 
-    /// <summary>All active workspace sessions, with the reference first.</summary>
+    /// <summary>All active workspace sessions in stable display order.</summary>
     public IReadOnlyList<ChartWorkspaceSession> WorkspaceSessions => _workspaceSessions;
 
-    /// <summary>All series available for the selected metric, reference first when present.</summary>
+    /// <summary>All series available for the selected metric.</summary>
     public IReadOnlyList<MetricSeries> SeriesList => _seriesList;
 
-    public bool IsMultiWorkspace => _workspaceSessions.Count > 2;
+    public bool IsMultiWorkspace => _isMultiWorkspace;
 
     /// <summary>Compatibility entry point for the existing Pair workflow.</summary>
     public void SetSessions(SessionAnalysis? baseSession, SessionAnalysis? comparisonSession)
@@ -96,14 +96,16 @@ public partial class ChartViewModel : ObservableObject
             sessions.Add(new ChartWorkspaceSession(comparisonSession, "Comparison"));
         }
 
-        SetWorkspace(sessions);
+        SetWorkspace(sessions, isMultiWorkspace: false);
     }
 
     /// <summary>
-    /// Replaces the complete chart workspace. A declared reference is moved to
-    /// index 0, preserving deterministic legend order and reference KPIs.
+    /// Replaces the complete chart workspace. Pair mode keeps Base first.
+    /// Multi mode preserves selection order and intentionally has no reference.
     /// </summary>
-    public void SetWorkspace(IReadOnlyList<ChartWorkspaceSession> sessions)
+    public void SetWorkspace(
+        IReadOnlyList<ChartWorkspaceSession> sessions,
+        bool isMultiWorkspace = false)
     {
         var normalized = sessions.Where(item => item.Session is not null).ToList();
         if (normalized.Count == 0)
@@ -112,27 +114,38 @@ public partial class ChartViewModel : ObservableObject
             return;
         }
 
-        var referenceIndex = normalized.FindIndex(item => item.IsReference);
-        if (referenceIndex < 0)
+        _isMultiWorkspace = isMultiWorkspace;
+        if (_isMultiWorkspace)
         {
-            referenceIndex = 0;
+            _workspaceSessions = normalized
+                .Select(item => item with { IsReference = false })
+                .ToList();
+        }
+        else
+        {
+            var referenceIndex = normalized.FindIndex(item => item.IsReference);
+            if (referenceIndex < 0)
+            {
+                referenceIndex = 0;
+            }
+
+            if (referenceIndex != 0)
+            {
+                var reference = normalized[referenceIndex];
+                normalized.RemoveAt(referenceIndex);
+                normalized.Insert(0, reference);
+            }
+
+            _workspaceSessions = normalized
+                .Select((item, index) => item with { IsReference = index == 0 })
+                .ToList();
         }
 
-        if (referenceIndex != 0)
-        {
-            var reference = normalized[referenceIndex];
-            normalized.RemoveAt(referenceIndex);
-            normalized.Insert(0, reference);
-        }
-
-        // Exactly one item is authoritative even if callers accidentally mark
-        // more than one reference.
-        _workspaceSessions = normalized
-            .Select((item, index) => item with { IsReference = index == 0 })
-            .ToList();
-
+        // Session/ComparisonSession remain compatibility adapters used by the
+        // Pair-only commands. Multi keeps Session as the first loaded item but
+        // never treats it as a statistical baseline.
         Session = _workspaceSessions[0].Session;
-        ComparisonSession = _workspaceSessions.Count == 2
+        ComparisonSession = !_isMultiWorkspace && _workspaceSessions.Count == 2
             ? _workspaceSessions[1].Session
             : null;
         _visibleBounds = null;
@@ -157,6 +170,7 @@ public partial class ChartViewModel : ObservableObject
     {
         _workspaceSessions = [];
         _seriesList = [];
+        _isMultiWorkspace = false;
         Session = null;
         ComparisonSession = null;
         Metrics.Clear();
@@ -174,8 +188,7 @@ public partial class ChartViewModel : ObservableObject
 
     /// <summary>
     /// Steps the selected metric ±1 without wrapping. Returns true only when
-    /// the selection actually changed (the wheel handler marks the event
-    /// handled only then).
+    /// the selection actually changed.
     /// </summary>
     public bool StepSelectedMetric(int direction)
     {
@@ -197,9 +210,8 @@ public partial class ChartViewModel : ObservableObject
 
     /// <summary>
     /// Recomputes statistics for the selected metric over the visible range.
-    /// Pair mode compares Base and Comparison. Multi mode intentionally keeps
-    /// the compact KPI strip focused on the reference benchmark; the full
-    /// N-way comparison table is a separate presentation concern.
+    /// Pair mode compares Base and Comparison. Multi mode shows one colored
+    /// row per benchmark and highlights the best value versus the runner-up.
     /// </summary>
     public void UpdateVisibleRange(ScottPlot.AxisLimits? bounds)
     {
@@ -222,6 +234,26 @@ public partial class ChartViewModel : ObservableObject
             ? (range.Left, range.Right)
             : (populated.Min(series => series.X[0]), populated.Max(series => series.X[^1]));
 
+        if (_isMultiWorkspace)
+        {
+            var multiStats = new List<MultiVisibleStats>(populated.Count);
+            foreach (var series in populated)
+            {
+                var (stats, count) = VisibleRangeCalculator.Compute(
+                    metric, series.X, series.Y, minX, maxX);
+                multiStats.Add(new MultiVisibleStats(series, stats, count));
+            }
+
+            var fields = KpiFields(metric);
+            for (var index = 0; index < fields.Count; index++)
+            {
+                ApplyMultiMetricTile(KpiTiles[index], metric, fields[index].Key, multiStats);
+            }
+
+            ApplyMultiVisibleTimeTile(KpiTiles[^1], multiStats);
+            return;
+        }
+
         MetricStatistics? baseStats = null;
         var baseCount = 0;
         if (Series is { X.Length: > 0 } baseSeries)
@@ -232,17 +264,16 @@ public partial class ChartViewModel : ObservableObject
 
         MetricStatistics? comparisonStats = null;
         var comparisonCount = 0;
-        if (_workspaceSessions.Count == 2
-            && ComparisonSeries is { X.Length: > 0 } comparisonSeries)
+        if (ComparisonSeries is { X.Length: > 0 } comparisonSeries)
         {
             (comparisonStats, comparisonCount) = VisibleRangeCalculator.Compute(
                 metric, comparisonSeries.X, comparisonSeries.Y, minX, maxX);
         }
 
-        var fields = KpiFields(metric);
-        for (var index = 0; index < fields.Count; index++)
+        var pairFields = KpiFields(metric);
+        for (var index = 0; index < pairFields.Count; index++)
         {
-            var (key, _) = fields[index];
+            var (key, _) = pairFields[index];
             ApplyMetricTile(
                 KpiTiles[index],
                 metric,
@@ -288,6 +319,73 @@ public partial class ChartViewModel : ObservableObject
             deltaKind);
     }
 
+    private static void ApplyMultiMetricTile(
+        KpiTileViewModel tile,
+        MetricDefinition metric,
+        string statisticKey,
+        IReadOnlyList<MultiVisibleStats> entries)
+    {
+        var values = entries
+            .Select(entry => new MultiMetricValue(
+                entry.Series,
+                ValueFor(entry.Stats, statisticKey)))
+            .ToList();
+
+        MultiMetricValue? best = null;
+        MultiMetricValue? runnerUp = null;
+        if (metric.Direction != MetricDirection.Undefined)
+        {
+            var valid = values.Where(value => value.Value is not null).ToList();
+            if (valid.Count >= 2)
+            {
+                var ordered = metric.Direction == MetricDirection.HigherIsBetter
+                    ? valid.OrderByDescending(value => value.Value!.Value).ToList()
+                    : valid.OrderBy(value => value.Value!.Value).ToList();
+                best = ordered[0];
+                runnerUp = ordered[1];
+            }
+        }
+
+        var bestDeltaText = string.Empty;
+        if (best?.Value is { } bestValue && runnerUp?.Value is { } nextValue)
+        {
+            var percent = ImprovementOverNext(metric.Direction, bestValue, nextValue);
+            bestDeltaText = percent is > 0.0001
+                ? $"BEST  +{percent.Value:F1}% vs next"
+                : "BEST";
+        }
+
+        tile.ApplySeries(values.Select(value =>
+        {
+            var isBest = best is not null && ReferenceEquals(value.Series, best.Series);
+            return new KpiSeriesValueViewModel(
+                value.Series.LabelOrDefault,
+                FormatMultiValue(metric, value.Value),
+                MultiSeriesPalette.HexAt(value.Series.WorkspaceIndex),
+                isBest ? bestDeltaText : string.Empty,
+                isBest);
+        }));
+    }
+
+    private static double? ImprovementOverNext(
+        MetricDirection direction,
+        double best,
+        double next)
+    {
+        var denominator = Math.Abs(next);
+        if (denominator < 1e-12)
+        {
+            return null;
+        }
+
+        return direction switch
+        {
+            MetricDirection.HigherIsBetter => Math.Max(0.0, (best - next) / denominator * 100.0),
+            MetricDirection.LowerIsBetter => Math.Max(0.0, (next - best) / denominator * 100.0),
+            _ => null,
+        };
+    }
+
     private static void ApplyVisibleTimeTile(
         KpiTileViewModel tile,
         MetricStatistics? baseStats,
@@ -321,6 +419,16 @@ public partial class ChartViewModel : ObservableObject
             ImprovementKind.None);
     }
 
+    private static void ApplyMultiVisibleTimeTile(
+        KpiTileViewModel tile,
+        IReadOnlyList<MultiVisibleStats> entries)
+    {
+        tile.ApplySeries(entries.Select(entry => new KpiSeriesValueViewModel(
+            entry.Series.LabelOrDefault,
+            DisplayText.FormatDurationHuman(entry.Count),
+            MultiSeriesPalette.HexAt(entry.Series.WorkspaceIndex))));
+    }
+
     private static string FormatValue(
         MetricDefinition metric,
         string statisticKey,
@@ -336,6 +444,23 @@ public partial class ChartViewModel : ObservableObject
             return statisticKey is "max" or "min"
                 ? $"{value:F1} FPS"
                 : $"{value:F1}";
+        }
+
+        return string.IsNullOrWhiteSpace(metric.Unit)
+            ? $"{value:F1}"
+            : $"{value:F1} {metric.Unit}";
+    }
+
+    private static string FormatMultiValue(MetricDefinition metric, double? value)
+    {
+        if (value is null)
+        {
+            return "--";
+        }
+
+        if (metric.Id == "fps")
+        {
+            return $"{value:F1} FPS";
         }
 
         return string.IsNullOrWhiteSpace(metric.Unit)
@@ -365,9 +490,7 @@ public partial class ChartViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The dashboard deliberately uses one compact statistic vocabulary.
-    /// Every metric shows Average/Max/Min; only FPS adds the two low-tail
-    /// metrics because those are the stutter indicators users expect there.
+    /// Every metric shows Average/Max/Min; only FPS adds the low-tail metrics.
     /// </summary>
     private static IReadOnlyList<(string Key, string Label)> KpiFields(MetricDefinition metric) =>
         metric.Id == "fps"
@@ -424,7 +547,7 @@ public partial class ChartViewModel : ObservableObject
         }
 
         var built = new List<MetricSeries>();
-        MetricSeries? referenceSeries = null;
+        MetricSeries? firstSeries = null;
         MetricSeries? firstComparisonSeries = null;
 
         for (var index = 0; index < _workspaceSessions.Count; index++)
@@ -439,27 +562,25 @@ public partial class ChartViewModel : ObservableObject
             var series = raw with
             {
                 Label = workspace.Label,
-                Role = index == 0 ? SessionRole.Base : SessionRole.Comparison,
+                Role = _isMultiWorkspace
+                    ? SessionRole.Comparison
+                    : index == 0 ? SessionRole.Base : SessionRole.Comparison,
+                WorkspaceIndex = index,
+                IsReference = !_isMultiWorkspace && workspace.IsReference,
             };
             built.Add(series);
-            if (index == 0)
-            {
-                referenceSeries = series;
-            }
-            else if (firstComparisonSeries is null)
+            firstSeries ??= series;
+            if (!_isMultiWorkspace && index > 0 && firstComparisonSeries is null)
             {
                 firstComparisonSeries = series;
             }
         }
 
         _seriesList = built;
-        Series = referenceSeries;
+        Series = firstSeries;
         ComparisonSeries = firstComparisonSeries;
         HasData = built.Count > 0;
 
-        // Force a presentation refresh even when the reference does not carry
-        // a comparison-only metric and the nullable adapter properties remain
-        // unchanged. The chart itself consumes SeriesList.
         OnPropertyChanged(nameof(SeriesList));
         OnPropertyChanged(nameof(Series));
         OnPropertyChanged(nameof(ComparisonSeries));
@@ -467,10 +588,10 @@ public partial class ChartViewModel : ObservableObject
 
     /// <summary>
     /// Pair-only points consumed by the legacy A/B range-analysis actions.
-    /// Multi mode intentionally exposes no second point set here.
+    /// Multi mode intentionally exposes no comparison point set here.
     /// </summary>
     public (IReadOnlyList<ChartPoint> Base, IReadOnlyList<ChartPoint> Comparison) CurrentPoints() =>
-        (ToPoints(Series), ToPoints(_workspaceSessions.Count == 2 ? ComparisonSeries : null));
+        (ToPoints(Series), ToPoints(_isMultiWorkspace ? null : ComparisonSeries));
 
     public static IReadOnlyList<ChartPoint> ToPoints(MetricSeries? series)
     {
@@ -505,4 +626,13 @@ public partial class ChartViewModel : ObservableObject
 
         return result;
     }
+
+    private sealed record MultiVisibleStats(
+        MetricSeries Series,
+        MetricStatistics? Stats,
+        int Count);
+
+    private sealed record MultiMetricValue(
+        MetricSeries Series,
+        double? Value);
 }
