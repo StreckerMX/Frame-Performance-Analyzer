@@ -7,7 +7,8 @@ namespace FrameViewAnalyzer.Analytics.Filtering;
 /// <summary>
 /// Detects the analyzable segment of a capture: GPU-utilization filtering,
 /// abnormal-FPS (transition) culling, sustained-run grouping, and edge
-/// trimming. Mirrors the Python reference algorithms exactly.
+/// trimming. FrameView keeps exact Python-reference behavior; sampled
+/// telemetry sources can lower the per-bin sample requirement explicitly.
 /// </summary>
 public static class FilterProfileDetector
 {
@@ -79,16 +80,18 @@ public static class FilterProfileDetector
     /// <summary>
     /// Robust upper fence for bin FPS, used to cull transition frames:
     /// min(5000, max(q3 + 3·IQR, median·1.75, median + 30)) over bins with
-    /// at least three frames and sufficient GPU utilization.
+    /// enough usable samples and sufficient GPU utilization.
     /// </summary>
     public static double? ComputeFpsUpperBound(
         IReadOnlyList<BinSummary> summaries,
-        double gpuThreshold)
+        double gpuThreshold,
+        int minimumSamplesPerBin = AnalysisConstants.MinFramesPerBin)
     {
+        minimumSamplesPerBin = Math.Max(1, minimumSamplesPerBin);
         var candidates = summaries
             .Where(summary =>
                 summary.Fps.HasValue
-                && summary.FrameCount >= AnalysisConstants.MinFramesPerBin
+                && summary.FrameCount >= minimumSamplesPerBin
                 && (!summary.GpuUtil.HasValue || summary.GpuUtil >= gpuThreshold))
             .Select(summary => summary.Fps!.Value)
             .OrderBy(value => value)
@@ -120,7 +123,8 @@ public static class FilterProfileDetector
         IReadOnlyList<BinSummary> summaries,
         double threshold,
         double trimBufferSeconds,
-        bool excludeTransitions)
+        bool excludeTransitions,
+        int minimumSamplesPerBin = AnalysisConstants.MinFramesPerBin)
     {
         if (summaries.Count == 0)
         {
@@ -129,7 +133,7 @@ public static class FilterProfileDetector
 
         var hasGpuData = summaries.Any(summary => summary.GpuUtil.HasValue);
         var fpsUpperBound = excludeTransitions
-            ? ComputeFpsUpperBound(summaries, threshold)
+            ? ComputeFpsUpperBound(summaries, threshold, minimumSamplesPerBin)
             : null;
 
         var gpuCandidates = new List<int>();
