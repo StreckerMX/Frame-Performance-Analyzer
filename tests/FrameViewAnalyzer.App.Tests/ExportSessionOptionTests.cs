@@ -2,100 +2,61 @@ using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Exports;
 using FrameViewAnalyzer.App.Views;
 using FrameViewAnalyzer.Core;
+using FrameViewAnalyzer.Core.Metrics;
 using FrameViewAnalyzer.Core.Models;
 
 namespace FrameViewAnalyzer.App.Tests;
 
-/// <summary>
-/// Regression coverage for the "Export selected session" picker: role-aware
-/// labels, exact option counts, preselect defaults, validation policy, and the
-/// exact export target — the ComboBox must never be blank or ambiguous.
-/// </summary>
 public class ExportSessionOptionTests
 {
     [Fact]
-    public void Base_only_produces_exactly_one_preselected_option()
+    public void Session_labels_remain_role_aware_and_path_free()
     {
         var session = Session();
-        var options = new[] { new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced", session) };
+        var baseOption = new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced", session);
+        var comparisonOption = new ExportSessionOption(SessionRole.Comparison, "GTA5 Enhanced", session);
 
-        var option = Assert.Single(options);
-        Assert.Equal(SessionRole.Base, option.Role);
-        Assert.Equal("Base — GTA5 Enhanced", option.Label);
-        Assert.Same(session, option.Session);
+        Assert.Equal("Base — GTA5 Enhanced", baseOption.Label);
+        Assert.Equal("Comparison — GTA5 Enhanced", comparisonOption.Label);
+        Assert.DoesNotContain(@"C:\", baseOption.Label);
+        Assert.DoesNotContain('\\', comparisonOption.Label);
+    }
+
+    [Theory]
+    [InlineData(0, 1, false)]
+    [InlineData(1, 0, false)]
+    [InlineData(1, 1, true)]
+    [InlineData(2, 8, true)]
+    [InlineData(1, 9, false)]
+    public void Checklist_validation_requires_sessions_and_one_to_eight_metrics(
+        int sessions,
+        int metrics,
+        bool expected)
+    {
+        Assert.Equal(expected, ExportReportWindow.CanExport(sessions, metrics));
     }
 
     [Fact]
-    public void Base_and_comparison_produce_two_distinguishable_options()
+    public void Build_selection_returns_only_checked_sessions_and_metrics()
     {
-        var options = new[]
+        var baseOption = new ExportSessionOption(SessionRole.Base, "Base run", Session());
+        var comparisonOption = new ExportSessionOption(SessionRole.Comparison, "Comparison run", Session());
+        var sessions = new[]
         {
-            new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced", Session()),
-            new ExportSessionOption(SessionRole.Comparison, "GTA5 Enhanced", Session()),
+            new ExportSessionChecklistItem(baseOption, isSelected: false),
+            new ExportSessionChecklistItem(comparisonOption, isSelected: true),
+        };
+        var metrics = new[]
+        {
+            new ExportMetricChecklistItem(CoreMetricCatalog.CoreById["fps"], isSelected: true),
+            new ExportMetricChecklistItem(CoreMetricCatalog.CoreById["frametime"], isSelected: false),
         };
 
-        Assert.Equal(2, options.Length);
-        Assert.Equal("Base — GTA5 Enhanced", options[0].Label);
-        Assert.Equal("Comparison — GTA5 Enhanced", options[1].Label);
-        Assert.NotEqual(options[0].Label, options[1].Label);
-        Assert.All(options, option => Assert.False(string.IsNullOrWhiteSpace(option.Label)));
-    }
+        var selection = ExportReportWindow.BuildSelection(sessions, metrics);
 
-    [Fact]
-    public void No_selection_disables_selected_session_export()
-    {
-        Assert.False(ExportReportWindow.CanExport(ExportScope.Single, selected: null));
-        Assert.Null(ExportReportWindow.SelectedSession(ExportScope.Single, selectedItem: null));
-        Assert.Null(ExportReportWindow.SelectedSession(ExportScope.Single, "not an option"));
-    }
-
-    [Fact]
-    public void Export_all_remains_valid_without_a_single_selection()
-    {
-        Assert.True(ExportReportWindow.CanExport(ExportScope.All, selected: null));
-        Assert.Null(ExportReportWindow.SelectedSession(ExportScope.All, selectedItem: null));
-    }
-
-    [Fact]
-    public void Selected_base_resolves_to_exactly_the_base_session()
-    {
-        var baseSession = Session();
-        var baseOption = new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced", baseSession);
-
-        var resolved = ExportReportWindow.SelectedSession(ExportScope.Single, baseOption);
-
-        Assert.Same(baseOption, resolved);
-        Assert.Equal(SessionRole.Base, resolved!.Role);
-        Assert.Same(baseSession, resolved.Session);
-    }
-
-    [Fact]
-    public void Selected_comparison_resolves_to_exactly_the_comparison_session()
-    {
-        var comparisonSession = Session();
-        var comparisonOption = new ExportSessionOption(
-            SessionRole.Comparison,
-            "GTA5 Enhanced",
-            comparisonSession);
-
-        var resolved = ExportReportWindow.SelectedSession(ExportScope.Single, comparisonOption);
-
-        Assert.Same(comparisonOption, resolved);
-        Assert.Equal(SessionRole.Comparison, resolved!.Role);
-        Assert.Same(comparisonSession, resolved.Session);
-    }
-
-    [Fact]
-    public void Labels_never_expose_absolute_paths()
-    {
-        var option = new ExportSessionOption(
-            SessionRole.Base,
-            "GTA5 Enhanced",
-            Session());
-
-        Assert.DoesNotContain(@"C:\", option.Label);
-        Assert.DoesNotContain("captures", option.Label);
-        Assert.DoesNotContain('\\', option.Label);
+        var selectedSession = Assert.Single(selection.Sessions);
+        Assert.Same(comparisonOption, selectedSession);
+        Assert.Equal(["fps"], selection.MetricIds);
     }
 
     private static SessionAnalysis Session() =>
