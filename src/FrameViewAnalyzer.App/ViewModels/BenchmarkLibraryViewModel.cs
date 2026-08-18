@@ -16,7 +16,7 @@ public sealed record LibraryRow(
     string Subtitle,
     string Stamp,
     bool Available,
-    bool IsAbSelected);
+    bool IsSelected);
 
 public sealed record RecentPairRow(
     string TitleA,
@@ -25,19 +25,21 @@ public sealed record RecentPairRow(
     LibraryRecord RecordB);
 
 /// <summary>
-/// Benchmark Library browser state: search, filters, sorting, the row list,
-/// the recent-comparisons bar, A/B selection, and non-destructive record
-/// removal. Pure search/filter/sort logic lives in Analytics.LibrarySearch.
+/// Benchmark Library browser state: search, filters, sorting, row selection,
+/// recent Pair comparisons, and non-destructive record removal. Pure
+/// search/filter/sort logic lives in Analytics.LibrarySearch.
 /// </summary>
 public partial class BenchmarkLibraryViewModel : ObservableObject
 {
     public const string AllValue = "All";
+    public const int MaxMultiSelection = 8;
 
     private readonly ILibraryStore _store;
     private readonly IManualMetadataStore _manualStore;
     private readonly CaptureFolderScanner _scanner;
     private readonly LibraryIndexer _indexer = new();
     private readonly string? _captureDirectory;
+    private readonly List<string> _selectedIdentities = [];
 
     private LibraryModel _library = new();
     private IReadOnlyDictionary<string, ManualMetadata> _manualLookup =
@@ -64,9 +66,6 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     [ObservableProperty]
     private string _countText = string.Empty;
 
-    [ObservableProperty]
-    private string? _abIdentity;
-
     public ObservableCollection<string> GameOptions { get; } = [AllValue];
 
     public ObservableCollection<string> ResolutionOptions { get; } = [AllValue];
@@ -77,13 +76,27 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
 
     public ObservableCollection<RecentPairRow> RecentPairs { get; } = [];
 
-    public bool HasAbSelection => AbIdentity is not null;
+    public int SelectedCount => _selectedIdentities.Count;
+
+    public bool CanCompareSelected => SelectedCount is >= 2 and <= MaxMultiSelection;
+
+    public string SelectionSummary => SelectedCount switch
+    {
+        0 => "Select 2–8 benchmarks for Multi comparison.",
+        1 => "1 benchmark selected · select at least one more.",
+        MaxMultiSelection => $"{MaxMultiSelection} benchmarks selected · maximum reached.",
+        _ => $"{SelectedCount} benchmarks selected.",
+    };
 
     public event Action<string>? LoadBaseRequested;
 
     public event Action<string>? LoadComparisonRequested;
 
+    /// <summary>Recent two-capture comparison request; remains a Pair action.</summary>
     public event Action<string, string>? CompareRequested;
+
+    /// <summary>Selected Library captures to load into the shared Multi workspace.</summary>
+    public event Action<IReadOnlyList<string>>? CompareSelectedRequested;
 
     /// <summary>
     /// Raised before a record is removed so the view can ask for explicit
@@ -124,6 +137,9 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
             TrySave();
         }
 
+        _selectedIdentities.RemoveAll(identity =>
+            !_library.Records.TryGetValue(identity, out var record) || !record.Available);
+        NotifySelectionChanged();
         RebuildOptions();
         RebuildRows();
         RebuildRecentPairs();
@@ -148,29 +164,44 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ToggleAb(LibraryRow? row)
+    private void ToggleSelected(LibraryRow? row)
     {
         if (row is not { Available: true })
         {
             return;
         }
 
-        if (AbIdentity == row.Record.Identity)
+        var identity = row.Record.Identity;
+        if (_selectedIdentities.Contains(identity, StringComparer.Ordinal))
         {
-            AbIdentity = null;
+            _selectedIdentities.Remove(identity);
         }
-        else if (AbIdentity is null)
+        else if (_selectedIdentities.Count < MaxMultiSelection)
         {
-            AbIdentity = row.Record.Identity;
-        }
-        else if (_library.Records.TryGetValue(AbIdentity, out var first))
-        {
-            CompareRequested?.Invoke(first.SourcePath, row.Record.SourcePath);
-            AbIdentity = null;
+            _selectedIdentities.Add(identity);
         }
 
-        OnPropertyChanged(nameof(HasAbSelection));
+        NotifySelectionChanged();
         RebuildRows();
+    }
+
+    [RelayCommand]
+    private void CompareSelected()
+    {
+        if (!CanCompareSelected)
+        {
+            return;
+        }
+
+        var paths = _selectedIdentities
+            .Select(identity => _library.Records.TryGetValue(identity, out var record) ? record : null)
+            .Where(record => record is { Available: true })
+            .Select(record => record!.SourcePath)
+            .ToList();
+        if (paths.Count is >= 2 and <= MaxMultiSelection)
+        {
+            CompareSelectedRequested?.Invoke(paths);
+        }
     }
 
     [RelayCommand]
@@ -207,12 +238,8 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
         _library.IgnoredIdentities.Add(identity);
         _library.RecentComparisons.RemoveAll(pair =>
             pair.Base == identity || pair.Comparison == identity);
-
-        if (AbIdentity == identity)
-        {
-            AbIdentity = null;
-            OnPropertyChanged(nameof(HasAbSelection));
-        }
+        _selectedIdentities.Remove(identity);
+        NotifySelectionChanged();
 
         TrySave();
         RebuildOptions();
@@ -231,6 +258,14 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     partial void OnSelectedGpuChanged(string value) => RebuildRows();
 
     partial void OnSortByDateChanged(bool value) => RebuildRows();
+
+    private void NotifySelectionChanged()
+    {
+        OnPropertyChanged(nameof(SelectedCount));
+        OnPropertyChanged(nameof(CanCompareSelected));
+        OnPropertyChanged(nameof(SelectionSummary));
+        CompareSelectedCommand.NotifyCanExecuteChanged();
+    }
 
     private void RebuildOptions()
     {
@@ -302,7 +337,7 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
                 LibrarySearch.LibraryRowSubtitle(record, manual),
                 LibrarySearch.LibraryStamp(record),
                 record.Available,
-                record.Identity == AbIdentity));
+                _selectedIdentities.Contains(record.Identity, StringComparer.Ordinal)));
         }
 
         CountText = $"{Rows.Count} record(s)";
