@@ -1,6 +1,7 @@
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using FrameViewAnalyzer.Analytics;
+using FrameViewAnalyzer.Analytics.Filtering;
 using FrameViewAnalyzer.Core.Formatting;
 
 namespace FrameViewAnalyzer.App.ViewModels;
@@ -230,7 +231,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
             : $"at least {GpuThreshold:F0}% GPU utilization will be required";
     }
 
-    private void AddExclusionDiagnostics(List<string> parts, AnalysisDiagnostics diagnostics)
+    private void AddExclusionDiagnostics(List<string> parts, FilterDiagnostics diagnostics)
     {
         if (diagnostics.FpsOutlierBins > 0)
         {
