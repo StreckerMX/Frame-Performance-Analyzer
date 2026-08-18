@@ -61,6 +61,11 @@ public partial class MainWindowViewModel
         ? "All selected benchmarks are compared equally."
         : "Select 2–8 benchmarks to compare them together.";
 
+    // Compatibility binding for the current dashboard XAML. The old property
+    // name is retained only so this feature branch does not need a broad XAML
+    // rewrite; the displayed copy no longer describes any benchmark as a base.
+    public string MultiReferenceText => MultiComparisonText;
+
     public string MultiBenchmarkNames
     {
         get
@@ -228,6 +233,7 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(HasMultiSelection));
         OnPropertyChanged(nameof(MultiSelectionSummary));
         OnPropertyChanged(nameof(MultiComparisonText));
+        OnPropertyChanged(nameof(MultiReferenceText));
         OnPropertyChanged(nameof(MultiBenchmarkNames));
         OnPropertyChanged(nameof(MultiSelectedPaths));
     }
