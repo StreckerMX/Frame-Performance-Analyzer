@@ -35,7 +35,8 @@ public class NvidiaAppPerformanceLogTests
             new AnalysisOptions(0, 0, AutoGpuThreshold: false, ExcludeTransitions: false));
 
         var onePercentLow = Assert.Single(
-            session.Catalog.Where(metric => metric.Label == "FPS 1(%) Low"));
+            session.Catalog,
+            metric => metric.Label == "FPS 1(%) Low");
         Assert.Equal("FPS", onePercentLow.Unit);
         Assert.Equal("Performance", onePercentLow.Category);
         Assert.Equal(MetricDirection.HigherIsBetter, onePercentLow.Direction);
