@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Input;
 using FrameViewAnalyzer.Analytics;
+using FrameViewAnalyzer.Core.Models;
 
 namespace FrameViewAnalyzer.App.ViewModels;
 
@@ -21,6 +22,7 @@ public sealed record MultiBenchmarkSession(
 public partial class MainWindowViewModel
 {
     private BenchmarkWorkspaceMode _workspaceMode = BenchmarkWorkspaceMode.Pair;
+    private bool _multiAnalysisRangeSubscribed;
 
     public ObservableCollection<MultiBenchmarkSession> MultiSessions { get; } = [];
 
@@ -170,6 +172,48 @@ public partial class MainWindowViewModel
         }
     }
 
+    /// <summary>
+    /// Re-analyzes every loaded Multi peer with one shared AnalysisOptions
+    /// snapshot. All results are computed before the collection is mutated, so
+    /// one failed benchmark leaves the previous N-session workspace untouched.
+    /// </summary>
+    public Task ApplyMultiAnalysisOptionsAsync(AnalysisOptions options)
+    {
+        if (!IsMultiMode || MultiSessions.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        var previous = MultiSessions.ToList();
+        try
+        {
+            var reanalyzed = previous
+                .Select(item => item with { Session = _analysis.Reanalyze(item.Session, options) })
+                .ToList();
+
+            MultiSessions.Clear();
+            foreach (var item in reanalyzed)
+            {
+                MultiSessions.Add(item);
+                IndexSession(item.Session);
+            }
+
+            ActivateMultiWorkspace();
+            StatusText = $"REANALYZED  ·  {MultiSessions.Count} Multi benchmarks";
+        }
+        catch (Exception error)
+        {
+            // The collection was not touched before every Reanalyze succeeded.
+            // Re-attach the old snapshots so controls also return to the
+            // effective options represented by the still-visible workspace.
+            AnalysisRange.AttachMulti(previous.Select(item => item.Session).ToList());
+            StatusText = "MULTI REANALYSIS FAILED  ·  Previous workspace kept";
+            _dialogs.ShowError("Multi analysis error", error.Message);
+        }
+
+        return Task.CompletedTask;
+    }
+
     private void SetWorkspaceMode(BenchmarkWorkspaceMode mode)
     {
         if (_workspaceMode == mode)
@@ -202,12 +246,12 @@ public partial class MainWindowViewModel
 
     private void ActivateMultiWorkspace()
     {
+        EnsureMultiAnalysisRangeSubscription();
+
         if (MultiSessions.Count == 0)
         {
             Chart.Clear();
-            AnalysisRange.Attach(null, null);
-            AnalysisRange.AnalysisSummaryText =
-                "Select two or more benchmarks to start a Multi comparison.";
+            AnalysisRange.AttachMulti([]);
             StatusText = "MULTI WORKSPACE  ·  Select benchmarks from the capture folder";
             NotifyMultiStateChanged();
             return;
@@ -219,13 +263,20 @@ public partial class MainWindowViewModel
                 item.Label)).ToList(),
             isMultiWorkspace: true);
 
-        // Keep the existing pair-only range editor disabled in Multi so a
-        // slider can never silently re-analyze only two of N sessions.
-        AnalysisRange.Attach(null, null);
-        AnalysisRange.AnalysisSummaryText =
-            $"Multi workspace loaded with {MultiSessions.Count} benchmarks. "
-            + "Range controls are temporarily locked while the N-way analysis path is being integrated.";
+        AnalysisRange.AttachMulti(MultiSessions.Select(item => item.Session).ToList());
         NotifyMultiStateChanged();
+    }
+
+    private void EnsureMultiAnalysisRangeSubscription()
+    {
+        if (_multiAnalysisRangeSubscribed)
+        {
+            return;
+        }
+
+        AnalysisRange.MultiOptionsChanged += (_, options) =>
+            _ = ApplyMultiAnalysisOptionsAsync(options);
+        _multiAnalysisRangeSubscribed = true;
     }
 
     private void NotifyMultiStateChanged()
