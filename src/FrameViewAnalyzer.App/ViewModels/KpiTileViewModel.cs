@@ -4,7 +4,11 @@ using FrameViewAnalyzer.Core.Models;
 
 namespace FrameViewAnalyzer.App.ViewModels;
 
-/// <summary>One per-benchmark value displayed inside a Multi KPI tile.</summary>
+/// <summary>
+/// One per-benchmark value displayed inside a Multi KPI tile. ComparedColorHex
+/// carries the runner-up color for the best row, so the UI can identify the
+/// closest competitor without introducing a Base or Reference benchmark.
+/// </summary>
 public sealed record KpiSeriesValueViewModel(
     string Label,
     string Value,
