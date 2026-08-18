@@ -9,50 +9,95 @@ namespace FrameViewAnalyzer.App.Tests;
 public class MultiWorkspaceTests
 {
     [Fact]
-    public void Chart_workspace_normalizes_reference_and_renders_all_series()
+    public void Chart_workspace_keeps_multi_order_and_renders_all_series_as_peers()
     {
         var first = Session("first.csv", frameTime: 20.0);
-        var reference = Session("reference.csv", frameTime: 10.0);
+        var second = Session("second.csv", frameTime: 10.0);
         var third = Session("third.csv", frameTime: 8.0);
         var viewModel = new ChartViewModel();
 
         viewModel.SetWorkspace(
         [
             new ChartWorkspaceSession(first, "First"),
-            new ChartWorkspaceSession(reference, "Reference", IsReference: true),
+            new ChartWorkspaceSession(second, "Second"),
             new ChartWorkspaceSession(third, "Third"),
-        ]);
+        ],
+        isMultiWorkspace: true);
 
         Assert.True(viewModel.IsMultiWorkspace);
         Assert.Equal(3, viewModel.WorkspaceSessions.Count);
-        Assert.Same(reference, viewModel.WorkspaceSessions[0].Session);
-        Assert.True(viewModel.WorkspaceSessions[0].IsReference);
+        Assert.Same(first, viewModel.WorkspaceSessions[0].Session);
+        Assert.All(viewModel.WorkspaceSessions, item => Assert.False(item.IsReference));
         Assert.Collection(
             viewModel.SeriesList,
-            series => Assert.Equal("Reference", series.Label),
             series => Assert.Equal("First", series.Label),
+            series => Assert.Equal("Second", series.Label),
             series => Assert.Equal("Third", series.Label));
+        Assert.All(viewModel.SeriesList, series => Assert.False(series.IsReference));
         Assert.Null(viewModel.ComparisonSession);
     }
 
     [Fact]
-    public void Multi_kpis_describe_the_reference_not_an_arbitrary_comparison()
+    public void Multi_kpis_show_every_benchmark_and_mark_the_best_against_runner_up()
     {
-        var reference = Session("reference.csv", frameTime: 10.0); // 100 FPS
-        var slow = Session("slow.csv", frameTime: 20.0);           // 50 FPS
-        var fast = Session("fast.csv", frameTime: 5.0);            // 200 FPS
+        var regular = Session("regular.csv", frameTime: 10.0); // 100 FPS
+        var slow = Session("slow.csv", frameTime: 20.0);       // 50 FPS
+        var fast = Session("fast.csv", frameTime: 5.0);        // 200 FPS
         var viewModel = new ChartViewModel();
 
         viewModel.SetWorkspace(
         [
-            new ChartWorkspaceSession(reference, "Reference", IsReference: true),
+            new ChartWorkspaceSession(regular, "Regular"),
             new ChartWorkspaceSession(slow, "Slow"),
             new ChartWorkspaceSession(fast, "Fast"),
-        ]);
+        ],
+        isMultiWorkspace: true);
 
-        Assert.Equal("AVERAGE", viewModel.KpiTiles[0].Label);
-        Assert.Equal("100.0", viewModel.KpiTiles[0].Value);
-        Assert.Empty(viewModel.KpiTiles[0].DeltaText);
+        var average = viewModel.KpiTiles[0];
+        Assert.Equal("AVERAGE", average.Label);
+        Assert.Equal(3, average.SeriesValues.Count);
+        Assert.Collection(
+            average.SeriesValues,
+            value =>
+            {
+                Assert.Equal("Regular", value.Label);
+                Assert.Equal("100.0 FPS", value.Value);
+                Assert.False(value.IsBest);
+            },
+            value =>
+            {
+                Assert.Equal("Slow", value.Label);
+                Assert.Equal("50.0 FPS", value.Value);
+                Assert.False(value.IsBest);
+            },
+            value =>
+            {
+                Assert.Equal("Fast", value.Label);
+                Assert.Equal("200.0 FPS", value.Value);
+                Assert.True(value.IsBest);
+                Assert.Contains("+100.0%", value.DeltaText);
+            });
+        Assert.Equal(3, average.SeriesValues.Select(value => value.ColorHex).Distinct().Count());
+    }
+
+    [Fact]
+    public void Multi_with_two_sessions_stays_multi_instead_of_falling_back_to_pair()
+    {
+        var first = Session("first.csv", frameTime: 10.0);
+        var second = Session("second.csv", frameTime: 20.0);
+        var viewModel = new ChartViewModel();
+
+        viewModel.SetWorkspace(
+        [
+            new ChartWorkspaceSession(first, "First"),
+            new ChartWorkspaceSession(second, "Second"),
+        ],
+        isMultiWorkspace: true);
+
+        Assert.True(viewModel.IsMultiWorkspace);
+        Assert.Null(viewModel.ComparisonSession);
+        Assert.Equal(2, viewModel.KpiTiles[0].SeriesValues.Count);
+        Assert.DoesNotContain("→", viewModel.KpiTiles[0].Value);
     }
 
     [Fact]
@@ -69,10 +114,11 @@ public class MultiWorkspaceTests
         Assert.Same(baseSession, viewModel.Session);
         Assert.Same(comparison, viewModel.ComparisonSession);
         Assert.Contains("→", viewModel.KpiTiles[0].Value);
+        Assert.Empty(viewModel.KpiTiles[0].SeriesValues);
     }
 
     [Fact]
-    public void Multi_selector_restores_checked_paths_and_reference() =>
+    public void Multi_selector_restores_checked_paths_without_reference_state() =>
         WpfStaTestHost.Run(() =>
         {
             WpfStaTestHost.EnsureApplication();
@@ -84,12 +130,12 @@ public class MultiWorkspaceTests
             };
             var window = new MultiBenchmarkSelectionWindow(
                 captures,
-                [captures[0].Path, captures[2].Path],
-                captures[2].Path);
+                [captures[0].Path, captures[2].Path]);
             try
             {
                 Assert.Equal(2, window.SelectedPaths.Count);
-                Assert.Equal(captures[2].Path, window.ReferencePath);
+                Assert.Contains(captures[0].Path, window.SelectedPaths);
+                Assert.Contains(captures[2].Path, window.SelectedPaths);
             }
             finally
             {
