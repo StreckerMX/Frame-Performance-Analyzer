@@ -26,8 +26,8 @@ public sealed record RecentPairRow(
 
 /// <summary>
 /// Benchmark Library browser state: search, filters, sorting, the row list,
-/// the recent-comparisons bar, and A/B selection. Pure search/filter/sort
-/// logic lives in Analytics.LibrarySearch.
+/// the recent-comparisons bar, A/B selection, and non-destructive record
+/// removal. Pure search/filter/sort logic lives in Analytics.LibrarySearch.
 /// </summary>
 public partial class BenchmarkLibraryViewModel : ObservableObject
 {
@@ -84,6 +84,12 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     public event Action<string>? LoadComparisonRequested;
 
     public event Action<string, string>? CompareRequested;
+
+    /// <summary>
+    /// Raised before a record is removed so the view can ask for explicit
+    /// confirmation. Confirmed removal is performed by RemoveFromLibrary.
+    /// </summary>
+    public event Action<LibraryRow>? RemoveRequested;
 
     public BenchmarkLibraryViewModel(
         ILibraryStore store,
@@ -174,6 +180,44 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
         {
             CompareRequested?.Invoke(pair.RecordA.SourcePath, pair.RecordB.SourcePath);
         }
+    }
+
+    [RelayCommand]
+    private void RequestRemove(LibraryRow? row)
+    {
+        if (row is not null)
+        {
+            RemoveRequested?.Invoke(row);
+        }
+    }
+
+    /// <summary>
+    /// Removes only the Library index entry. The source CSV and manual
+    /// metadata stay untouched; the identity is persisted as ignored so a
+    /// folder refresh cannot immediately recreate the row.
+    /// </summary>
+    public void RemoveFromLibrary(LibraryRow row)
+    {
+        var identity = row.Record.Identity;
+        if (!_library.Records.Remove(identity))
+        {
+            return;
+        }
+
+        _library.IgnoredIdentities.Add(identity);
+        _library.RecentComparisons.RemoveAll(pair =>
+            pair.Base == identity || pair.Comparison == identity);
+
+        if (AbIdentity == identity)
+        {
+            AbIdentity = null;
+            OnPropertyChanged(nameof(HasAbSelection));
+        }
+
+        TrySave();
+        RebuildOptions();
+        RebuildRows();
+        RebuildRecentPairs();
     }
 
     partial void OnSearchTextChanged(string value) => RebuildRows();
