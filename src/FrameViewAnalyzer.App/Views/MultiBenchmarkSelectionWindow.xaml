@@ -1,0 +1,126 @@
+<Window x:Class="FrameViewAnalyzer.App.Views.MultiBenchmarkSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Select benchmarks"
+        Width="760"
+        Height="680"
+        MinWidth="620"
+        MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        Background="{DynamicResource WindowBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="{DynamicResource FontFamily.App}">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="MULTI BENCHMARK"
+                       Style="{StaticResource SectionLabelStyle}" />
+            <TextBlock Margin="0,6,0,0"
+                       Text="Select 2–8 captures. One selected benchmark must be the reference used for comparison."
+                       TextWrapping="Wrap"
+                       FontSize="{DynamicResource FontSize.Small}"
+                       Foreground="{DynamicResource TextSoftBrush}" />
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,16,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center"
+                       Text="{Binding SelectionSummary}"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource TextBrush}" />
+            <Button Grid.Column="1"
+                    Margin="8,0,0,0"
+                    Content="Select all"
+                    Click="SelectAll_Click"
+                    Style="{StaticResource GhostButtonStyle}" />
+            <Button Grid.Column="2"
+                    Margin="8,0,0,0"
+                    Content="Clear"
+                    Click="Clear_Click"
+                    Style="{StaticResource GhostButtonStyle}" />
+        </Grid>
+
+        <Border Grid.Row="2"
+                Style="{StaticResource CardStyle}"
+                Padding="8">
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Choices}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,6"
+                                    Padding="10,8"
+                                    Background="{DynamicResource PanelAltBrush}"
+                                    BorderBrush="{DynamicResource CardBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0"
+                                              VerticalAlignment="Center"
+                                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                              Style="{StaticResource DarkCheckBoxStyle}" />
+                                    <StackPanel Grid.Column="1" Margin="10,0,12,0">
+                                        <TextBlock Text="{Binding Display}"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextBrush}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Margin="0,2,0,0"
+                                                   Text="{Binding FileName}"
+                                                   FontSize="{DynamicResource FontSize.Tiny}"
+                                                   Foreground="{DynamicResource MutedBrush}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <RadioButton Grid.Column="2"
+                                                 GroupName="MultiReference"
+                                                 Content="Reference"
+                                                 VerticalAlignment="Center"
+                                                 IsEnabled="{Binding IsSelected}"
+                                                 IsChecked="{Binding IsReference, Mode=TwoWay}"
+                                                 Checked="Reference_Checked"
+                                                 Foreground="{DynamicResource TextSoftBrush}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <Grid Grid.Row="3" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center"
+                       Text="{Binding ValidationText}"
+                       Foreground="{DynamicResource DangerBrush}"
+                       FontSize="{DynamicResource FontSize.Small}" />
+            <Button Grid.Column="1"
+                    Content="Cancel"
+                    IsCancel="True"
+                    Style="{StaticResource GhostButtonStyle}" />
+            <Button Grid.Column="2"
+                    Margin="8,0,0,0"
+                    Content="Load selected"
+                    Click="LoadSelected_Click"
+                    Style="{StaticResource PrimaryButtonStyle}" />
+        </Grid>
+    </Grid>
+</Window>
