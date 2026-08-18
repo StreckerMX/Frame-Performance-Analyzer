@@ -10,7 +10,11 @@ public sealed record KpiSeriesValueViewModel(
     string Value,
     string ColorHex,
     string DeltaText = "",
-    bool IsBest = false);
+    bool IsBest = false,
+    string? ComparedColorHex = null)
+{
+    public bool HasComparedColor => !string.IsNullOrWhiteSpace(ComparedColorHex);
+}
 
 /// <summary>
 /// One visible-range KPI tile. Pair mode keeps the compact Base → Comparison
