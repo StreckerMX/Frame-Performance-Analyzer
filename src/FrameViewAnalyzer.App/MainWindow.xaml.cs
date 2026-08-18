@@ -231,26 +231,51 @@ public partial class MainWindow : Window
 
     private void ExportPng_Click(object sender, RoutedEventArgs e)
     {
-        var baseSession = _viewModel.BaseSession;
-        if (baseSession is null)
+        List<ExportSessionOption> options;
+        IReadOnlyList<FrameViewAnalyzer.Core.Metrics.MetricDefinition> metrics;
+
+        if (_viewModel.IsMultiMode)
         {
-            _dialogs.ShowInfo("Export", "Load at least one base session.");
-            return;
+            if (_viewModel.MultiSessions.Count < 2)
+            {
+                _dialogs.ShowInfo("Export", "Select at least two Multi benchmarks first.");
+                return;
+            }
+
+            options = _viewModel.MultiSessions
+                .Select((item, index) => new ExportSessionOption(
+                    SessionRole.Comparison,
+                    item.Label,
+                    item.Session,
+                    WorkspaceIndex: index,
+                    IsMultiPeer: true))
+                .ToList();
+            metrics = _viewModel.Chart.Metrics.ToList();
+        }
+        else
+        {
+            var baseSession = _viewModel.BaseSession;
+            if (baseSession is null)
+            {
+                _dialogs.ShowInfo("Export", "Load at least one base session.");
+                return;
+            }
+
+            options =
+            [
+                new ExportSessionOption(SessionRole.Base, SessionPickerLabel(baseSession), baseSession),
+            ];
+            if (_viewModel.ComparisonSession is { } comparison)
+            {
+                options.Add(new ExportSessionOption(
+                    SessionRole.Comparison,
+                    SessionPickerLabel(comparison),
+                    comparison));
+            }
+
+            metrics = ComparisonService.MetricUnion(baseSession, _viewModel.ComparisonSession);
         }
 
-        var options = new List<ExportSessionOption>
-        {
-            new(SessionRole.Base, SessionPickerLabel(baseSession), baseSession),
-        };
-        if (_viewModel.ComparisonSession is { } comparison)
-        {
-            options.Add(new ExportSessionOption(
-                SessionRole.Comparison,
-                SessionPickerLabel(comparison),
-                comparison));
-        }
-
-        var metrics = ComparisonService.MetricUnion(baseSession, _viewModel.ComparisonSession);
         var dialog = new ExportReportWindow(options, metrics) { Owner = this };
         WindowThemeBootstrap.Attach(dialog, _themes);
         dialog.ExportRequested += PerformPngExport;
@@ -280,6 +305,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        var isMultiReport = selection.Sessions.All(option => option.IsMultiPeer);
         var byId = selection.Sessions
             .SelectMany(option => option.Session.Catalog)
             .GroupBy(metric => metric.Id, StringComparer.Ordinal)
@@ -305,12 +331,17 @@ public partial class MainWindow : Window
                 {
                     Label = option.Label,
                     Role = option.Role,
+                    WorkspaceIndex = option.WorkspaceIndex,
+                    IsReference = !option.IsMultiPeer && option.Role == SessionRole.Base,
                 });
             }
 
             if (seriesList.Count > 0)
             {
-                groups.Add(new ReportPlotBuilder.ReportGroup(metric, seriesList));
+                groups.Add(new ReportPlotBuilder.ReportGroup(
+                    metric,
+                    seriesList,
+                    IsMultiWorkspace: isMultiReport));
             }
         }
 
@@ -335,7 +366,9 @@ public partial class MainWindow : Window
             var header = BuildReportHeader(selection);
             var height = groups.Count * 520 + ReportPlotBuilder.MeasureHeaderHeight(header);
             ReportPlotBuilder.SavePng(multiplot, style, header, path, 1600, height);
-            _dialogs.ShowInfo("Export", $"Report saved with {groups.Count} charts to:\n{path}");
+            _dialogs.ShowInfo(
+                "Export",
+                $"Report saved with {selection.Sessions.Count} benchmark(s) and {groups.Count} chart(s) to:\n{path}");
         }
         catch (Exception error)
         {
@@ -347,38 +380,48 @@ public partial class MainWindow : Window
     {
         var first = selection.Sessions[0];
         var headerSession = first.Session;
+        var isMultiReport = selection.Sessions.All(option => option.IsMultiPeer);
         var manual = _viewModel.ManualMetadataFor(headerSession);
-        var game = manual is { BenchmarkName.Length: > 0 }
-            ? manual.BenchmarkName
-            : manual is { Game.Length: > 0 }
-                ? manual.Game
-                : ExportReport.SessionExportLabel(headerSession);
+        var game = isMultiReport
+            ? "Multi benchmark comparison"
+            : manual is { BenchmarkName.Length: > 0 }
+                ? manual.BenchmarkName
+                : manual is { Game.Length: > 0 }
+                    ? manual.Game
+                    : ExportReport.SessionExportLabel(headerSession);
         var lines = new List<string>();
-        if (headerSession.Metadata is { } metadata)
+
+        // Pair can safely use the first session as report context. Multi may
+        // contain different resolutions/configurations, so it avoids presenting
+        // one capture's hardware/config as if it applied to every benchmark.
+        if (!isMultiReport)
         {
-            var hardware = new List<string>();
-            foreach (var value in new[] { metadata.Resolution, metadata.Gpu, metadata.Cpu })
+            if (headerSession.Metadata is { } metadata)
             {
-                if (value.Length > 0 && value != "--")
+                var hardware = new List<string>();
+                foreach (var value in new[] { metadata.Resolution, metadata.Gpu, metadata.Cpu })
                 {
-                    hardware.Add(value);
+                    if (value.Length > 0 && value != "--")
+                    {
+                        hardware.Add(value);
+                    }
+                }
+
+                if (hardware.Count > 0)
+                {
+                    lines.Add(string.Join("  ·  ", hardware));
                 }
             }
 
-            if (hardware.Count > 0)
+            if (manual is not null && manual.ConfigLine is { } config)
             {
-                lines.Add(string.Join("  ·  ", hardware));
+                lines.Add(config);
             }
-        }
-
-        if (manual is not null && manual.ConfigLine is { } config)
-        {
-            lines.Add(config);
         }
 
         foreach (var option in selection.Sessions)
         {
-            lines.Add(ExportReport.SessionRoleLine(option.Role, option.DisplayName));
+            lines.Add(option.HeaderLine);
         }
 
         return new ReportPlotBuilder.ReportHeader(game, lines);
