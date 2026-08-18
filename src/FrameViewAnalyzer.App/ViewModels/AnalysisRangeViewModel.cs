@@ -8,8 +8,8 @@ namespace FrameViewAnalyzer.App.ViewModels;
 /// <summary>
 /// Analysis-range controls mirroring the Python reference rail: automatic or
 /// manual GPU threshold, edge trim, and transition exclusion. The view model
-/// holds no analytics logic — it only snapshots AnalysisOptions and raises
-/// OptionsChanged (debounced) so the owner re-analyzes the loaded sessions.
+/// holds no analytics logic — it snapshots AnalysisOptions and raises the
+/// appropriate debounced event so the owner re-analyzes Pair or Multi sessions.
 /// </summary>
 public partial class AnalysisRangeViewModel : ObservableObject
 {
@@ -23,6 +23,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
 
     private readonly DispatcherTimer _debounce;
     private bool _suppressEvents;
+    private bool _isMultiSessionMode;
 
     [ObservableProperty]
     private bool _isEnabled;
@@ -46,8 +47,11 @@ public partial class AnalysisRangeViewModel : ObservableObject
     [ObservableProperty]
     private string _analysisSummaryText = "Load a capture to configure the analysis range.";
 
-    /// <summary>Raised once per debounce window when any control changed.</summary>
+    /// <summary>Raised once per debounce window when Pair controls change.</summary>
     public event EventHandler<AnalysisOptions>? OptionsChanged;
+
+    /// <summary>Raised once per debounce window when Multi controls change.</summary>
+    public event EventHandler<AnalysisOptions>? MultiOptionsChanged;
 
     public AnalysisRangeViewModel()
     {
@@ -55,7 +59,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
         _debounce.Tick += (_, _) =>
         {
             _debounce.Stop();
-            OptionsChanged?.Invoke(this, SnapshotOptions());
+            RaiseOptionsChanged();
         };
     }
 
@@ -97,27 +101,44 @@ public partial class AnalysisRangeViewModel : ObservableObject
             ExcludeTransitions: ExcludeTransitionsEnabled);
 
     /// <summary>
-    /// Adopts a session's effective options into the controls without raising
-    /// OptionsChanged, and refreshes the diagnostic text. Call this after
-    /// loading/removing sessions or after a re-analysis completes.
+    /// Adopts a Pair session's effective options into the controls without
+    /// raising OptionsChanged, and refreshes the diagnostic text.
     /// </summary>
     public void Attach(SessionAnalysis? baseSession, SessionAnalysis? comparisonSession)
+    {
+        _isMultiSessionMode = false;
+        AttachCore(baseSession);
+        UpdateDiagnostics(baseSession, comparisonSession);
+    }
+
+    /// <summary>
+    /// Adopts the shared effective options for an N-session Multi workspace.
+    /// Multi peers deliberately share one range-control snapshot so every
+    /// threshold/trim/transition change is applied consistently to all of them.
+    /// </summary>
+    public void AttachMulti(IReadOnlyList<SessionAnalysis> sessions)
+    {
+        _isMultiSessionMode = true;
+        AttachCore(sessions.Count > 0 ? sessions[0] : null);
+        UpdateMultiDiagnostics(sessions);
+    }
+
+    private void AttachCore(SessionAnalysis? session)
     {
         _debounce.Stop();
         _suppressEvents = true;
         try
         {
-            IsEnabled = baseSession is not null;
+            IsEnabled = session is not null;
             OnPropertyChanged(nameof(ManualGpuThresholdEnabled));
-            if (baseSession is null)
+            if (session is null)
             {
                 FilterHelpText =
                     "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)";
-                AnalysisSummaryText = "Load a capture to configure the analysis range.";
                 return;
             }
 
-            var options = baseSession.EffectiveOptions;
+            var options = session.EffectiveOptions;
             AutoGpuThresholdEnabled = options.AutoGpuThreshold;
             GpuThreshold = Math.Clamp(options.GpuThreshold, MinGpuThreshold, MaxGpuThreshold);
             TrimBufferSeconds = Math.Clamp(options.TrimBufferSeconds, MinTrimSeconds, MaxTrimSeconds);
@@ -127,11 +148,9 @@ public partial class AnalysisRangeViewModel : ObservableObject
         {
             _suppressEvents = false;
         }
-
-        UpdateDiagnostics(baseSession, comparisonSession);
     }
 
-    /// <summary>Updates only the diagnostic/help text for the current sessions.</summary>
+    /// <summary>Updates only the diagnostic/help text for the current Pair sessions.</summary>
     public void UpdateDiagnostics(SessionAnalysis? baseSession, SessionAnalysis? comparisonSession)
     {
         if (baseSession is null)
@@ -142,9 +161,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
             return;
         }
 
-        FilterHelpText = AutoGpuThresholdEnabled
-            ? "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)"
-            : $"at least {GpuThreshold:F0}% GPU utilization will be required";
+        UpdateFilterHelpText();
 
         var diagnostics = baseSession.Diagnostics;
         var total = diagnostics.TotalBins;
@@ -154,6 +171,67 @@ public partial class AnalysisRangeViewModel : ObservableObject
         {
             $"{visible:N0} / {total:N0} seconds analyzed ({percent:F0}%)",
         };
+        AddExclusionDiagnostics(parts, diagnostics);
+
+        if (comparisonSession is not null)
+        {
+            parts.Add("Applied to Base and Comparison.");
+        }
+
+        AnalysisSummaryText = string.Join("  ·  ", parts);
+    }
+
+    /// <summary>Updates the aggregate diagnostic text for all Multi peers.</summary>
+    public void UpdateMultiDiagnostics(IReadOnlyList<SessionAnalysis> sessions)
+    {
+        if (sessions.Count == 0)
+        {
+            FilterHelpText =
+                "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)";
+            AnalysisSummaryText = "Select two or more benchmarks to configure the Multi analysis range.";
+            return;
+        }
+
+        UpdateFilterHelpText();
+
+        var total = sessions.Sum(session => session.Diagnostics.TotalBins);
+        var visible = sessions.Sum(session => session.Diagnostics.VisibleBins);
+        var percent = total > 0 ? visible * 100.0 / total : 0.0;
+        var outlierBins = sessions.Sum(session => session.Diagnostics.FpsOutlierBins);
+        var belowGpuBins = sessions.Sum(session => session.Diagnostics.BelowGpuBins);
+        var edgeTrimmedBins = sessions.Sum(session => session.Diagnostics.EdgeTrimmedBins);
+        var parts = new List<string>
+        {
+            $"{sessions.Count} benchmarks  ·  {visible:N0} / {total:N0} benchmark-seconds analyzed ({percent:F0}%)",
+        };
+
+        if (outlierBins > 0)
+        {
+            parts.Add($"Excluded {outlierBins:N0} benchmark-seconds of FPS outliers.");
+        }
+        else if (belowGpuBins > 0)
+        {
+            parts.Add($"Excluded {belowGpuBins:N0} benchmark-seconds below the GPU utilization threshold.");
+        }
+
+        if (edgeTrimmedBins > 0)
+        {
+            parts.Add($"Removed {TrimBufferSeconds:F1} s from the detected segment edges in each benchmark.");
+        }
+
+        parts.Add($"Applied to all {sessions.Count} benchmarks.");
+        AnalysisSummaryText = string.Join("  ·  ", parts);
+    }
+
+    private void UpdateFilterHelpText()
+    {
+        FilterHelpText = AutoGpuThresholdEnabled
+            ? "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)"
+            : $"at least {GpuThreshold:F0}% GPU utilization will be required";
+    }
+
+    private void AddExclusionDiagnostics(List<string> parts, AnalysisDiagnostics diagnostics)
+    {
         if (diagnostics.FpsOutlierBins > 0)
         {
             parts.Add($"Excluded: {diagnostics.FpsOutlierBins:N0} s of FPS outliers above {diagnostics.FpsUpperBound:F0} FPS.");
@@ -167,26 +245,31 @@ public partial class AnalysisRangeViewModel : ObservableObject
         {
             parts.Add($"Removed {TrimBufferSeconds:F1} s from the start and end of the detected segment.");
         }
-
-        if (comparisonSession is not null)
-        {
-            parts.Add("Applied to Base and Comparison.");
-        }
-
-        AnalysisSummaryText = string.Join("  ·  ", parts);
     }
 
     /// <summary>Applies pending changes immediately (used by tests).</summary>
     public void ApplyNow()
     {
         _debounce.Stop();
-        OptionsChanged?.Invoke(this, SnapshotOptions());
+        RaiseOptionsChanged();
+    }
+
+    private void RaiseOptionsChanged()
+    {
+        var options = SnapshotOptions();
+        if (_isMultiSessionMode)
+        {
+            MultiOptionsChanged?.Invoke(this, options);
+        }
+        else
+        {
+            OptionsChanged?.Invoke(this, options);
+        }
     }
 
     /// <summary>
     /// Trailing-edge debounce: every control change restarts the 400 ms delay,
-    /// so <c>OptionsChanged</c> fires only after ~400 ms of inactivity instead
-    /// of 400 ms after the first change of a continuous drag.
+    /// so the active Pair/Multi event fires only after ~400 ms of inactivity.
     /// </summary>
     private void Schedule()
     {
