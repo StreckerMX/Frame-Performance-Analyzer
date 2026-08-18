@@ -57,11 +57,14 @@ public class BenchmarkLibraryViewModelTests
                 "Ryzen 7",
                 60.0,
                 "2026-01-01T00:00:00Z",
-                $"2026-01-0{counter}T00:00:00Z");
+                $"2026-01-0{Math.Min(counter, 9)}T00:00:00Z");
             counter--;
         }
 
-        library.RecentComparisons.Add(("a", "b"));
+        if (library.Records.ContainsKey("a") && library.Records.ContainsKey("b"))
+        {
+            library.RecentComparisons.Add(("a", "b"));
+        }
         store.Save(library);
         if (manual.Count > 0)
         {
@@ -148,7 +151,7 @@ public class BenchmarkLibraryViewModelTests
     }
 
     [Fact]
-    public async Task Ab_selection_compares_two_captures_and_clears()
+    public async Task Multi_selection_forwards_checked_captures_in_selection_order()
     {
         var (viewModel, directory) = Create();
         try
@@ -157,20 +160,63 @@ public class BenchmarkLibraryViewModelTests
                 Path.Combine(directory, "library.json"),
                 new Dictionary<string, ManualMetadata>(),
                 ("a", "GTA5", "1920x1080", "RTX 4090"),
-                ("b", "Cyber", "3840x2160", "RTX 5090"));
+                ("b", "Cyber", "3840x2160", "RTX 5090"),
+                ("c", "Helldivers", "2560x1440", "RTX 4080"));
             await viewModel.RefreshAsync();
-            (string First, string Second)? compare = null;
-            viewModel.CompareRequested += (first, second) => compare = (first, second);
+            IReadOnlyList<string>? requested = null;
+            viewModel.CompareSelectedRequested += paths => requested = paths;
 
-            viewModel.ToggleAbCommand.Execute(viewModel.Rows[0]);
-            Assert.True(viewModel.HasAbSelection);
+            var cyber = Assert.Single(viewModel.Rows, row => row.Record.Identity == "b");
+            var gta = Assert.Single(viewModel.Rows, row => row.Record.Identity == "a");
+            viewModel.ToggleSelectedCommand.Execute(cyber);
+            viewModel.ToggleSelectedCommand.Execute(gta);
 
-            viewModel.ToggleAbCommand.Execute(viewModel.Rows[1]);
+            Assert.Equal(2, viewModel.SelectedCount);
+            Assert.True(viewModel.CanCompareSelected);
+            Assert.True(Assert.Single(viewModel.Rows, row => row.Record.Identity == "a").IsSelected);
+            Assert.True(Assert.Single(viewModel.Rows, row => row.Record.Identity == "b").IsSelected);
 
-            Assert.NotNull(compare);
-            Assert.EndsWith("a.csv", compare!.Value.First);
-            Assert.EndsWith("b.csv", compare.Value.Second);
-            Assert.False(viewModel.HasAbSelection);
+            viewModel.CompareSelectedCommand.Execute(null);
+
+            Assert.NotNull(requested);
+            Assert.Equal(["C:/captures/b.csv", "C:/captures/a.csv"], requested);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Multi_selection_is_capped_at_eight_and_survives_filtering()
+    {
+        var (viewModel, directory) = Create();
+        try
+        {
+            var records = Enumerable.Range(0, 9)
+                .Select(index => ($"id{index}", $"Game {index}", "2560x1440", "RTX 4090"))
+                .ToArray();
+            Seed(
+                Path.Combine(directory, "library.json"),
+                new Dictionary<string, ManualMetadata>(),
+                records);
+            await viewModel.RefreshAsync();
+
+            foreach (var row in viewModel.Rows.ToList())
+            {
+                viewModel.ToggleSelectedCommand.Execute(row);
+            }
+
+            Assert.Equal(BenchmarkLibraryViewModel.MaxMultiSelection, viewModel.SelectedCount);
+            Assert.True(viewModel.CanCompareSelected);
+            Assert.Contains("maximum", viewModel.SelectionSummary, StringComparison.OrdinalIgnoreCase);
+
+            viewModel.SearchText = "Game 0";
+            Assert.Single(viewModel.Rows);
+            Assert.Equal(BenchmarkLibraryViewModel.MaxMultiSelection, viewModel.SelectedCount);
+
+            viewModel.SearchText = string.Empty;
+            Assert.Equal(BenchmarkLibraryViewModel.MaxMultiSelection, viewModel.Rows.Count(row => row.IsSelected));
         }
         finally
         {
@@ -207,7 +253,7 @@ public class BenchmarkLibraryViewModelTests
     }
 
     [Fact]
-    public async Task Remove_from_library_persists_ignore_and_prunes_recent_comparisons()
+    public async Task Remove_from_library_persists_ignore_prunes_recent_and_selection()
     {
         var (viewModel, directory) = Create();
         try
@@ -220,12 +266,16 @@ public class BenchmarkLibraryViewModelTests
                 ("b", "Cyber", "3840x2160", "RTX 5090"));
             await viewModel.RefreshAsync();
             var row = Assert.Single(viewModel.Rows, item => item.Record.Identity == "a");
+            viewModel.ToggleSelectedCommand.Execute(row);
+            Assert.Equal(1, viewModel.SelectedCount);
 
+            row = Assert.Single(viewModel.Rows, item => item.Record.Identity == "a");
             viewModel.RemoveFromLibrary(row);
 
             Assert.Single(viewModel.Rows);
             Assert.DoesNotContain(viewModel.Rows, item => item.Record.Identity == "a");
             Assert.Empty(viewModel.RecentPairs);
+            Assert.Equal(0, viewModel.SelectedCount);
 
             var persisted = new JsonLibraryStore(storePath).Load();
             Assert.Contains("a", persisted.IgnoredIdentities);
