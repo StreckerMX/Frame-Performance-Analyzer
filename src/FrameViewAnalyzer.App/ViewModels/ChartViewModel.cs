@@ -183,7 +183,7 @@ public partial class ChartViewModel : ObservableObject
                 metric, comparisonSeries.X, comparisonSeries.Y, minX, maxX);
         }
 
-        var fields = CoreMetricCatalog.StatFields(metric.Id);
+        var fields = KpiFields(metric);
         for (var index = 0; index < fields.Count; index++)
         {
             var (key, _) = fields[index];
@@ -291,9 +291,8 @@ public partial class ChartViewModel : ObservableObject
     private void ConfigureKpiTiles(MetricDefinition? metric)
     {
         var selected = metric ?? CoreMetricCatalog.CoreById["fps"];
-        var fields = CoreMetricCatalog.StatFields(selected.Id);
-        var labels = fields
-            .Select(field => KpiLabel(selected, field.Key, field.Label))
+        var labels = KpiFields(selected)
+            .Select(field => field.Label)
             .Append("VISIBLE TIME")
             .ToList();
 
@@ -310,14 +309,27 @@ public partial class ChartViewModel : ObservableObject
         }
     }
 
-    private static string KpiLabel(MetricDefinition metric, string key, string catalogLabel) =>
-        key switch
-        {
-            "avg" when metric.Id == "fps" => "AVERAGE FPS",
-            "max" => "MAX",
-            "min" => "MIN",
-            _ => catalogLabel.ToUpperInvariant(),
-        };
+    /// <summary>
+    /// The dashboard deliberately uses one compact statistic vocabulary.
+    /// Every metric shows Average/Max/Min; only FPS adds the two low-tail
+    /// metrics because those are the stutter indicators users expect there.
+    /// </summary>
+    private static IReadOnlyList<(string Key, string Label)> KpiFields(MetricDefinition metric) =>
+        metric.Id == "fps"
+            ?
+            [
+                ("avg", "AVERAGE"),
+                ("p1", "1% LOW"),
+                ("p01", "0.1% LOW"),
+                ("max", "Max"),
+                ("min", "Min"),
+            ]
+            :
+            [
+                ("avg", "AVERAGE"),
+                ("max", "Max"),
+                ("min", "Min"),
+            ];
 
     private void ResetKpiValues()
     {
