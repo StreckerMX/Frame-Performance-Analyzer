@@ -77,20 +77,61 @@ public static class SeriesGeometry
         IReadOnlyList<double> ys,
         double minimumGapSeconds = DefaultMinimumGapSeconds)
     {
+        return InsertGapBreaks(xs, ys, FindGaps(xs, minimumGapSeconds));
+    }
+
+    /// <summary>
+    /// Inserts NaN breaks only when the rendered sequence crosses a gap that
+    /// was detected in the original full-resolution series. This is used
+    /// after chart-only decimation so skipped samples never masquerade as
+    /// omitted loading-screen time.
+    /// </summary>
+    public static (double[] Xs, double[] Ys) InsertGapBreaks(
+        IReadOnlyList<double> xs,
+        IReadOnlyList<double> ys,
+        IReadOnlyList<GapSpan> sourceGaps)
+    {
         if (xs.Count == 0)
         {
             return ([], []);
         }
 
-        var resultXs = new List<double>(xs.Count);
-        var resultYs = new List<double>(ys.Count);
+        if (xs.Count != ys.Count)
+        {
+            throw new ArgumentException("X and Y point counts must match.");
+        }
+
+        if (sourceGaps.Count == 0)
+        {
+            return ([.. xs], [.. ys]);
+        }
+
+        var gaps = sourceGaps.Count <= 1
+            ? sourceGaps
+            : sourceGaps.OrderBy(gap => gap.Start).ToArray();
+        var resultXs = new List<double>(xs.Count + sourceGaps.Count);
+        var resultYs = new List<double>(ys.Count + sourceGaps.Count);
+        var gapIndex = 0;
 
         for (var i = 0; i < xs.Count; i++)
         {
-            if (i > 0 && xs[i] - xs[i - 1] > minimumGapSeconds)
+            if (i > 0)
             {
-                resultXs.Add(double.NaN);
-                resultYs.Add(double.NaN);
+                var previousX = xs[i - 1];
+                var currentX = xs[i];
+
+                while (gapIndex < gaps.Count && gaps[gapIndex].End <= previousX)
+                {
+                    gapIndex++;
+                }
+
+                if (gapIndex < gaps.Count
+                    && gaps[gapIndex].Start >= previousX
+                    && gaps[gapIndex].End <= currentX)
+                {
+                    resultXs.Add(double.NaN);
+                    resultYs.Add(double.NaN);
+                }
             }
 
             resultXs.Add(xs[i]);
