@@ -1,76 +1,141 @@
 using System.Windows;
-using System.Windows.Controls;
 using FrameViewAnalyzer.Analytics.Exports;
+using FrameViewAnalyzer.App.Charting;
+using FrameViewAnalyzer.Core.Metrics;
 
 namespace FrameViewAnalyzer.App.Views;
 
+public sealed class ExportSessionChecklistItem
+{
+    public ExportSessionChecklistItem(ExportSessionOption option, bool isSelected = true)
+    {
+        Option = option;
+        IsSelected = isSelected;
+    }
+
+    public ExportSessionOption Option { get; }
+
+    public string Label => Option.Label;
+
+    public bool IsSelected { get; set; }
+
+    public bool IsMultiPeer => Option.IsMultiPeer;
+
+    public string? ColorHex => IsMultiPeer
+        ? MultiSeriesPalette.HexAt(Option.WorkspaceIndex)
+        : null;
+}
+
+public sealed class ExportMetricChecklistItem
+{
+    public ExportMetricChecklistItem(MetricDefinition metric, bool isSelected = false)
+    {
+        Metric = metric;
+        IsSelected = isSelected;
+    }
+
+    public MetricDefinition Metric { get; }
+
+    public string Label => string.IsNullOrWhiteSpace(Metric.Unit)
+        ? Metric.Label
+        : $"{Metric.Label}  ({Metric.Unit})";
+
+    public bool IsSelected { get; set; }
+}
+
 /// <summary>
-/// Choose between exporting every loaded session or exactly one session for
-/// the PNG report, like the Python ExportDialog.
+/// Checklist-based PNG report picker. Pair and Multi both carry explicit
+/// session and metric collections; Multi items also expose the same stable
+/// colors used by the interactive chart and final PNG report. The report title
+/// is editable and is carried with the export request rather than being
+/// inferred again later from benchmark metadata.
 /// </summary>
 public partial class ExportReportWindow : Window
 {
-    private readonly IReadOnlyList<ExportSessionOption> _options;
+    private readonly IReadOnlyList<ExportSessionChecklistItem> _sessions;
+    private readonly IReadOnlyList<ExportMetricChecklistItem> _metrics;
 
-    public ExportReportWindow(IReadOnlyList<ExportSessionOption> options)
+    public ExportReportWindow(
+        IReadOnlyList<ExportSessionOption> sessions,
+        IReadOnlyList<MetricDefinition> metrics)
     {
         InitializeComponent();
-        _options = options;
 
-        // Subscribe AFTER InitializeComponent: the All radio's IsChecked=True
-        // fires Checked during XAML load, when ExportButton does not exist
-        // yet — wiring through XAML caused a startup NullReferenceException.
-        AllRadio.Checked += Scope_Checked;
-        SingleRadio.Checked += Scope_Checked;
+        _sessions = sessions
+            .Select(option => new ExportSessionChecklistItem(option))
+            .ToList();
+        _metrics = metrics
+            .Select(metric => new ExportMetricChecklistItem(metric, metric.Id == "fps"))
+            .ToList();
 
-        SessionOptions.ItemsSource = options;
-        if (options.Count > 0)
+        // A capture with no explicit FPS metric should still have a usable
+        // default rather than opening a dialog with no metric selected.
+        if (_metrics.Count > 0 && !_metrics.Any(item => item.IsSelected))
         {
-            // Prefer Base as the initial selection when both sessions exist.
-            SessionOptions.SelectedIndex = 0;
+            _metrics[0].IsSelected = true;
         }
 
+        var isMultiReport = sessions.Count > 0 && sessions.All(option => option.IsMultiPeer);
+        ReportTitleTextBox.Text = ExportReportTitles.DefaultTitle(isMultiReport);
+        SessionChecklist.ItemsSource = _sessions;
+        MetricChecklist.ItemsSource = _metrics;
         UpdateExportEnabled();
     }
 
-    public event Action<ExportScope, ExportSessionOption?>? ExportRequested;
+    public event Action<ExportReportSelection>? ExportRequested;
 
-    /// <summary>Selected-session export is only valid when a session is chosen.</summary>
-    public static bool CanExport(ExportScope scope, ExportSessionOption? selected) =>
-        scope == ExportScope.All || selected is not null;
+    public static bool CanExport(int selectedSessions, int selectedMetrics) =>
+        selectedSessions > 0
+        && selectedMetrics > 0
+        && selectedMetrics <= ExportReport.MaxReportMetrics;
 
-    /// <summary>Resolves the exact export target for the current UI state.</summary>
-    public static ExportSessionOption? SelectedSession(ExportScope scope, object? selectedItem) =>
-        scope == ExportScope.Single && selectedItem is ExportSessionOption option
-            ? option
-            : null;
+    public static ExportReportSelection BuildSelection(
+        IEnumerable<ExportSessionChecklistItem> sessions,
+        IEnumerable<ExportMetricChecklistItem> metrics,
+        string? reportTitle = null)
+    {
+        var selectedSessions = sessions
+            .Where(item => item.IsSelected)
+            .Select(item => item.Option)
+            .ToList();
+        var selectedMetrics = metrics
+            .Where(item => item.IsSelected)
+            .Select(item => item.Metric.Id)
+            .ToList();
+        var isMultiReport = selectedSessions.Count > 0
+            && selectedSessions.All(option => option.IsMultiPeer);
+
+        return new ExportReportSelection(
+            selectedSessions,
+            selectedMetrics,
+            ExportReportTitles.NormalizeTitle(reportTitle, isMultiReport));
+    }
+
+    private ExportReportSelection CurrentSelection() =>
+        BuildSelection(_sessions, _metrics, ReportTitleTextBox.Text);
 
     private void UpdateExportEnabled()
     {
-        var scope = SingleRadio.IsChecked == true ? ExportScope.Single : ExportScope.All;
-        var selected = SelectedSession(scope, SessionOptions.SelectedItem);
-        ExportButton.IsEnabled = CanExport(scope, selected);
+        var selection = CurrentSelection();
+        ExportButton.IsEnabled = CanExport(selection.Sessions.Count, selection.MetricIds.Count);
+
+        SelectionStatus.Text = selection.MetricIds.Count > ExportReport.MaxReportMetrics
+            ? $"Choose up to {ExportReport.MaxReportMetrics} metrics to keep the PNG report readable."
+            : $"{selection.Sessions.Count} benchmark(s) · {selection.MetricIds.Count} metric(s) selected · "
+              + $"maximum {ExportReport.MaxReportMetrics} metrics";
     }
 
-    private void Scope_Checked(object sender, RoutedEventArgs e) => UpdateExportEnabled();
-
-    private void SessionOptions_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
-        UpdateExportEnabled();
+    private void Selection_CheckedChanged(object sender, RoutedEventArgs e) => UpdateExportEnabled();
 
     private void Export_Click(object sender, RoutedEventArgs e)
     {
-        var scope = SingleRadio.IsChecked == true ? ExportScope.Single : ExportScope.All;
-        var option = SelectedSession(scope, SessionOptions.SelectedItem);
-        if (!CanExport(scope, option))
+        var selection = CurrentSelection();
+        if (!CanExport(selection.Sessions.Count, selection.MetricIds.Count))
         {
             return;
         }
 
-        // The full option travels with the request: the role it carries is
-        // authoritative for the header and the series styling, so the
-        // selected-session export can never mislabel Base as Comparison or
-        // vice versa.
-        ExportRequested?.Invoke(scope, option);
+        ExportRequested?.Invoke(selection);
         Close();
     }
 

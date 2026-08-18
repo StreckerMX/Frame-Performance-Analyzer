@@ -78,6 +78,30 @@ public sealed class JsonLibraryStore : ILibraryStore, IStoreDestination
                 }
             }
 
+            if (root.TryGetProperty("ignored_identities", out var ignored)
+                && ignored.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var value in ignored.EnumerateArray())
+                {
+                    if (value.ValueKind == JsonValueKind.String
+                        && value.GetString() is { Length: > 0 } identity)
+                    {
+                        library.IgnoredIdentities.Add(identity);
+                    }
+                }
+            }
+
+            // A manually removed record must stay removed even if an older or
+            // externally edited store contains it in both collections.
+            foreach (var identity in library.IgnoredIdentities)
+            {
+                library.Records.Remove(identity);
+            }
+
+            library.RecentComparisons.RemoveAll(pair =>
+                library.IgnoredIdentities.Contains(pair.Base)
+                || library.IgnoredIdentities.Contains(pair.Comparison));
+
             return library;
         }
         catch (Exception error) when (error is IOException
@@ -117,6 +141,7 @@ public sealed class JsonLibraryStore : ILibraryStore, IStoreDestination
             writer.WriteNumber("format_version", library.FormatVersion);
             writer.WriteStartObject("records");
             foreach (var (identity, record) in library.Records
+                         .Where(pair => !library.IgnoredIdentities.Contains(pair.Key))
                          .OrderBy(pair => pair.Key, StringComparer.Ordinal))
             {
                 writer.WritePropertyName(identity);
@@ -125,12 +150,21 @@ public sealed class JsonLibraryStore : ILibraryStore, IStoreDestination
 
             writer.WriteEndObject();
             writer.WriteStartArray("recent_comparisons");
-            foreach (var (first, second) in library.RecentComparisons)
+            foreach (var (first, second) in library.RecentComparisons.Where(pair =>
+                         !library.IgnoredIdentities.Contains(pair.Base)
+                         && !library.IgnoredIdentities.Contains(pair.Comparison)))
             {
                 writer.WriteStartArray();
                 writer.WriteStringValue(first);
                 writer.WriteStringValue(second);
                 writer.WriteEndArray();
+            }
+
+            writer.WriteEndArray();
+            writer.WriteStartArray("ignored_identities");
+            foreach (var identity in library.IgnoredIdentities.OrderBy(value => value, StringComparer.Ordinal))
+            {
+                writer.WriteStringValue(identity);
             }
 
             writer.WriteEndArray();

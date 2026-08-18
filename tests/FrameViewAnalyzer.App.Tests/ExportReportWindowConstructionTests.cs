@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Exports;
 using FrameViewAnalyzer.App.Views;
@@ -9,10 +10,8 @@ using FrameViewAnalyzer.Core.Models;
 namespace FrameViewAnalyzer.App.Tests;
 
 /// <summary>
-/// Regression coverage that actually CONSTRUCTS the Export PNG report window
-/// (InitializeComponent included) — the previous helper-level tests could not
-/// catch the XAML initialization-order crash. All scenarios run on the shared
-/// STA test host so the test Application and its theme resources are safe.
+/// Regression coverage that constructs the real checklist-based Export PNG
+/// report window, including InitializeComponent, title editing, and defaults.
 /// </summary>
 public class ExportReportWindowConstructionTests
 {
@@ -23,22 +22,33 @@ public class ExportReportWindowConstructionTests
             WpfStaTestHost.EnsureApplication();
             BaseOnlyConstructs();
             BaseAndComparisonConstructs();
-            NoSessionsConstructs();
-            SelectionToggleUpdatesExportState();
+            MultiConstructsWithMultiTitle();
+            NoSessionsDisablesExport();
         });
 
     private static void BaseOnlyConstructs()
     {
+        var session = Session();
         var window = new ExportReportWindow(
-            [new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced", Session())]);
+            [new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced", session)],
+            session.Catalog);
         try
         {
-            var combo = (ComboBox)window.FindName("SessionOptions");
-            var options = Assert.IsAssignableFrom<IReadOnlyList<ExportSessionOption>>(combo.ItemsSource);
-            Assert.Single(options);
-            Assert.Equal(0, combo.SelectedIndex);
-            Assert.False(string.IsNullOrWhiteSpace(options[0].Label));
-            Assert.Equal("Base — GTA5 Enhanced", options[0].Label);
+            var sessionList = (ItemsControl)window.FindName("SessionChecklist");
+            var sessionItems = Assert.IsAssignableFrom<IReadOnlyList<ExportSessionChecklistItem>>(
+                sessionList.ItemsSource);
+            var selectedSession = Assert.Single(sessionItems);
+            Assert.True(selectedSession.IsSelected);
+            Assert.Equal("Base — GTA5 Enhanced", selectedSession.Label);
+
+            var metricList = (ItemsControl)window.FindName("MetricChecklist");
+            var metricItems = Assert.IsAssignableFrom<IReadOnlyList<ExportMetricChecklistItem>>(
+                metricList.ItemsSource);
+            Assert.Contains(metricItems, item => item.Metric.Id == "fps" && item.IsSelected);
+            Assert.Equal(
+                ExportReportTitles.PairReportTitle,
+                ((TextBox)window.FindName("ReportTitleTextBox")).Text);
+            Assert.True(((Button)window.FindName("ExportButton")).IsEnabled);
         }
         finally
         {
@@ -48,19 +58,35 @@ public class ExportReportWindowConstructionTests
 
     private static void BaseAndComparisonConstructs()
     {
+        var baseSession = Session();
+        var comparisonSession = Session();
         var window = new ExportReportWindow(
         [
-            new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced", Session()),
-            new ExportSessionOption(SessionRole.Comparison, "GTA5 Enhanced", Session()),
-        ]);
+            new ExportSessionOption(SessionRole.Base, "Base run", baseSession),
+            new ExportSessionOption(SessionRole.Comparison, "Comparison run", comparisonSession),
+        ],
+        baseSession.Catalog);
         try
         {
-            var combo = (ComboBox)window.FindName("SessionOptions");
-            var options = Assert.IsAssignableFrom<IReadOnlyList<ExportSessionOption>>(combo.ItemsSource);
-            Assert.Equal(2, options.Count);
-            Assert.Equal("Base — GTA5 Enhanced", options[0].Label);
-            Assert.Equal("Comparison — GTA5 Enhanced", options[1].Label);
-            Assert.Equal(0, combo.SelectedIndex);
+            var sessionList = (ItemsControl)window.FindName("SessionChecklist");
+            var sessionItems = Assert.IsAssignableFrom<IReadOnlyList<ExportSessionChecklistItem>>(
+                sessionList.ItemsSource);
+            Assert.Equal(2, sessionItems.Count);
+            Assert.All(sessionItems, item => Assert.True(item.IsSelected));
+            Assert.Equal("Base — Base run", sessionItems[0].Label);
+            Assert.Equal("Comparison — Comparison run", sessionItems[1].Label);
+
+            var titleBox = (TextBox)window.FindName("ReportTitleTextBox");
+            Assert.Equal(ExportReportTitles.PairReportTitle, titleBox.Text);
+            titleBox.Text = "MY CUSTOM BENCHMARK TITLE";
+
+            ExportReportSelection? requested = null;
+            window.ExportRequested += selection => requested = selection;
+            ((Button)window.FindName("ExportButton"))
+                .RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+
+            Assert.NotNull(requested);
+            Assert.Equal("MY CUSTOM BENCHMARK TITLE", requested!.ReportTitle);
         }
         finally
         {
@@ -68,18 +94,31 @@ public class ExportReportWindowConstructionTests
         }
     }
 
-    private static void NoSessionsConstructs()
+    private static void MultiConstructsWithMultiTitle()
     {
-        var window = new ExportReportWindow([]);
+        var first = Session();
+        var second = Session();
+        var window = new ExportReportWindow(
+        [
+            new ExportSessionOption(
+                SessionRole.Comparison,
+                "Run A",
+                first,
+                WorkspaceIndex: 0,
+                IsMultiPeer: true),
+            new ExportSessionOption(
+                SessionRole.Comparison,
+                "Run B",
+                second,
+                WorkspaceIndex: 1,
+                IsMultiPeer: true),
+        ],
+        first.Catalog);
         try
         {
-            var exportButton = (Button)window.FindName("ExportButton");
-            Assert.True(exportButton.IsEnabled, "All-sessions mode stays valid without sessions.");
-
-            var single = (RadioButton)window.FindName("SingleRadio");
-            single.IsChecked = true;
-            Assert.False(exportButton.IsEnabled,
-                "Selected-session export must be disabled without a selection.");
+            Assert.Equal(
+                ExportReport.MultiReportTitle,
+                ((TextBox)window.FindName("ReportTitleTextBox")).Text);
         }
         finally
         {
@@ -87,24 +126,13 @@ public class ExportReportWindowConstructionTests
         }
     }
 
-    private static void SelectionToggleUpdatesExportState()
+    private static void NoSessionsDisablesExport()
     {
-        var window = new ExportReportWindow(
-        [
-            new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced", Session()),
-            new ExportSessionOption(SessionRole.Comparison, "GTA5 Enhanced", Session()),
-        ]);
+        var session = Session();
+        var window = new ExportReportWindow([], session.Catalog);
         try
         {
-            var exportButton = (Button)window.FindName("ExportButton");
-            var single = (RadioButton)window.FindName("SingleRadio");
-            var combo = (ComboBox)window.FindName("SessionOptions");
-
-            single.IsChecked = true;
-            Assert.True(exportButton.IsEnabled, "A valid selection enables the export.");
-
-            combo.SelectedItem = null;
-            Assert.False(exportButton.IsEnabled, "Clearing the selection disables the export.");
+            Assert.False(((Button)window.FindName("ExportButton")).IsEnabled);
         }
         finally
         {

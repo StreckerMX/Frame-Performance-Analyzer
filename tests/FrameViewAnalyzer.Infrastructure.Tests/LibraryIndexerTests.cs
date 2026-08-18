@@ -35,6 +35,59 @@ public class LibraryIndexerTests
     }
 
     [Fact]
+    public void Upsert_skips_an_explicitly_ignored_identity()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "fva-idx-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "FrameView_2026_01_02T033633_Log.csv");
+            File.WriteAllText(path, "TimeInSeconds,MsBetweenPresents\n0,10\n");
+            var info = Info(path, "FrameView_2026_01_02T033633_Log.csv");
+            var identity = CaptureIdentityResolver.TryBuild(path)!;
+            var library = new LibraryModel();
+            library.IgnoredIdentities.Add(identity);
+
+            var result = new LibraryIndexer().Upsert(library, info, "now");
+
+            Assert.False(result);
+            Assert.Empty(library.Records);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Refresh_does_not_readd_an_ignored_capture_that_still_exists()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "fva-idx-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var file = Path.Combine(directory, "FrameView_2026_01_02T033633_Log.csv");
+            File.WriteAllText(file, "TimeInSeconds,MsBetweenPresents\n0,10\n1,10\n");
+            var identity = CaptureIdentityResolver.TryBuild(file)!;
+            var library = new LibraryModel();
+            library.IgnoredIdentities.Add(identity);
+
+            await new LibraryIndexer().RefreshAsync(
+                library,
+                directory,
+                new CaptureFolderScanner(new FrameViewCsvReader()));
+
+            Assert.True(File.Exists(file));
+            Assert.Empty(library.Records);
+            Assert.Contains(identity, library.IgnoredIdentities);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Refresh_marks_disappeared_captures_as_unavailable()
     {
         var directory = Path.Combine(Path.GetTempPath(), "fva-idx-" + Guid.NewGuid().ToString("N"));

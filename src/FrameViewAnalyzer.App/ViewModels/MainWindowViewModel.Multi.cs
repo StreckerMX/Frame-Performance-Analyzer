@@ -1,0 +1,310 @@
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.Input;
+using FrameViewAnalyzer.Analytics;
+using FrameViewAnalyzer.Core.Models;
+
+namespace FrameViewAnalyzer.App.ViewModels;
+
+public enum BenchmarkWorkspaceMode
+{
+    Pair,
+    Multi,
+}
+
+/// <summary>One loaded benchmark in the Multi workspace.</summary>
+public sealed record MultiBenchmarkSession(
+    SessionAnalysis Session,
+    string Label)
+{
+    public string Path => Session.Capture.Path;
+}
+
+public partial class MainWindowViewModel
+{
+    private BenchmarkWorkspaceMode _workspaceMode = BenchmarkWorkspaceMode.Pair;
+    private bool _multiAnalysisRangeSubscribed;
+
+    public ObservableCollection<MultiBenchmarkSession> MultiSessions { get; } = [];
+
+    public bool IsPairMode
+    {
+        get => _workspaceMode == BenchmarkWorkspaceMode.Pair;
+        set
+        {
+            if (value)
+            {
+                SetWorkspaceMode(BenchmarkWorkspaceMode.Pair);
+            }
+        }
+    }
+
+    public bool IsMultiMode
+    {
+        get => _workspaceMode == BenchmarkWorkspaceMode.Multi;
+        set
+        {
+            if (value)
+            {
+                SetWorkspaceMode(BenchmarkWorkspaceMode.Multi);
+            }
+        }
+    }
+
+    public bool HasMultiSelection => MultiSessions.Count > 0;
+
+    public string MultiSelectionSummary => MultiSessions.Count switch
+    {
+        0 => "No benchmarks selected",
+        1 => "1 benchmark selected",
+        _ => $"{MultiSessions.Count} benchmarks selected",
+    };
+
+    public string MultiComparisonText => MultiSessions.Count >= 2
+        ? "All selected benchmarks are compared equally."
+        : "Select 2–8 benchmarks to compare them together.";
+
+    // Compatibility binding for the current dashboard XAML. The old property
+    // name is retained only so this feature branch does not need a broad XAML
+    // rewrite; the displayed copy no longer describes any benchmark as a base.
+    public string MultiReferenceText => MultiComparisonText;
+
+    public string MultiBenchmarkNames
+    {
+        get
+        {
+            if (MultiSessions.Count == 0)
+            {
+                return "Choose two or more captures from the selected folder.";
+            }
+
+            const int previewCount = 4;
+            var names = MultiSessions.Take(previewCount).Select(item => item.Label).ToList();
+            var text = string.Join("  ·  ", names);
+            var remaining = MultiSessions.Count - names.Count;
+            return remaining > 0 ? $"{text}  ·  +{remaining} more" : text;
+        }
+    }
+
+    public IReadOnlyList<string> MultiSelectedPaths => MultiSessions.Select(item => item.Path).ToList();
+
+    /// <summary>Raised when the Multi checklist dialog should open.</summary>
+    public event EventHandler? MultiBenchmarkSelectionRequested;
+
+    [RelayCommand]
+    private void SelectMultiBenchmarks()
+    {
+        if (!IsMultiMode)
+        {
+            return;
+        }
+
+        MultiBenchmarkSelectionRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    [RelayCommand]
+    private void ClearMultiBenchmarks()
+    {
+        MultiSessions.Clear();
+        NotifyMultiStateChanged();
+        if (IsMultiMode)
+        {
+            ActivateMultiWorkspace();
+        }
+    }
+
+    /// <summary>
+    /// Loads a checked set of folder captures. Loading is transactional: the
+    /// current Multi workspace is left untouched if any selected file fails.
+    /// No benchmark is designated as a base or reference.
+    /// </summary>
+    public async Task LoadMultiBenchmarksAsync(IReadOnlyList<string> selectedPaths)
+    {
+        var paths = selectedPaths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (paths.Count < 2)
+        {
+            _dialogs.ShowInfo("Multi benchmark", "Select at least two benchmarks.");
+            return;
+        }
+
+        if (paths.Count > 8)
+        {
+            _dialogs.ShowInfo(
+                "Multi benchmark",
+                "Select up to 8 benchmarks so the chart and statistics remain readable.");
+            return;
+        }
+
+        try
+        {
+            var loaded = new List<MultiBenchmarkSession>(paths.Count);
+            foreach (var path in paths)
+            {
+                var session = await LoadSessionAsync(path);
+                if (session is null)
+                {
+                    throw new InvalidOperationException(
+                        $"The selected file is not a benchmark log: {System.IO.Path.GetFileName(path)}");
+                }
+
+                var label = CardNameOf(session, ManualMetadataOf(session));
+                loaded.Add(new MultiBenchmarkSession(session, label));
+            }
+
+            MultiSessions.Clear();
+            foreach (var item in loaded)
+            {
+                MultiSessions.Add(item);
+                IndexSession(item.Session);
+            }
+
+            SetWorkspaceMode(BenchmarkWorkspaceMode.Multi);
+            ActivateMultiWorkspace();
+            NotifyMultiStateChanged();
+            StatusText = $"MULTI WORKSPACE  ·  Comparing {MultiSessions.Count} benchmarks";
+        }
+        catch (Exception error)
+        {
+            _dialogs.ShowError("Multi benchmark loading error", error.Message);
+        }
+    }
+
+    /// <summary>
+    /// Re-analyzes every loaded Multi peer with one shared AnalysisOptions
+    /// snapshot. All results are computed before the collection is mutated, so
+    /// one failed benchmark leaves the previous N-session workspace untouched.
+    /// </summary>
+    public Task ApplyMultiAnalysisOptionsAsync(AnalysisOptions options)
+    {
+        if (!IsMultiMode || MultiSessions.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        var previous = MultiSessions.ToList();
+        try
+        {
+            var reanalyzed = previous
+                .Select(item => item with { Session = _analysis.Reanalyze(item.Session, options) })
+                .ToList();
+
+            MultiSessions.Clear();
+            foreach (var item in reanalyzed)
+            {
+                MultiSessions.Add(item);
+                IndexSession(item.Session);
+            }
+
+            ActivateMultiWorkspace();
+            StatusText = $"REANALYZED  ·  {MultiSessions.Count} Multi benchmarks";
+        }
+        catch (Exception error)
+        {
+            // The collection was not touched before every Reanalyze succeeded.
+            // Re-attach the old snapshots so controls also return to the
+            // effective options represented by the still-visible workspace.
+            AnalysisRange.AttachMulti(previous.Select(item => item.Session).ToList());
+            StatusText = "MULTI REANALYSIS FAILED  ·  Previous workspace kept";
+            _dialogs.ShowError("Multi analysis error", error.Message);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void SetWorkspaceMode(BenchmarkWorkspaceMode mode)
+    {
+        if (_workspaceMode == mode)
+        {
+            if (mode == BenchmarkWorkspaceMode.Multi)
+            {
+                ActivateMultiWorkspace();
+            }
+
+            return;
+        }
+
+        _workspaceMode = mode;
+        OnPropertyChanged(nameof(IsPairMode));
+        OnPropertyChanged(nameof(IsMultiMode));
+
+        if (mode == BenchmarkWorkspaceMode.Pair)
+        {
+            Chart.SetSessions(BaseSession, ComparisonSession);
+            AnalysisRange.Attach(BaseSession, ComparisonSession);
+            StatusText = BaseSession is null
+                ? "READY  ·  Pair mode"
+                : "PAIR WORKSPACE";
+        }
+        else
+        {
+            ActivateMultiWorkspace();
+        }
+    }
+
+    private void ActivateMultiWorkspace()
+    {
+        EnsureMultiAnalysisRangeSubscription();
+
+        if (MultiSessions.Count == 0)
+        {
+            Chart.Clear();
+            AnalysisRange.AttachMulti([]);
+            StatusText = "MULTI WORKSPACE  ·  Select benchmarks from the capture folder";
+            NotifyMultiStateChanged();
+            return;
+        }
+
+        Chart.SetWorkspace(
+            MultiSessions.Select(item => new ChartWorkspaceSession(
+                item.Session,
+                item.Label)).ToList(),
+            isMultiWorkspace: true);
+
+        AnalysisRange.AttachMulti(MultiSessions.Select(item => item.Session).ToList());
+        NotifyMultiStateChanged();
+    }
+
+    private void EnsureMultiAnalysisRangeSubscription()
+    {
+        if (_multiAnalysisRangeSubscribed)
+        {
+            return;
+        }
+
+        AnalysisRange.MultiOptionsChanged += (_, options) =>
+            _ = ApplyMultiAnalysisOptionsAsync(options);
+        _multiAnalysisRangeSubscribed = true;
+    }
+
+    private void NotifyMultiStateChanged()
+    {
+        OnPropertyChanged(nameof(HasMultiSelection));
+        OnPropertyChanged(nameof(MultiSelectionSummary));
+        OnPropertyChanged(nameof(MultiComparisonText));
+        OnPropertyChanged(nameof(MultiReferenceText));
+        OnPropertyChanged(nameof(MultiBenchmarkNames));
+        OnPropertyChanged(nameof(MultiSelectedPaths));
+    }
+
+    // Library's legacy "Load as Base/Comparison" actions remain Pair actions.
+    // If one is invoked while Multi is visible, switch back rather than leave
+    // the mode selector and chart describing different workspaces.
+    partial void OnBaseSessionChanged(SessionAnalysis? value)
+    {
+        if (IsMultiMode && value is not null)
+        {
+            SetWorkspaceMode(BenchmarkWorkspaceMode.Pair);
+        }
+    }
+
+    partial void OnComparisonSessionChanged(SessionAnalysis? value)
+    {
+        if (IsMultiMode && value is not null)
+        {
+            SetWorkspaceMode(BenchmarkWorkspaceMode.Pair);
+        }
+    }
+}

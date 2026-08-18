@@ -1,0 +1,114 @@
+<UserControl x:Class="FrameViewAnalyzer.App.Views.KpiTileView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent">
+    <StackPanel Margin="0,0,16,0">
+        <TextBlock Text="{Binding Label}"
+                   FontSize="{DynamicResource FontSize.Tiny}"
+                   FontWeight="Bold"
+                   Foreground="{DynamicResource AccentBrush}" />
+
+        <!-- Pair mode keeps the compact Base → Comparison presentation. -->
+        <StackPanel>
+            <StackPanel.Style>
+                <Style TargetType="StackPanel">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasSeriesValues}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </StackPanel.Style>
+            <TextBlock Text="{Binding Value}"
+                       FontSize="{DynamicResource FontSize.KpiValue}"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource TextBrush}"
+                       TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding DeltaText}" Margin="0,2,0,0">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="FontSize" Value="{DynamicResource FontSize.Small}" />
+                        <Setter Property="FontWeight" Value="Bold" />
+                        <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Kind}" Value="Improvement">
+                                <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="Regression">
+                                <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </StackPanel>
+
+        <!-- Multi mode shows every benchmark as an equal colored row. -->
+        <ItemsControl ItemsSource="{Binding SeriesValues}" Margin="0,4,0,0">
+            <ItemsControl.Style>
+                <Style TargetType="ItemsControl">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasSeriesValues}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ItemsControl.Style>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Grid Margin="0,2,8,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0"
+                                Width="7"
+                                Height="7"
+                                Margin="0,0,6,0"
+                                CornerRadius="4"
+                                VerticalAlignment="Center"
+                                Background="{Binding ColorHex}" />
+
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding Label}"
+                                   Margin="0,0,6,0"
+                                   FontSize="{DynamicResource FontSize.Tiny}"
+                                   Foreground="{DynamicResource TextSoftBrush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+
+                        <StackPanel Grid.Column="2"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Value}"
+                                       FontSize="{DynamicResource FontSize.Small}"
+                                       FontWeight="Bold"
+                                       Foreground="{Binding ColorHex}" />
+                            <TextBlock Text="{Binding DeltaText}"
+                                       Margin="6,0,0,0"
+                                       FontSize="{DynamicResource FontSize.Tiny}"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource SuccessBrush}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsBest}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>

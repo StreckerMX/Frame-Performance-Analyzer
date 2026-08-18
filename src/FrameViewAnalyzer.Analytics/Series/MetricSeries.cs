@@ -9,7 +9,9 @@ public sealed record MetricSeries(
     double[] X,
     double[] Y,
     string? Label = null,
-    SessionRole Role = SessionRole.Base)
+    SessionRole Role = SessionRole.Base,
+    int WorkspaceIndex = 0,
+    bool IsReference = false)
 {
     /// <summary>Legend/display label; falls back to the metric label.</summary>
     public string LabelOrDefault => Label ?? Metric.Label;

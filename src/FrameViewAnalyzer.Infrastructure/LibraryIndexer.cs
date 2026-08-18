@@ -13,11 +13,11 @@ public sealed class LibraryIndexer
     public static string? IdentityOf(CaptureInfo capture) =>
         CaptureIdentityResolver.TryBuild(capture.Path);
 
-    /// <summary>Insert or merge one capture; returns false when unidentifiable.</summary>
+    /// <summary>Insert or merge one capture; returns false when unidentifiable or ignored.</summary>
     public bool Upsert(LibraryModel library, CaptureInfo capture, string now)
     {
         var identity = IdentityOf(capture);
-        if (identity is null)
+        if (identity is null || library.IgnoredIdentities.Contains(identity))
         {
             return false;
         }
@@ -55,7 +55,8 @@ public sealed class LibraryIndexer
 
     /// <summary>
     /// Scan a folder and update the library; records that no longer resolve
-    /// anywhere stay visible but are marked missing.
+    /// anywhere stay visible but are marked missing. User-hidden identities
+    /// are excluded from refresh even when their source CSV still exists.
     /// </summary>
     public async Task RefreshAsync(
         LibraryModel library,
@@ -63,14 +64,29 @@ public sealed class LibraryIndexer
         CaptureFolderScanner scanner,
         CancellationToken cancellationToken = default)
     {
+        foreach (var identity in library.IgnoredIdentities)
+        {
+            library.Records.Remove(identity);
+        }
+
+        library.RecentComparisons.RemoveAll(pair =>
+            library.IgnoredIdentities.Contains(pair.Base)
+            || library.IgnoredIdentities.Contains(pair.Comparison));
+
         var now = LibraryUpdater.NowIso();
         var infos = await scanner.ScanCaptureFolderAsync(directory, cancellationToken).ConfigureAwait(false);
         var foundIdentities = new HashSet<string>(StringComparer.Ordinal);
         foreach (var info in infos)
         {
+            var identity = IdentityOf(info);
+            if (identity is null || library.IgnoredIdentities.Contains(identity))
+            {
+                continue;
+            }
+
             if (Upsert(library, info, now))
             {
-                foundIdentities.Add(IdentityOf(info)!);
+                foundIdentities.Add(identity);
             }
         }
 

@@ -36,6 +36,26 @@ public static class ChartPlotBuilder
         return PlotKind.SignalXY;
     }
 
+    /// <summary>
+    /// Pair mode preserves the theme's Base/Comparison colors. Multi mode uses
+    /// the shared benchmark palette, with every checked benchmark styled as an
+    /// equal peer rather than giving the first line reference semantics.
+    /// </summary>
+    public static ScottPlot.Color SeriesColor(
+        ChartStyle style,
+        int index,
+        int seriesCount,
+        SessionRole role,
+        bool isMultiWorkspace = false)
+    {
+        if (!isMultiWorkspace && seriesCount <= 2)
+        {
+            return role == SessionRole.Base ? style.SeriesA : style.SeriesB;
+        }
+
+        return MultiSeriesPalette.ColorAt(index);
+    }
+
     public static void Build(
         Plot plot,
         MetricDefinition metric,
@@ -64,13 +84,21 @@ public static class ChartPlotBuilder
         GapOverlay.Apply(plot, seriesList, style);
 
         var showLegend = seriesList.Count > 1;
+        var isMultiWorkspace = seriesList.Count > 1
+            && seriesList.All(series => !series.IsReference && series.Role == SessionRole.Comparison);
+
         for (var index = 0; index < seriesList.Count; index++)
         {
             var series = seriesList[index];
-            // Styling follows the session role, never the list position: a
-            // Comparison-only metric is index 0 but still uses SeriesB.
-            var isBase = series.Role == SessionRole.Base;
-            var color = isBase ? style.SeriesA : style.SeriesB;
+            var color = SeriesColor(
+                style,
+                series.WorkspaceIndex,
+                seriesList.Count,
+                series.Role,
+                isMultiWorkspace);
+            var lineWidth = isMultiWorkspace
+                ? 1.9f
+                : series.Role == SessionRole.Base ? 2.15f : 1.8f;
 
             // Real omitted ranges must be detected from the original series
             // before decimation. LTTB/min-max intentionally skip samples, and
@@ -84,7 +112,7 @@ public static class ChartPlotBuilder
             {
                 var signal = plot.Add.SignalXY(gapX, gapY);
                 signal.Color = color;
-                signal.LineWidth = 2.15f;
+                signal.LineWidth = lineWidth;
                 signal.LegendText = series.LabelOrDefault;
                 signal.MarkerSize = showMarkers ? 4f : 0f;
                 signal.MarkerColor = color;
@@ -93,7 +121,7 @@ public static class ChartPlotBuilder
             {
                 var scatter = plot.Add.Scatter(gapX, gapY);
                 scatter.Color = color;
-                scatter.LineWidth = isBase ? 2.15f : 1.8f;
+                scatter.LineWidth = lineWidth;
                 scatter.LegendText = series.LabelOrDefault;
                 scatter.MarkerSize = showMarkers ? 4f : 0f;
                 scatter.MarkerColor = color;
@@ -109,8 +137,6 @@ public static class ChartPlotBuilder
 
         if (showLegend)
         {
-            // Legend lives inside the plot, bottom-right, with a subtle
-            // outline — matching the reference screenshot.
             plot.ShowLegend();
             plot.Legend.Alignment = Alignment.LowerRight;
             plot.Legend.Margin = new PixelPadding(10);

@@ -14,13 +14,9 @@ using SkiaSharp;
 namespace FrameViewAnalyzer.App.Tests;
 
 /// <summary>
-/// End-to-end single-session header coverage through the REAL export path:
-/// the actual ExportReportWindow is constructed, the user's radio + dropdown
-/// selection is applied, the real Export button click fires the real
-/// ExportRequested event, and the option that emerges from that pipeline
-/// drives the same RoleLines helper MainWindow uses to build the final header
-/// model passed to DrawHeader. The rendered PNG is then checked pixel-wise
-/// for three visible logical rows (title, hardware, role line).
+/// End-to-end header coverage through the real checklist export dialog. The
+/// selected ExportSessionOption objects carry the authoritative roles and
+/// names that MainWindow uses for the final report header.
 /// </summary>
 public class ExportReportHeaderEndToEndTests
 {
@@ -33,43 +29,30 @@ public class ExportReportHeaderEndToEndTests
             var comparisonSession = Session("3840x2160");
             var options = new[]
             {
-                new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced", baseSession),
-                new ExportSessionOption(SessionRole.Comparison, "GTA5 Enhanced", comparisonSession),
+                new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced Base", baseSession),
+                new ExportSessionOption(SessionRole.Comparison, "GTA5 Enhanced Comparison", comparisonSession),
             };
 
-            var window = new ExportReportWindow(options);
+            var window = new ExportReportWindow(options, baseSession.Catalog);
             try
             {
                 window.Show();
+                var checklist = SessionItems(window);
+                checklist[1].IsSelected = false;
 
-                ExportScope? requestedScope = null;
-                ExportSessionOption? requestedOption = null;
-                window.ExportRequested += (scope, option) =>
-                {
-                    requestedScope = scope;
-                    requestedOption = option;
-                };
-
-                ((RadioButton)window.FindName("SingleRadio")).IsChecked = true;
-                ((ComboBox)window.FindName("SessionOptions")).SelectedIndex = 0;
+                ExportReportSelection? requested = null;
+                window.ExportRequested += selection => requested = selection;
                 ((Button)window.FindName("ExportButton"))
                     .RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
 
-                // The real click fired the real event; the option that
-                // emerges carries the authoritative role for the header.
-                Assert.Equal(ExportScope.Single, requestedScope);
-                Assert.NotNull(requestedOption);
-                Assert.Equal(SessionRole.Base, requestedOption!.Role);
-                Assert.Same(baseSession, requestedOption.Session);
+                Assert.NotNull(requested);
+                var selected = Assert.Single(requested!.Sessions);
+                Assert.Equal(SessionRole.Base, selected.Role);
+                Assert.Same(baseSession, selected.Session);
+                Assert.Equal(["fps"], requested.MetricIds);
 
-                var lines = ExportReport.RoleLines(
-                    requestedScope!.Value,
-                    baseSession,
-                    comparisonSession,
-                    requestedOption);
-                var line = Assert.Single(lines);
+                var line = ExportReport.SessionRoleLine(selected.Role, selected.DisplayName);
                 Assert.StartsWith("Base:", line, StringComparison.Ordinal);
-                Assert.Contains(ExportReport.SessionExportLabel(baseSession), line);
                 Assert.DoesNotContain("Comparison:", line, StringComparison.Ordinal);
 
                 AssertRenderedHeaderHasThreeVisibleRows(
@@ -92,41 +75,29 @@ public class ExportReportHeaderEndToEndTests
             var comparisonSession = Session("3840x2160");
             var options = new[]
             {
-                new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced", baseSession),
-                new ExportSessionOption(SessionRole.Comparison, "GTA5 Enhanced", comparisonSession),
+                new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced Base", baseSession),
+                new ExportSessionOption(SessionRole.Comparison, "GTA5 Enhanced Comparison", comparisonSession),
             };
 
-            var window = new ExportReportWindow(options);
+            var window = new ExportReportWindow(options, baseSession.Catalog);
             try
             {
                 window.Show();
+                var checklist = SessionItems(window);
+                checklist[0].IsSelected = false;
 
-                ExportScope? requestedScope = null;
-                ExportSessionOption? requestedOption = null;
-                window.ExportRequested += (scope, option) =>
-                {
-                    requestedScope = scope;
-                    requestedOption = option;
-                };
-
-                ((RadioButton)window.FindName("SingleRadio")).IsChecked = true;
-                ((ComboBox)window.FindName("SessionOptions")).SelectedIndex = 1;
+                ExportReportSelection? requested = null;
+                window.ExportRequested += selection => requested = selection;
                 ((Button)window.FindName("ExportButton"))
                     .RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
 
-                Assert.Equal(ExportScope.Single, requestedScope);
-                Assert.NotNull(requestedOption);
-                Assert.Equal(SessionRole.Comparison, requestedOption!.Role);
-                Assert.Same(comparisonSession, requestedOption.Session);
+                Assert.NotNull(requested);
+                var selected = Assert.Single(requested!.Sessions);
+                Assert.Equal(SessionRole.Comparison, selected.Role);
+                Assert.Same(comparisonSession, selected.Session);
 
-                var lines = ExportReport.RoleLines(
-                    requestedScope!.Value,
-                    baseSession,
-                    comparisonSession,
-                    requestedOption);
-                var line = Assert.Single(lines);
+                var line = ExportReport.SessionRoleLine(selected.Role, selected.DisplayName);
                 Assert.StartsWith("Comparison:", line, StringComparison.Ordinal);
-                Assert.Contains(ExportReport.SessionExportLabel(comparisonSession), line);
                 Assert.DoesNotContain("Base:", line, StringComparison.Ordinal);
             }
             finally
@@ -136,7 +107,7 @@ public class ExportReportHeaderEndToEndTests
         });
 
     [Fact]
-    public void All_sessions_export_keeps_both_role_lines() =>
+    public void Default_export_keeps_both_selected_role_lines() =>
         WpfStaTestHost.Run(() =>
         {
             WpfStaTestHost.EnsureApplication();
@@ -144,25 +115,23 @@ public class ExportReportHeaderEndToEndTests
             var comparisonSession = Session("3840x2160");
             var window = new ExportReportWindow(
             [
-                new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced", baseSession),
-                new ExportSessionOption(SessionRole.Comparison, "GTA5 Enhanced", comparisonSession),
-            ]);
+                new ExportSessionOption(SessionRole.Base, "Base run", baseSession),
+                new ExportSessionOption(SessionRole.Comparison, "Comparison run", comparisonSession),
+            ],
+            baseSession.Catalog);
             try
             {
                 window.Show();
-
-                ExportScope? requestedScope = null;
-                window.ExportRequested += (scope, _) => requestedScope = scope;
+                ExportReportSelection? requested = null;
+                window.ExportRequested += selection => requested = selection;
                 ((Button)window.FindName("ExportButton"))
                     .RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
 
-                Assert.Equal(ExportScope.All, requestedScope);
-                var lines = ExportReport.RoleLines(
-                    ExportScope.All,
-                    baseSession,
-                    comparisonSession,
-                    selected: null);
-                Assert.Equal(2, lines.Count);
+                Assert.NotNull(requested);
+                Assert.Equal(2, requested!.Sessions.Count);
+                var lines = requested.Sessions
+                    .Select(option => ExportReport.SessionRoleLine(option.Role, option.DisplayName))
+                    .ToList();
                 Assert.StartsWith("Base:", lines[0], StringComparison.Ordinal);
                 Assert.StartsWith("Comparison:", lines[1], StringComparison.Ordinal);
             }
@@ -173,31 +142,25 @@ public class ExportReportHeaderEndToEndTests
         });
 
     [Fact]
-    public void All_sessions_export_with_only_a_base_loaded_identifies_the_base() =>
+    public void Base_only_default_export_identifies_the_base() =>
         WpfStaTestHost.Run(() =>
         {
             WpfStaTestHost.EnsureApplication();
             var baseSession = Session("2560x1440");
             var window = new ExportReportWindow(
-                [new ExportSessionOption(SessionRole.Base, "GTA5 Enhanced", baseSession)]);
+                [new ExportSessionOption(SessionRole.Base, "Base run", baseSession)],
+                baseSession.Catalog);
             try
             {
                 window.Show();
-
-                ExportScope? requestedScope = null;
-                window.ExportRequested += (scope, _) => requestedScope = scope;
+                ExportReportSelection? requested = null;
+                window.ExportRequested += selection => requested = selection;
                 ((Button)window.FindName("ExportButton"))
                     .RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
 
-                Assert.Equal(ExportScope.All, requestedScope);
-                var lines = ExportReport.RoleLines(
-                    ExportScope.All,
-                    baseSession,
-                    comparisonSession: null,
-                    selected: null);
-                var line = Assert.Single(lines);
+                var selected = Assert.Single(requested!.Sessions);
+                var line = ExportReport.SessionRoleLine(selected.Role, selected.DisplayName);
                 Assert.StartsWith("Base:", line, StringComparison.Ordinal);
-                Assert.DoesNotContain("Comparison:", line, StringComparison.Ordinal);
             }
             finally
             {
@@ -205,11 +168,10 @@ public class ExportReportHeaderEndToEndTests
             }
         });
 
-    /// <summary>
-    /// Renders the final header model through the real report renderer and
-    /// verifies three logical rows are actually visible: title, metadata
-    /// line, and role line.
-    /// </summary>
+    private static IReadOnlyList<ExportSessionChecklistItem> SessionItems(ExportReportWindow window) =>
+        Assert.IsAssignableFrom<IReadOnlyList<ExportSessionChecklistItem>>(
+            ((ItemsControl)window.FindName("SessionChecklist")).ItemsSource);
+
     private static void AssertRenderedHeaderHasThreeVisibleRows(
         IReadOnlyList<string> headerLines,
         string title,
@@ -235,8 +197,6 @@ public class ExportReportHeaderEndToEndTests
             using var bitmap = SKBitmap.Decode(path);
             Assert.NotNull(bitmap);
 
-            // Same font-metric math as DrawHeader, so each expected text row
-            // maps to a concrete band in the rendered artifact.
             var titleHeight = LineHeight(22, bold: true);
             var lineHeight = LineHeight(14, bold: false);
             var linesTop = 16 + titleHeight + 12;
