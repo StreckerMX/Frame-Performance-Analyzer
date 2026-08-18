@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Input;
-using FrameViewAnalyzer.Core.Models;
+using FrameViewAnalyzer.Analytics;
 
 namespace FrameViewAnalyzer.App.ViewModels;
 
