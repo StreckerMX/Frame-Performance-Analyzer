@@ -103,7 +103,7 @@
                        Margin="12,0,0,0" />
         </Grid>
 
-        <!-- Recent comparisons -->
+        <!-- Recent Pair comparisons -->
         <ItemsControl Grid.Row="2" Margin="0,10,0,0" ItemsSource="{Binding RecentPairs}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
@@ -139,10 +139,19 @@
                                 Margin="0,0,0,8">
                             <Grid>
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0">
+                                <CheckBox Grid.Column="0"
+                                          Margin="0,0,12,0"
+                                          VerticalAlignment="Center"
+                                          IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                          IsEnabled="{Binding Available}"
+                                          Command="{Binding DataContext.ToggleSelectedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          CommandParameter="{Binding}"
+                                          ToolTip="Select for Multi comparison" />
+                                <StackPanel Grid.Column="1">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding Title}"
                                                    FontSize="{DynamicResource FontSize.Title}"
@@ -168,7 +177,7 @@
                                                TextTrimming="CharacterEllipsis"
                                                Margin="0,2,0,0" />
                                 </StackPanel>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Stamp}"
                                                FontSize="{DynamicResource FontSize.Tiny}"
                                                Foreground="{DynamicResource MutedBrush}"
@@ -185,13 +194,6 @@
                                             CommandParameter="{Binding}"
                                             IsEnabled="{Binding Available}"
                                             Style="{StaticResource GhostButtonStyle}" />
-                                    <ToggleButton Content="A/B"
-                                                  Margin="8,0,0,0"
-                                                  Command="{Binding DataContext.ToggleAbCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                  CommandParameter="{Binding}"
-                                                  IsChecked="{Binding IsAbSelected, Mode=OneWay}"
-                                                  IsEnabled="{Binding Available}"
-                                                  Style="{StaticResource ToggleButtonStyle}" />
                                     <Button Content="Remove"
                                             Margin="8,0,0,0"
                                             Command="{Binding DataContext.RequestRemoveCommand, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -213,29 +215,42 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0"
-                       Text="Remove hides a Library record without deleting its CSV. A/B remains available until Multi mode replaces it."
-                       FontSize="{DynamicResource FontSize.Tiny}"
-                       Foreground="{DynamicResource MutedBrush}"
-                       VerticalAlignment="Center"
-                       TextWrapping="Wrap" />
+            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                <TextBlock Text="{Binding SelectionSummary}"
+                           FontSize="{DynamicResource FontSize.Small}"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource TextSoftBrush}"
+                           TextWrapping="Wrap" />
+                <TextBlock Text="Remove hides a Library record without deleting its CSV. Base and Comparison remain quick Pair actions."
+                           Margin="0,2,12,0"
+                           FontSize="{DynamicResource FontSize.Tiny}"
+                           Foreground="{DynamicResource MutedBrush}"
+                           TextWrapping="Wrap" />
+            </StackPanel>
             <Button Grid.Column="1"
+                    Content="Compare selected"
+                    Margin="0,0,8,0"
+                    Command="{Binding CompareSelectedCommand}"
+                    IsEnabled="{Binding CanCompareSelected}"
+                    Style="{StaticResource PrimaryButtonStyle}" />
+            <Button Grid.Column="2"
                     Content="Export package"
                     Margin="0,0,8,0"
                     Click="ExportPackage_Click"
                     Style="{StaticResource GhostButtonStyle}" />
-            <Button Grid.Column="2"
+            <Button Grid.Column="3"
                     Content="Import package"
                     Margin="0,0,8,0"
                     Click="ImportPackage_Click"
                     Style="{StaticResource GhostButtonStyle}" />
-            <Button Grid.Column="3"
+            <Button Grid.Column="4"
                     Content="Import legacy data"
                     Margin="0,0,8,0"
                     Click="ImportLegacy_Click"
                     Style="{StaticResource GhostButtonStyle}" />
-            <Button Grid.Column="4"
+            <Button Grid.Column="5"
                     Content="Close"
                     Click="Close_Click"
                     Style="{StaticResource SecondaryButtonStyle}" />
