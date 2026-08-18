@@ -104,6 +104,26 @@ public class SeriesGeometryTests
     }
 
     [Fact]
+    public void Source_gaps_ignore_decimation_skips_but_preserve_real_omitted_ranges()
+    {
+        var fullXs = new double[] { 0, 1, 2, 3, 10, 11, 12 };
+        var renderedXs = new double[] { 0, 2, 3, 10, 12 };
+        var renderedYs = new double[] { 50, 52, 53, 60, 62 };
+        var sourceGaps = SeriesGeometry.FindGaps(fullXs);
+
+        var (resultXs, resultYs) = SeriesGeometry.InsertGapBreaks(
+            renderedXs,
+            renderedYs,
+            sourceGaps);
+
+        Assert.Equal(6, resultXs.Length);
+        Assert.Equal(1, resultXs.Count(double.IsNaN));
+        Assert.Equal(1, resultYs.Count(double.IsNaN));
+        Assert.True(double.IsNaN(resultXs[3]));
+        Assert.Equal(10, resultXs[4]);
+    }
+
+    [Fact]
     public void Close_points_produce_no_gaps()
     {
         var xs = new double[] { 0, 0.5, 1.0, 1.5 };
