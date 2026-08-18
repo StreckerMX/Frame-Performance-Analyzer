@@ -60,12 +60,33 @@
                         <ItemsControl x:Name="SessionChecklist">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <CheckBox Content="{Binding Label}"
-                                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                               Checked="Selection_CheckedChanged"
                                               Unchecked="Selection_CheckedChanged"
                                               Margin="0,0,0,8"
-                                              Foreground="{DynamicResource TextBrush}" />
+                                              Foreground="{DynamicResource TextBrush}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse Width="7"
+                                                     Height="7"
+                                                     Margin="0,0,6,0"
+                                                     VerticalAlignment="Center"
+                                                     Fill="{Binding ColorHex}">
+                                                <Ellipse.Style>
+                                                    <Style TargetType="Ellipse">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsMultiPeer}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Ellipse.Style>
+                                            </Ellipse>
+                                            <TextBlock Text="{Binding Label}"
+                                                       Foreground="{DynamicResource TextBrush}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </CheckBox>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
