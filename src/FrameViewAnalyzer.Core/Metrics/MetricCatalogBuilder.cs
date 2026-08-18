@@ -60,10 +60,10 @@ public static partial class MetricCatalogBuilder
             catalog.Add(new MetricDefinition(
                 Id: ColumnMetricId(header),
                 Label: header,
-                Unit: GuessUnit(header),
-                Category: GuessCategory(header),
+                Unit: isNvidiaAppLog ? GuessNvidiaUnit(header) : GuessUnit(header),
+                Category: isNvidiaAppLog ? GuessNvidiaCategory(header) : GuessCategory(header),
                 ColumnKeys: [header],
-                Direction: GuessDirection(header)));
+                Direction: isNvidiaAppLog ? GuessNvidiaDirection(header) : MetricDirection.Undefined));
         }
 
         return catalog;
@@ -95,20 +95,16 @@ public static partial class MetricCatalogBuilder
         return $"col_{slug}_{digest:x8}";
     }
 
+    // Keep the established FrameView heuristics unchanged so existing
+    // dynamic-column parity and stable display behavior are unaffected.
     public static string GuessUnit(string column)
     {
-        if (column.StartsWith("FPS", StringComparison.OrdinalIgnoreCase))
-        {
-            return "FPS";
-        }
-
         if (Regex.IsMatch(column, @"\(%\)|Util%", RegexOptions.IgnoreCase))
         {
             return "%";
         }
 
-        if (Regex.IsMatch(column, @"\(MHz\)|Frequency", RegexOptions.IgnoreCase)
-            || column.Contains("Clk", StringComparison.OrdinalIgnoreCase))
+        if (Regex.IsMatch(column, @"\(MHz\)|Clk", RegexOptions.IgnoreCase))
         {
             return "MHz";
         }
@@ -118,22 +114,12 @@ public static partial class MetricCatalogBuilder
             return "°C";
         }
 
-        if (Regex.IsMatch(column, @"Milli\s*Volts|\bmV\b", RegexOptions.IgnoreCase))
-        {
-            return "mV";
-        }
-
-        if (Regex.IsMatch(column, @"\bRPM\b", RegexOptions.IgnoreCase))
-        {
-            return "RPM";
-        }
-
         if (Regex.IsMatch(column, @"\(W\)|Power|Watts|Pwr", RegexOptions.IgnoreCase))
         {
             return "W";
         }
 
-        if (Regex.IsMatch(column, @"\(msec\)|\(ms\)|^Ms", RegexOptions.IgnoreCase))
+        if (Regex.IsMatch(column, @"\(ms\)|^Ms"))
         {
             return "ms";
         }
@@ -154,11 +140,6 @@ public static partial class MetricCatalogBuilder
     public static string GuessCategory(string column)
     {
         var upper = column.ToUpperInvariant();
-        if (upper.StartsWith("FPS", StringComparison.Ordinal))
-        {
-            return "Performance";
-        }
-
         if (upper.Contains("CPU"))
         {
             return "CPU";
@@ -166,7 +147,7 @@ public static partial class MetricCatalogBuilder
 
         if (upper.Contains("GPU") || upper.Contains("NV") || upper.Contains("PCAT") || upper.Contains("PERF/W"))
         {
-            return upper.Contains("PWR") || upper.Contains("POWER") || upper.Contains("PERF/W")
+            return upper.Contains("PWR") || upper.Contains("POWER") || upper.Contains("PERF")
                 ? "Power"
                 : "GPU";
         }
@@ -184,7 +165,47 @@ public static partial class MetricCatalogBuilder
         return "Other";
     }
 
-    public static MetricDirection GuessDirection(string column)
+    private static string GuessNvidiaUnit(string column)
+    {
+        if (column.StartsWith("FPS", StringComparison.OrdinalIgnoreCase))
+        {
+            return "FPS";
+        }
+
+        if (Regex.IsMatch(column, @"Milli\s*Volts|\bmV\b", RegexOptions.IgnoreCase))
+        {
+            return "mV";
+        }
+
+        if (Regex.IsMatch(column, @"\bRPM\b", RegexOptions.IgnoreCase))
+        {
+            return "RPM";
+        }
+
+        if (Regex.IsMatch(column, @"\(msec\)", RegexOptions.IgnoreCase))
+        {
+            return "ms";
+        }
+
+        if (column.Contains("Frequency", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MHz";
+        }
+
+        return GuessUnit(column);
+    }
+
+    private static string GuessNvidiaCategory(string column)
+    {
+        if (column.StartsWith("FPS", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Performance";
+        }
+
+        return GuessCategory(column);
+    }
+
+    private static MetricDirection GuessNvidiaDirection(string column)
     {
         var upper = column.ToUpperInvariant();
         if (upper.StartsWith("FPS", StringComparison.Ordinal))
