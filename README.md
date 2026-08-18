@@ -50,7 +50,7 @@ Download the latest stable build from **[GitHub Releases](https://github.com/Str
 
 For the current stable release:
 
-1. Download `FrameViewAnalyzer-v2.0.0-win-x64.zip`.
+1. Download `FrameViewAnalyzer-v2.0.1-win-x64.zip`.
 2. Extract the archive.
 3. Run `FrameViewAnalyzer.exe`.
 
@@ -142,7 +142,7 @@ More technical documentation is available in [`docs/`](docs/), including the arc
 
 ## Verification
 
-The stable `2.0.0` release is validated with **502 automated tests**, a clean Release build, and a self-contained startup smoke test without a locally installed .NET runtime.
+The stable `2.0.1` release is validated with **503 automated tests**, a clean Release build, and the self-contained win-x64 packaging pipeline.
 
 Each release also includes a `.sha256` file for verifying the downloadable ZIP.
 
