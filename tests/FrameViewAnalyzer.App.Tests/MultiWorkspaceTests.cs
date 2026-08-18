@@ -38,7 +38,7 @@ public class MultiWorkspaceTests
     }
 
     [Fact]
-    public void Multi_kpis_show_every_benchmark_and_mark_the_best_against_runner_up()
+    public void Multi_kpis_show_every_benchmark_and_only_the_winner_percentage()
     {
         var regular = Session("regular.csv", frameTime: 10.0); // 100 FPS
         var slow = Session("slow.csv", frameTime: 20.0);       // 50 FPS
@@ -63,24 +63,50 @@ public class MultiWorkspaceTests
                 Assert.Equal("Regular", value.Label);
                 Assert.Equal("100.0 FPS", value.Value);
                 Assert.False(value.IsBest);
+                Assert.Empty(value.DeltaText);
             },
             value =>
             {
                 Assert.Equal("Slow", value.Label);
                 Assert.Equal("50.0 FPS", value.Value);
                 Assert.False(value.IsBest);
+                Assert.Empty(value.DeltaText);
             },
             value =>
             {
                 Assert.Equal("Fast", value.Label);
                 Assert.Equal("200.0 FPS", value.Value);
                 Assert.True(value.IsBest);
-                Assert.Contains("+100.0%", value.DeltaText);
-                Assert.DoesNotContain("next", value.DeltaText, StringComparison.OrdinalIgnoreCase);
-                Assert.True(value.HasComparedColor);
-                Assert.Equal(average.SeriesValues[0].ColorHex, value.ComparedColorHex);
+                Assert.Equal("+100.0%", value.DeltaText);
+                Assert.False(value.HasComparedColor);
             });
         Assert.Equal(3, average.SeriesValues.Select(value => value.ColorHex).Distinct().Count());
+    }
+
+    [Fact]
+    public void Multi_lower_is_better_winner_percentage_is_negative()
+    {
+        var regular = Session("regular.csv", frameTime: 11.0);
+        var best = Session("best.csv", frameTime: 9.0);
+        var slow = Session("slow.csv", frameTime: 12.8);
+        var viewModel = new ChartViewModel();
+
+        viewModel.SetWorkspace(
+        [
+            new ChartWorkspaceSession(regular, "Regular"),
+            new ChartWorkspaceSession(best, "Best"),
+            new ChartWorkspaceSession(slow, "Slow"),
+        ],
+        isMultiWorkspace: true);
+
+        viewModel.SelectedMetric = viewModel.Metrics.Single(metric => metric.Id == "frametime");
+
+        var average = viewModel.KpiTiles[0];
+        var winner = average.SeriesValues.Single(value => value.Label == "Best");
+        Assert.Equal("9.0 ms", winner.Value);
+        Assert.True(winner.IsBest);
+        Assert.Equal("-18.2%", winner.DeltaText);
+        Assert.False(winner.HasComparedColor);
     }
 
     [Fact]
