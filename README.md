@@ -1,13 +1,13 @@
 # FrameView Analyzer
 
-A native Windows desktop application for analyzing and comparing **NVIDIA FrameView** capture data.
+A native Windows desktop application for analyzing and comparing **NVIDIA FrameView** captures and **NVIDIA App performance-overlay logs**.
 
 [![Release](https://img.shields.io/github/v/release/StreckerMX/FrameView-Analyzer?label=release)](https://github.com/StreckerMX/FrameView-Analyzer/releases/latest)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D4)](https://github.com/StreckerMX/FrameView-Analyzer/releases/latest)
 [![License](https://img.shields.io/github/license/StreckerMX/FrameView-Analyzer)](LICENSE)
 
-FrameView Analyzer turns FrameView CSV captures into an interactive performance workspace. Load a benchmark run, inspect frame-rate and telemetry data over time, compare two sessions side by side, isolate problem regions, attach benchmark metadata, and export presentation-ready results.
+FrameView Analyzer turns NVIDIA performance CSV captures into an interactive performance workspace. Load a benchmark run, inspect frame-rate and telemetry data over time, compare two sessions side by side, isolate problem regions, attach benchmark metadata, and export presentation-ready results.
 
 ## Screenshots
 
@@ -50,7 +50,7 @@ Download the latest stable build from **[GitHub Releases](https://github.com/Str
 
 For the current stable release:
 
-1. Download `FrameViewAnalyzer-v2.0.1-win-x64.zip`.
+1. Download `FrameViewAnalyzer-v2.1.0-win-x64.zip`.
 2. Extract the archive.
 3. Run `FrameViewAnalyzer.exe`.
 
@@ -62,9 +62,10 @@ The application is distributed as a **self-contained Windows x64 build**, so ins
 
 - **Interactive performance charts** with metric switching, hover inspection, cursor-anchored zoom, drag pan, range selection, and automatic zoom.
 - **Base vs. Comparison workflow** for overlaying two captures and reviewing KPI deltas between benchmark runs.
-- **Visible-range statistics** including Average FPS, 1% Low, 0.1% Low, Maximum, Minimum, and visible duration.
+- **Visible-range statistics** including Average FPS, 1% Low, 0.1% Low, Maximum, Minimum, and visible duration when the source provides enough information.
 - **Automatic analysis tools** for full capture, worst-performance region, most stable region, largest performance drop, and largest A/B difference.
 - **Capture filtering** with GPU-active range detection, edge trimming, transition/loading-screen exclusion, and FPS outlier handling.
+- **NVIDIA App performance-log support** with sampled FPS, NVIDIA-provided 1% Low, GPU/CPU utilization, latency, clocks, temperatures, power, voltage, and fan telemetry when present in the CSV.
 - **Benchmark metadata** for game, scene, resolution, graphics preset, upscaler, Frame Generation, Ray Tracing, driver version, notes, and tags.
 - **Benchmark Library** with search, filters, sorting, availability tracking, recent comparisons, and direct Base/Comparison loading.
 - **Exports** for PNG reports, Statistics CSV, benchmark JSON, and portable benchmark packages.
@@ -72,13 +73,17 @@ The application is distributed as a **self-contained Windows x64 build**, so ins
 
 ## Supported input
 
-FrameView Analyzer is designed for NVIDIA FrameView capture logs, including standard `*_Log.csv` session files.
+FrameView Analyzer supports:
+
+- **NVIDIA FrameView detailed logs**, including standard `*_Log.csv` session files. FrameView FPS is calculated from per-frame timing data.
+- **NVIDIA FrameView summary CSVs**, opened as a read-only table.
+- **NVIDIA App performance-overlay logs**, including `NVIDIA_App_Performance_Log_*.csv`. These are low-rate telemetry samples rather than per-frame captures, so FPS is aggregated from NVIDIA's sampled FPS values and the exported `FPS 1(%) Low` column is shown as its own metric.
 
 CSV loading includes tolerant handling for common encoding and numeric-format variations found in real-world captures.
 
 ## Typical workflow
 
-1. Select your FrameView capture folder.
+1. Select a capture folder or open a supported CSV directly.
 2. Load a capture as the **Base** session.
 3. Optionally load a second capture as **Comparison**.
 4. Choose a metric and inspect the chart or select a visible time range.
@@ -90,7 +95,7 @@ CSV loading includes tolerant handling for common encoding and numeric-format va
 
 - **Windows 11 x64 recommended**
 - Self-contained release build: **no separate .NET installation required**
-- NVIDIA FrameView CSV captures
+- NVIDIA FrameView or NVIDIA App performance CSV captures
 
 ## Building from source
 
@@ -142,7 +147,7 @@ More technical documentation is available in [`docs/`](docs/), including the arc
 
 ## Verification
 
-The stable `2.0.1` release is validated with **503 automated tests**, a clean Release build, and the self-contained win-x64 packaging pipeline.
+The stable `2.1.0` release is validated by the automated test suite, a clean Release build, manual validation with a real NVIDIA App performance log, and the self-contained win-x64 packaging pipeline.
 
 Each release also includes a `.sha256` file for verifying the downloadable ZIP.
 
@@ -152,6 +157,6 @@ FrameView Analyzer is released under the [MIT License](LICENSE).
 
 ## Acknowledgements
 
-FrameView Analyzer uses NVIDIA FrameView capture data and open-source libraries including ScottPlot, CsvHelper, CommunityToolkit.Mvvm, and Serilog.
+FrameView Analyzer uses NVIDIA FrameView and NVIDIA App performance-export data together with open-source libraries including ScottPlot, CsvHelper, CommunityToolkit.Mvvm, and Serilog.
 
 This project is independent and is not affiliated with or endorsed by NVIDIA Corporation.
