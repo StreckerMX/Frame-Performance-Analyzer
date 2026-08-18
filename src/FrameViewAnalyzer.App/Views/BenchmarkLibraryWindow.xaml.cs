@@ -57,9 +57,17 @@ public partial class BenchmarkLibraryWindow : Window
         _viewModel.LoadBaseRequested += path => LoadBaseRequested?.Invoke(path);
         _viewModel.LoadComparisonRequested += path => LoadComparisonRequested?.Invoke(path);
         _viewModel.CompareRequested += (first, second) => CompareRequested?.Invoke(first, second);
-        _viewModel.CompareSelectedRequested += paths =>
+        _viewModel.CompareSelectedRequested += async paths =>
         {
-            CompareSelectedRequested?.Invoke(paths);
+            if (CompareSelectedRequested is { } requested)
+            {
+                requested(paths);
+            }
+            else if (Owner is FrameViewAnalyzer.App.MainWindow mainWindow)
+            {
+                await mainWindow.LoadMultiBenchmarksFromLibraryAsync(paths);
+            }
+
             Close();
         };
         _viewModel.RemoveRequested += ConfirmRemoveFromLibrary;
