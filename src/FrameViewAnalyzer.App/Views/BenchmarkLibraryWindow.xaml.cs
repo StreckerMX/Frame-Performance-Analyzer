@@ -15,8 +15,8 @@ namespace FrameViewAnalyzer.App.Views;
 
 /// <summary>
 /// Benchmark Library browser: search, filters, sorting, A/B selection, the
-/// recent-comparisons bar, legacy import, and package export/import.
-/// Loading requests are forwarded to the owner.
+/// recent-comparisons bar, non-destructive record removal, legacy import, and
+/// package export/import. Loading requests are forwarded to the owner.
 /// </summary>
 public partial class BenchmarkLibraryWindow : Window
 {
@@ -57,6 +57,7 @@ public partial class BenchmarkLibraryWindow : Window
         _viewModel.LoadBaseRequested += path => LoadBaseRequested?.Invoke(path);
         _viewModel.LoadComparisonRequested += path => LoadComparisonRequested?.Invoke(path);
         _viewModel.CompareRequested += (first, second) => CompareRequested?.Invoke(first, second);
+        _viewModel.RemoveRequested += ConfirmRemoveFromLibrary;
 
         Loaded += async (_, _) => await _viewModel.RefreshAsync();
     }
@@ -68,6 +69,23 @@ public partial class BenchmarkLibraryWindow : Window
     public event Action<string, string>? CompareRequested;
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void ConfirmRemoveFromLibrary(LibraryRow row)
+    {
+        var result = MessageBox.Show(
+            this,
+            $"Remove '{row.Title}' from Benchmark Library?\n\n"
+            + "The source CSV will not be deleted. The record will stay hidden when the capture folder is refreshed.",
+            "Remove from Library",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+
+        if (result == MessageBoxResult.Yes)
+        {
+            _viewModel.RemoveFromLibrary(row);
+        }
+    }
 
     private async void ImportLegacy_Click(object sender, RoutedEventArgs e)
     {
