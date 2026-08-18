@@ -1,4 +1,5 @@
 using System.Windows;
+using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.Views;
 
 namespace FrameViewAnalyzer.App;
