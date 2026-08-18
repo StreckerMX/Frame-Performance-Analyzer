@@ -352,7 +352,11 @@ public partial class MainWindow : Window
         }
 
         var stemSession = selection.Sessions[0].Session;
-        var initialFile = ExportReport.BuildFileStem(stemSession, selection.MetricIds) + ".png";
+        var initialFile = ExportReport.BuildPngFileName(
+            stemSession,
+            selection.MetricIds,
+            isMultiReport,
+            DateTime.Now);
         var path = _dialogs.PickSaveFile(initialFile, "PNG (*.png)|*.png", ".png");
         if (path is null)
         {
@@ -383,7 +387,7 @@ public partial class MainWindow : Window
         var isMultiReport = selection.Sessions.All(option => option.IsMultiPeer);
         var manual = _viewModel.ManualMetadataFor(headerSession);
         var game = isMultiReport
-            ? "Multi benchmark comparison"
+            ? ExportReport.MultiReportTitle
             : manual is { BenchmarkName.Length: > 0 }
                 ? manual.BenchmarkName
                 : manual is { Game.Length: > 0 }
