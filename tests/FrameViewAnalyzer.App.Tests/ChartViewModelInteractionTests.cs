@@ -42,12 +42,19 @@ public class ChartViewModelInteractionTests
     }
 
     [Fact]
-    public void Load_populates_the_kpi_strip()
+    public void Load_populates_the_fps_kpi_strip()
     {
         var viewModel = new ChartViewModel();
 
         viewModel.SetSessions(MakeSession(seconds: 5), null);
 
+        Assert.Equal(6, viewModel.KpiTiles.Count);
+        Assert.Equal("AVERAGE FPS", viewModel.KpiTiles[0].Label);
+        Assert.Equal("1% LOW", viewModel.KpiTiles[1].Label);
+        Assert.Equal("0.1% LOW", viewModel.KpiTiles[2].Label);
+        Assert.Equal("MAX", viewModel.KpiTiles[3].Label);
+        Assert.Equal("MIN", viewModel.KpiTiles[4].Label);
+        Assert.Equal("VISIBLE TIME", viewModel.KpiTiles[5].Label);
         Assert.Equal("100.0", viewModel.KpiTiles[0].Value);
         Assert.Equal("100.0", viewModel.KpiTiles[1].Value);
         Assert.Equal("100.0 FPS", viewModel.KpiTiles[3].Value);
@@ -65,6 +72,59 @@ public class ChartViewModelInteractionTests
 
         Assert.Equal("100.0", viewModel.KpiTiles[0].Value);
         Assert.Equal("4 s", viewModel.KpiTiles[5].Value);
+    }
+
+    [Fact]
+    public void Selecting_frametime_changes_kpis_and_keeps_the_visible_time_range()
+    {
+        var viewModel = new ChartViewModel();
+        viewModel.SetSessions(MakeSession(seconds: 10, frameTime: 10.0), null);
+        viewModel.UpdateVisibleRange(new ScottPlot.AxisLimits(2, 5, 0, 150));
+
+        viewModel.SelectedMetric = viewModel.Metrics.Single(metric => metric.Id == "frametime");
+
+        Assert.Equal(6, viewModel.KpiTiles.Count);
+        Assert.Equal("AVERAGE", viewModel.KpiTiles[0].Label);
+        Assert.Equal("1% HIGH", viewModel.KpiTiles[1].Label);
+        Assert.Equal("0.1% HIGH", viewModel.KpiTiles[2].Label);
+        Assert.Equal("MAX", viewModel.KpiTiles[3].Label);
+        Assert.Equal("MIN", viewModel.KpiTiles[4].Label);
+        Assert.Equal("VISIBLE TIME", viewModel.KpiTiles[5].Label);
+        Assert.Equal("10.0 ms", viewModel.KpiTiles[0].Value);
+        Assert.Equal("10.0 ms", viewModel.KpiTiles[3].Value);
+        Assert.Equal("4 s", viewModel.KpiTiles[5].Value);
+    }
+
+    [Fact]
+    public void Utilization_metric_uses_a_compact_average_range_layout()
+    {
+        var viewModel = new ChartViewModel();
+        viewModel.SetSessions(MakeSession(seconds: 5), null);
+
+        viewModel.SelectedMetric = viewModel.Metrics.Single(metric => metric.Id == "gpu0_util");
+
+        Assert.Equal(4, viewModel.KpiTiles.Count);
+        Assert.Equal(["AVERAGE", "MAX", "MIN", "VISIBLE TIME"],
+            viewModel.KpiTiles.Select(tile => tile.Label).ToArray());
+        Assert.Equal("80.0 %", viewModel.KpiTiles[0].Value);
+        Assert.Equal("80.0 %", viewModel.KpiTiles[1].Value);
+        Assert.Equal("5 s", viewModel.KpiTiles[^1].Value);
+    }
+
+    [Fact]
+    public void Metric_direction_controls_comparison_improvement()
+    {
+        var viewModel = new ChartViewModel();
+        viewModel.SetSessions(
+            MakeSession(seconds: 4, frameTime: 20.0),
+            MakeSession(seconds: 4, frameTime: 10.0));
+
+        viewModel.SelectedMetric = viewModel.Metrics.Single(metric => metric.Id == "frametime");
+
+        var averageTile = viewModel.KpiTiles[0];
+        Assert.Equal("20.0 ms → 10.0 ms", averageTile.Value);
+        Assert.Equal("↑ 50.0%", averageTile.DeltaText);
+        Assert.Equal(ImprovementKind.Improvement, averageTile.Kind);
     }
 
     [Fact]
@@ -115,6 +175,10 @@ public class ChartViewModelInteractionTests
 
         viewModel.Clear();
 
+        Assert.Equal(6, viewModel.KpiTiles.Count);
+        Assert.Equal("AVERAGE FPS", viewModel.KpiTiles[0].Label);
+        Assert.Equal("MAX", viewModel.KpiTiles[3].Label);
+        Assert.Equal("MIN", viewModel.KpiTiles[4].Label);
         Assert.Equal("--", viewModel.KpiTiles[0].Value);
         Assert.Equal("--", viewModel.KpiTiles[5].Value);
     }
