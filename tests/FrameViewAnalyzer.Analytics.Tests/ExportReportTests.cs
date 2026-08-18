@@ -66,6 +66,40 @@ public class ExportReportTests
     }
 
     [Fact]
+    public void Multi_png_filename_is_neutral_uppercase_and_timestamped()
+    {
+        var timestamp = new DateTime(2026, 8, 18, 3, 18, 42, 123);
+
+        var fileName = ExportReport.BuildPngFileName(
+            SessionOf(application: "GTA5 Enhanced.exe"),
+            ["fps"],
+            isMultiReport: true,
+            timestamp);
+
+        Assert.Equal(
+            "MULTI_BENCHMARK_COMPARISON_FPS_2026-08-18_03-18-42-123.png",
+            fileName);
+        Assert.DoesNotContain("GTA5", fileName, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("MULTI BENCHMARK COMPARISON", ExportReport.MultiReportTitle);
+    }
+
+    [Fact]
+    public void Pair_png_filename_keeps_benchmark_stem_and_adds_timestamp()
+    {
+        var timestamp = new DateTime(2026, 8, 18, 3, 18, 42, 987);
+
+        var fileName = ExportReport.BuildPngFileName(
+            SessionOf(application: "GTA5 Enhanced.exe"),
+            ["fps"],
+            isMultiReport: false,
+            timestamp);
+
+        Assert.Equal(
+            "FrameView_GTA5_Enhanced_fps_2026-08-18_03-18-42-987.png",
+            fileName);
+    }
+
+    [Fact]
     public void Session_label_combines_game_and_resolution()
     {
         Assert.Equal("Game — 3840x2160", ExportReport.SessionExportLabel(SessionOf()));
