@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using FrameViewAnalyzer.Analytics.Comparison;
 using FrameViewAnalyzer.Analytics.Library;
@@ -18,6 +19,8 @@ public static class ExportReport
     public const int MaxReportMetrics = 8;
 
     public const int PackageVersion = 1;
+
+    public const string MultiReportTitle = "MULTI BENCHMARK COMPARISON";
 
     private static readonly string[][] ReportMetricGroups =
     [
@@ -77,6 +80,46 @@ public static class ExportReport
         }
 
         return $"FrameView_{sanitized}_{metrics}";
+    }
+
+    /// <summary>
+    /// Suggested PNG filename. Pair keeps the familiar benchmark-based stem,
+    /// while Multi uses a neutral report identity. Both append a local-time
+    /// timestamp down to milliseconds so repeated exports do not reuse the
+    /// same suggested filename.
+    /// </summary>
+    public static string BuildPngFileName(
+        SessionAnalysis session,
+        IReadOnlyList<string> metricIds,
+        bool isMultiReport,
+        DateTime timestamp)
+    {
+        var timestampToken = timestamp.ToString(
+            "yyyy-MM-dd_HH-mm-ss-fff",
+            CultureInfo.InvariantCulture);
+
+        if (!isMultiReport)
+        {
+            return $"{BuildFileStem(session, metricIds)}_{timestampToken}.png";
+        }
+
+        var metrics = string.Join(
+            "_",
+            metricIds
+                .Take(4)
+                .Select(MetricFileToken));
+        if (metrics.Length == 0)
+        {
+            metrics = "CHART";
+        }
+
+        return $"MULTI_BENCHMARK_COMPARISON_{metrics}_{timestampToken}.png";
+    }
+
+    private static string MetricFileToken(string metricId)
+    {
+        var sanitized = Regex.Replace(metricId, "[^A-Za-z0-9._-]+", "_").Trim('_', '.');
+        return sanitized.Length == 0 ? "METRIC" : sanitized.ToUpperInvariant();
     }
 
     /// <summary>Human-readable export label, e.g. "GTA5 Enhanced — 3840x2160".</summary>
