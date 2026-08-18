@@ -1,5 +1,6 @@
 using System.Windows;
 using FrameViewAnalyzer.Analytics.Exports;
+using FrameViewAnalyzer.App.Charting;
 using FrameViewAnalyzer.Core.Metrics;
 
 namespace FrameViewAnalyzer.App.Views;
@@ -17,6 +18,12 @@ public sealed class ExportSessionChecklistItem
     public string Label => Option.Label;
 
     public bool IsSelected { get; set; }
+
+    public bool IsMultiPeer => Option.IsMultiPeer;
+
+    public string? ColorHex => IsMultiPeer
+        ? MultiSeriesPalette.HexAt(Option.WorkspaceIndex)
+        : null;
 }
 
 public sealed class ExportMetricChecklistItem
@@ -37,9 +44,9 @@ public sealed class ExportMetricChecklistItem
 }
 
 /// <summary>
-/// Checklist-based PNG report picker. The request already carries explicit
-/// session and metric collections so the same contract can later be used by
-/// the Multi workspace without another pair-only export API.
+/// Checklist-based PNG report picker. Pair and Multi both carry explicit
+/// session and metric collections; Multi items also expose the same stable
+/// colors used by the interactive chart and final PNG report.
 /// </summary>
 public partial class ExportReportWindow : Window
 {
