@@ -27,8 +27,11 @@ public class MultiWorkspaceTests
         Assert.Equal(3, viewModel.WorkspaceSessions.Count);
         Assert.Same(reference, viewModel.WorkspaceSessions[0].Session);
         Assert.True(viewModel.WorkspaceSessions[0].IsReference);
-        Assert.Equal(["Reference", "First", "Third"],
-            viewModel.SeriesList.Select(series => series.Label).ToArray());
+        Assert.Collection(
+            viewModel.SeriesList,
+            series => Assert.Equal("Reference", series.Label),
+            series => Assert.Equal("First", series.Label),
+            series => Assert.Equal("Third", series.Label));
         Assert.Null(viewModel.ComparisonSession);
     }
 
