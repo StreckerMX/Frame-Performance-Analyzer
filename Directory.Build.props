@@ -9,11 +9,11 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <!-- Single source of truth for the product version:
-         Version/InformationalVersion = 2.0.0 (UI, startup log, and packaging
+         Version/InformationalVersion = 2.0.1 (UI, startup log, and packaging
          read this); AssemblyVersion/FileVersion stay numeric for Windows. -->
-    <VersionPrefix>2.0.0</VersionPrefix>
-    <AssemblyVersion>2.0.0.0</AssemblyVersion>
-    <FileVersion>2.0.0.0</FileVersion>
+    <VersionPrefix>2.0.1</VersionPrefix>
+    <AssemblyVersion>2.0.1.0</AssemblyVersion>
+    <FileVersion>2.0.1.0</FileVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 </Project>
