@@ -347,12 +347,19 @@ public partial class ChartViewModel : ObservableObject
         }
 
         var bestDeltaText = string.Empty;
+        string? runnerUpColor = null;
         if (best?.Value is { } bestValue && runnerUp?.Value is { } nextValue)
         {
             var percent = ImprovementOverNext(metric.Direction, bestValue, nextValue);
-            bestDeltaText = percent is > 0.0001
-                ? $"BEST  +{percent.Value:F1}% vs next"
-                : "BEST";
+            if (percent is > 0.0001)
+            {
+                bestDeltaText = $"BEST  +{percent.Value:F1}% vs";
+                runnerUpColor = MultiSeriesPalette.HexAt(runnerUp.Series.WorkspaceIndex);
+            }
+            else
+            {
+                bestDeltaText = "BEST";
+            }
         }
 
         tile.ApplySeries(values.Select(value =>
@@ -363,7 +370,8 @@ public partial class ChartViewModel : ObservableObject
                 FormatMultiValue(metric, value.Value),
                 MultiSeriesPalette.HexAt(value.Series.WorkspaceIndex),
                 isBest ? bestDeltaText : string.Empty,
-                isBest);
+                isBest,
+                isBest ? runnerUpColor : null);
         }));
     }
 
