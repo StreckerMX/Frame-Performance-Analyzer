@@ -12,14 +12,26 @@ using FrameViewAnalyzer.Core.Models;
 namespace FrameViewAnalyzer.App.ViewModels;
 
 /// <summary>
-/// Chart-side state: the base/comparison sessions, the metric catalog, the
-/// selected metric, its full-resolution series for both sessions, interaction
-/// toggles, and the metric-aware visible-range KPI tiles. Rendering lives in
-/// the chart layer; this view model only carries data.
+/// One analyzed session shown by the chart workspace. The reference session is
+/// always normalized to index 0; Pair mode therefore remains a two-item
+/// workspace while Multi mode can provide any number of additional sessions.
+/// </summary>
+public sealed record ChartWorkspaceSession(
+    SessionAnalysis Session,
+    string? Label = null,
+    bool IsReference = false);
+
+/// <summary>
+/// Chart-side state: the active workspace sessions, metric catalog, selected
+/// metric, full-resolution series, interaction toggles, and metric-aware
+/// visible-range KPI tiles. Rendering lives in the chart layer; this view
+/// model only carries data.
 /// </summary>
 public partial class ChartViewModel : ObservableObject
 {
     private ScottPlot.AxisLimits? _visibleBounds;
+    private IReadOnlyList<ChartWorkspaceSession> _workspaceSessions = [];
+    private IReadOnlyList<MetricSeries> _seriesList = [];
 
     [ObservableProperty]
     private SessionAnalysis? _session;
@@ -58,26 +70,15 @@ public partial class ChartViewModel : ObservableObject
 
     public int SeriesPointCount => Series?.X.Length ?? 0;
 
-    /// <summary>All series to plot for the selected metric (base first).</summary>
-    public IReadOnlyList<MetricSeries> SeriesList
-    {
-        get
-        {
-            var list = new List<MetricSeries>();
-            if (Series is not null)
-            {
-                list.Add(Series);
-            }
+    /// <summary>All active workspace sessions, with the reference first.</summary>
+    public IReadOnlyList<ChartWorkspaceSession> WorkspaceSessions => _workspaceSessions;
 
-            if (ComparisonSeries is not null)
-            {
-                list.Add(ComparisonSeries);
-            }
+    /// <summary>All series available for the selected metric, reference first when present.</summary>
+    public IReadOnlyList<MetricSeries> SeriesList => _seriesList;
 
-            return list;
-        }
-    }
+    public bool IsMultiWorkspace => _workspaceSessions.Count > 2;
 
+    /// <summary>Compatibility entry point for the existing Pair workflow.</summary>
     public void SetSessions(SessionAnalysis? baseSession, SessionAnalysis? comparisonSession)
     {
         if (baseSession is null)
@@ -86,33 +87,89 @@ public partial class ChartViewModel : ObservableObject
             return;
         }
 
-        Session = baseSession;
-        ComparisonSession = comparisonSession;
+        var sessions = new List<ChartWorkspaceSession>
+        {
+            new(baseSession, IsReference: true),
+        };
+        if (comparisonSession is not null)
+        {
+            sessions.Add(new ChartWorkspaceSession(comparisonSession, "Comparison"));
+        }
+
+        SetWorkspace(sessions);
+    }
+
+    /// <summary>
+    /// Replaces the complete chart workspace. A declared reference is moved to
+    /// index 0, preserving deterministic legend order and reference KPIs.
+    /// </summary>
+    public void SetWorkspace(IReadOnlyList<ChartWorkspaceSession> sessions)
+    {
+        var normalized = sessions.Where(item => item.Session is not null).ToList();
+        if (normalized.Count == 0)
+        {
+            Clear();
+            return;
+        }
+
+        var referenceIndex = normalized.FindIndex(item => item.IsReference);
+        if (referenceIndex < 0)
+        {
+            referenceIndex = 0;
+        }
+
+        if (referenceIndex != 0)
+        {
+            var reference = normalized[referenceIndex];
+            normalized.RemoveAt(referenceIndex);
+            normalized.Insert(0, reference);
+        }
+
+        // Exactly one item is authoritative even if callers accidentally mark
+        // more than one reference.
+        _workspaceSessions = normalized
+            .Select((item, index) => item with { IsReference = index == 0 })
+            .ToList();
+
+        Session = _workspaceSessions[0].Session;
+        ComparisonSession = _workspaceSessions.Count == 2
+            ? _workspaceSessions[1].Session
+            : null;
         _visibleBounds = null;
 
-        var keepSelection = Metrics.FirstOrDefault(metric => metric.Id == SelectedMetric?.Id);
+        var previousMetricId = SelectedMetric?.Id;
         Metrics.Clear();
-        foreach (var metric in ComparisonService.MetricUnion(baseSession, comparisonSession))
+        foreach (var metric in MetricUnion(_workspaceSessions.Select(item => item.Session)))
         {
             Metrics.Add(metric);
         }
 
-        SelectedMetric = keepSelection ?? (Metrics.Count > 0 ? Metrics[0] : null);
+        SelectedMetric = Metrics.FirstOrDefault(metric => metric.Id == previousMetricId)
+            ?? (Metrics.Count > 0 ? Metrics[0] : null);
         RefreshSeries();
         ConfigureKpiTiles(SelectedMetric);
         UpdateVisibleRange(null);
+        OnPropertyChanged(nameof(WorkspaceSessions));
+        OnPropertyChanged(nameof(IsMultiWorkspace));
     }
 
     public void Clear()
     {
+        _workspaceSessions = [];
+        _seriesList = [];
         Session = null;
         ComparisonSession = null;
         Metrics.Clear();
         SelectedMetric = null;
+        Series = null;
+        ComparisonSeries = null;
+        HasData = false;
         _visibleBounds = null;
-        RefreshSeries();
         ConfigureKpiTiles(CoreMetricCatalog.CoreById["fps"]);
         ResetKpiValues();
+        OnPropertyChanged(nameof(WorkspaceSessions));
+        OnPropertyChanged(nameof(SeriesList));
+        OnPropertyChanged(nameof(IsMultiWorkspace));
     }
 
     /// <summary>
@@ -140,23 +197,21 @@ public partial class ChartViewModel : ObservableObject
 
     /// <summary>
     /// Recomputes statistics for the selected metric over the visible range.
-    /// The same X bounds are retained when the user switches metrics, so KPI
-    /// values continue to describe exactly the currently inspected time span.
+    /// Pair mode compares Base and Comparison. Multi mode intentionally keeps
+    /// the compact KPI strip focused on the reference benchmark; the full
+    /// N-way comparison table is a separate presentation concern.
     /// </summary>
     public void UpdateVisibleRange(ScottPlot.AxisLimits? bounds)
     {
         _visibleBounds = bounds;
         var metric = SelectedMetric;
-        if (metric is null || (Series is null && ComparisonSeries is null))
+        if (metric is null || SeriesList.Count == 0)
         {
             ResetKpiValues();
             return;
         }
 
-        var populated = new[] { Series, ComparisonSeries }
-            .Where(series => series is { X.Length: > 0 })
-            .Cast<MetricSeries>()
-            .ToList();
+        var populated = SeriesList.Where(series => series.X.Length > 0).ToList();
         if (populated.Count == 0)
         {
             ResetKpiValues();
@@ -177,7 +232,8 @@ public partial class ChartViewModel : ObservableObject
 
         MetricStatistics? comparisonStats = null;
         var comparisonCount = 0;
-        if (ComparisonSeries is { X.Length: > 0 } comparisonSeries)
+        if (_workspaceSessions.Count == 2
+            && ComparisonSeries is { X.Length: > 0 } comparisonSeries)
         {
             (comparisonStats, comparisonCount) = VisibleRangeCalculator.Compute(
                 metric, comparisonSeries.X, comparisonSeries.Y, minX, maxX);
@@ -275,7 +331,6 @@ public partial class ChartViewModel : ObservableObject
             return "--";
         }
 
-        // Preserve the compact FPS presentation already used by the app.
         if (metric.Id == "fps")
         {
             return statisticKey is "max" or "min"
@@ -358,48 +413,64 @@ public partial class ChartViewModel : ObservableObject
 
     private void RefreshSeries()
     {
-        if (Session is null || SelectedMetric is null)
+        if (_workspaceSessions.Count == 0 || SelectedMetric is null)
         {
+            _seriesList = [];
             Series = null;
             ComparisonSeries = null;
             HasData = false;
+            OnPropertyChanged(nameof(SeriesList));
             return;
         }
 
-        // Build each session's series independently: a metric that only
-        // exists in one capture must not hide the other session's data.
-        // The session role travels with the series so styling (SeriesA for
-        // Base, SeriesB for Comparison) never depends on list position.
-        var baseSeries = SeriesBuilder.Build(Session, SelectedMetric.Id);
-        Series = baseSeries.Y.Length > 0
-            ? baseSeries with { Role = SessionRole.Base }
-            : null;
+        var built = new List<MetricSeries>();
+        MetricSeries? referenceSeries = null;
+        MetricSeries? firstComparisonSeries = null;
 
-        if (ComparisonSession is not null)
+        for (var index = 0; index < _workspaceSessions.Count; index++)
         {
-            var comparisonSeries = SeriesBuilder.Build(ComparisonSession, SelectedMetric.Id);
-            ComparisonSeries = comparisonSeries.Y.Length > 0
-                ? comparisonSeries with
-                {
-                    Label = "Comparison",
-                    Role = SessionRole.Comparison,
-                }
-                : null;
-        }
-        else
-        {
-            ComparisonSeries = null;
+            var workspace = _workspaceSessions[index];
+            var raw = SeriesBuilder.Build(workspace.Session, SelectedMetric.Id);
+            if (raw.Y.Length == 0)
+            {
+                continue;
+            }
+
+            var series = raw with
+            {
+                Label = workspace.Label,
+                Role = index == 0 ? SessionRole.Base : SessionRole.Comparison,
+            };
+            built.Add(series);
+            if (index == 0)
+            {
+                referenceSeries = series;
+            }
+            else if (firstComparisonSeries is null)
+            {
+                firstComparisonSeries = series;
+            }
         }
 
-        HasData = Series is not null || ComparisonSeries is not null;
+        _seriesList = built;
+        Series = referenceSeries;
+        ComparisonSeries = firstComparisonSeries;
+        HasData = built.Count > 0;
+
+        // Force a presentation refresh even when the reference does not carry
+        // a comparison-only metric and the nullable adapter properties remain
+        // unchanged. The chart itself consumes SeriesList.
+        OnPropertyChanged(nameof(SeriesList));
+        OnPropertyChanged(nameof(Series));
+        OnPropertyChanged(nameof(ComparisonSeries));
     }
 
     /// <summary>
-    /// Base/comparison points for the selected metric, in the ChartPoint
-    /// shape consumed by the Analyze range calculations.
+    /// Pair-only points consumed by the legacy A/B range-analysis actions.
+    /// Multi mode intentionally exposes no second point set here.
     /// </summary>
     public (IReadOnlyList<ChartPoint> Base, IReadOnlyList<ChartPoint> Comparison) CurrentPoints() =>
-        (ToPoints(Series), ToPoints(ComparisonSeries));
+        (ToPoints(Series), ToPoints(_workspaceSessions.Count == 2 ? ComparisonSeries : null));
 
     public static IReadOnlyList<ChartPoint> ToPoints(MetricSeries? series)
     {
@@ -415,5 +486,23 @@ public partial class ChartViewModel : ObservableObject
         }
 
         return points;
+    }
+
+    private static IReadOnlyList<MetricDefinition> MetricUnion(IEnumerable<SessionAnalysis> sessions)
+    {
+        var result = new List<MetricDefinition>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var session in sessions)
+        {
+            foreach (var metric in session.Catalog)
+            {
+                if (seen.Add(metric.Id))
+                {
+                    result.Add(metric);
+                }
+            }
+        }
+
+        return result;
     }
 }
