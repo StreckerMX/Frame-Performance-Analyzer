@@ -28,18 +28,17 @@ public partial class MainWindow
 
         var window = new MultiBenchmarkSelectionWindow(
             _viewModel.Captures.ToList(),
-            _viewModel.MultiSelectedPaths,
-            _viewModel.MultiReferencePath)
+            _viewModel.MultiSelectedPaths)
         {
             Owner = this,
         };
         WindowThemeBootstrap.Attach(window, _themes);
 
-        if (window.ShowDialog() != true || window.ReferencePath is null)
+        if (window.ShowDialog() != true)
         {
             return;
         }
 
-        await _viewModel.LoadMultiBenchmarksAsync(window.SelectedPaths, window.ReferencePath);
+        await _viewModel.LoadMultiBenchmarksAsync(window.SelectedPaths);
     }
 }
