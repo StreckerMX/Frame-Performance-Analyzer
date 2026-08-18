@@ -347,18 +347,12 @@ public partial class ChartViewModel : ObservableObject
         }
 
         var bestDeltaText = string.Empty;
-        string? runnerUpColor = null;
         if (best?.Value is { } bestValue && runnerUp?.Value is { } nextValue)
         {
-            var percent = ImprovementOverNext(metric.Direction, bestValue, nextValue);
-            if (percent is > 0.0001)
+            var percent = SignedDifferenceVsRunnerUp(bestValue, nextValue);
+            if (percent is { } signedPercent && Math.Abs(signedPercent) > 0.0001)
             {
-                bestDeltaText = $"BEST  +{percent.Value:F1}% vs";
-                runnerUpColor = MultiSeriesPalette.HexAt(runnerUp.Series.WorkspaceIndex);
-            }
-            else
-            {
-                bestDeltaText = "BEST";
+                bestDeltaText = $"{signedPercent:+0.0;-0.0;0.0}%";
             }
         }
 
@@ -370,15 +364,11 @@ public partial class ChartViewModel : ObservableObject
                 FormatMultiValue(metric, value.Value),
                 MultiSeriesPalette.HexAt(value.Series.WorkspaceIndex),
                 isBest ? bestDeltaText : string.Empty,
-                isBest,
-                isBest ? runnerUpColor : null);
+                isBest);
         }));
     }
 
-    private static double? ImprovementOverNext(
-        MetricDirection direction,
-        double best,
-        double next)
+    private static double? SignedDifferenceVsRunnerUp(double best, double next)
     {
         var denominator = Math.Abs(next);
         if (denominator < 1e-12)
@@ -386,12 +376,7 @@ public partial class ChartViewModel : ObservableObject
             return null;
         }
 
-        return direction switch
-        {
-            MetricDirection.HigherIsBetter => Math.Max(0.0, (best - next) / denominator * 100.0),
-            MetricDirection.LowerIsBetter => Math.Max(0.0, (next - best) / denominator * 100.0),
-            _ => null,
-        };
+        return (best - next) / denominator * 100.0;
     }
 
     private static void ApplyVisibleTimeTile(
