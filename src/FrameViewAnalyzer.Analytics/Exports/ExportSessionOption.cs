@@ -13,6 +13,18 @@ public enum ExportScope
     Single,
 }
 
+/// <summary>Shared default and normalization rules for PNG report titles.</summary>
+public static class ExportReportTitles
+{
+    public const string PairReportTitle = "BENCHMARK COMPARISON";
+
+    public static string DefaultTitle(bool isMultiReport) =>
+        isMultiReport ? ExportReport.MultiReportTitle : PairReportTitle;
+
+    public static string NormalizeTitle(string? title, bool isMultiReport) =>
+        string.IsNullOrWhiteSpace(title) ? DefaultTitle(isMultiReport) : title.Trim();
+}
+
 /// <summary>
 /// One selectable export session. Pair exports keep explicit Base/Comparison
 /// roles; Multi exports carry the stable workspace index used by the shared
@@ -43,8 +55,11 @@ public sealed record ExportSessionOption(
 
 /// <summary>
 /// Future-proof PNG report request. Sessions and metrics are explicit
-/// collections so the same contract supports Pair and Multi workspaces.
+/// collections so the same contract supports Pair and Multi workspaces. The
+/// optional report title is normalized at export time so older callers remain
+/// source-compatible while the UI can provide a user-editable title.
 /// </summary>
 public sealed record ExportReportSelection(
     IReadOnlyList<ExportSessionOption> Sessions,
-    IReadOnlyList<string> MetricIds);
+    IReadOnlyList<string> MetricIds,
+    string? ReportTitle = null);

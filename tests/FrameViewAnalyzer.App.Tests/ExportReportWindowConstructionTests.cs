@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Exports;
 using FrameViewAnalyzer.App.Views;
@@ -10,7 +11,7 @@ namespace FrameViewAnalyzer.App.Tests;
 
 /// <summary>
 /// Regression coverage that constructs the real checklist-based Export PNG
-/// report window, including InitializeComponent and its default selections.
+/// report window, including InitializeComponent, title editing, and defaults.
 /// </summary>
 public class ExportReportWindowConstructionTests
 {
@@ -21,6 +22,7 @@ public class ExportReportWindowConstructionTests
             WpfStaTestHost.EnsureApplication();
             BaseOnlyConstructs();
             BaseAndComparisonConstructs();
+            MultiConstructsWithMultiTitle();
             NoSessionsDisablesExport();
         });
 
@@ -43,6 +45,9 @@ public class ExportReportWindowConstructionTests
             var metricItems = Assert.IsAssignableFrom<IReadOnlyList<ExportMetricChecklistItem>>(
                 metricList.ItemsSource);
             Assert.Contains(metricItems, item => item.Metric.Id == "fps" && item.IsSelected);
+            Assert.Equal(
+                ExportReportTitles.PairReportTitle,
+                ((TextBox)window.FindName("ReportTitleTextBox")).Text);
             Assert.True(((Button)window.FindName("ExportButton")).IsEnabled);
         }
         finally
@@ -70,6 +75,50 @@ public class ExportReportWindowConstructionTests
             Assert.All(sessionItems, item => Assert.True(item.IsSelected));
             Assert.Equal("Base — Base run", sessionItems[0].Label);
             Assert.Equal("Comparison — Comparison run", sessionItems[1].Label);
+
+            var titleBox = (TextBox)window.FindName("ReportTitleTextBox");
+            Assert.Equal(ExportReportTitles.PairReportTitle, titleBox.Text);
+            titleBox.Text = "MY CUSTOM BENCHMARK TITLE";
+
+            ExportReportSelection? requested = null;
+            window.ExportRequested += selection => requested = selection;
+            ((Button)window.FindName("ExportButton"))
+                .RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+
+            Assert.NotNull(requested);
+            Assert.Equal("MY CUSTOM BENCHMARK TITLE", requested!.ReportTitle);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private static void MultiConstructsWithMultiTitle()
+    {
+        var first = Session();
+        var second = Session();
+        var window = new ExportReportWindow(
+        [
+            new ExportSessionOption(
+                SessionRole.Comparison,
+                "Run A",
+                first,
+                WorkspaceIndex: 0,
+                IsMultiPeer: true),
+            new ExportSessionOption(
+                SessionRole.Comparison,
+                "Run B",
+                second,
+                WorkspaceIndex: 1,
+                IsMultiPeer: true),
+        ],
+        first.Catalog);
+        try
+        {
+            Assert.Equal(
+                ExportReport.MultiReportTitle,
+                ((TextBox)window.FindName("ReportTitleTextBox")).Text);
         }
         finally
         {

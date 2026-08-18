@@ -46,7 +46,9 @@ public sealed class ExportMetricChecklistItem
 /// <summary>
 /// Checklist-based PNG report picker. Pair and Multi both carry explicit
 /// session and metric collections; Multi items also expose the same stable
-/// colors used by the interactive chart and final PNG report.
+/// colors used by the interactive chart and final PNG report. The report title
+/// is editable and is carried with the export request rather than being
+/// inferred again later from benchmark metadata.
 /// </summary>
 public partial class ExportReportWindow : Window
 {
@@ -73,6 +75,8 @@ public partial class ExportReportWindow : Window
             _metrics[0].IsSelected = true;
         }
 
+        var isMultiReport = sessions.Count > 0 && sessions.All(option => option.IsMultiPeer);
+        ReportTitleTextBox.Text = ExportReportTitles.DefaultTitle(isMultiReport);
         SessionChecklist.ItemsSource = _sessions;
         MetricChecklist.ItemsSource = _metrics;
         UpdateExportEnabled();
@@ -87,12 +91,28 @@ public partial class ExportReportWindow : Window
 
     public static ExportReportSelection BuildSelection(
         IEnumerable<ExportSessionChecklistItem> sessions,
-        IEnumerable<ExportMetricChecklistItem> metrics) =>
-        new(
-            sessions.Where(item => item.IsSelected).Select(item => item.Option).ToList(),
-            metrics.Where(item => item.IsSelected).Select(item => item.Metric.Id).ToList());
+        IEnumerable<ExportMetricChecklistItem> metrics,
+        string? reportTitle = null)
+    {
+        var selectedSessions = sessions
+            .Where(item => item.IsSelected)
+            .Select(item => item.Option)
+            .ToList();
+        var selectedMetrics = metrics
+            .Where(item => item.IsSelected)
+            .Select(item => item.Metric.Id)
+            .ToList();
+        var isMultiReport = selectedSessions.Count > 0
+            && selectedSessions.All(option => option.IsMultiPeer);
 
-    private ExportReportSelection CurrentSelection() => BuildSelection(_sessions, _metrics);
+        return new ExportReportSelection(
+            selectedSessions,
+            selectedMetrics,
+            ExportReportTitles.NormalizeTitle(reportTitle, isMultiReport));
+    }
+
+    private ExportReportSelection CurrentSelection() =>
+        BuildSelection(_sessions, _metrics, ReportTitleTextBox.Text);
 
     private void UpdateExportEnabled()
     {

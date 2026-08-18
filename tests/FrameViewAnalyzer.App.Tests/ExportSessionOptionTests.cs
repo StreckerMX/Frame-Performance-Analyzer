@@ -61,7 +61,7 @@ public class ExportSessionOptionTests
     }
 
     [Fact]
-    public void Build_selection_returns_only_checked_sessions_and_metrics()
+    public void Build_selection_returns_only_checked_sessions_metrics_and_pair_title()
     {
         var baseOption = new ExportSessionOption(SessionRole.Base, "Base run", Session());
         var comparisonOption = new ExportSessionOption(SessionRole.Comparison, "Comparison run", Session());
@@ -81,6 +81,32 @@ public class ExportSessionOptionTests
         var selectedSession = Assert.Single(selection.Sessions);
         Assert.Same(comparisonOption, selectedSession);
         Assert.Equal(["fps"], selection.MetricIds);
+        Assert.Equal(ExportReportTitles.PairReportTitle, selection.ReportTitle);
+    }
+
+    [Fact]
+    public void Build_selection_uses_multi_default_and_preserves_custom_title()
+    {
+        var option = new ExportSessionOption(
+            SessionRole.Comparison,
+            "Run A",
+            Session(),
+            WorkspaceIndex: 0,
+            IsMultiPeer: true);
+        var sessions = new[] { new ExportSessionChecklistItem(option) };
+        var metrics = new[]
+        {
+            new ExportMetricChecklistItem(CoreMetricCatalog.CoreById["fps"], isSelected: true),
+        };
+
+        var defaultSelection = ExportReportWindow.BuildSelection(sessions, metrics);
+        var customSelection = ExportReportWindow.BuildSelection(
+            sessions,
+            metrics,
+            "  CYBERPUNK 2077 - DLSS COMPARISON  ");
+
+        Assert.Equal(ExportReport.MultiReportTitle, defaultSelection.ReportTitle);
+        Assert.Equal("CYBERPUNK 2077 - DLSS COMPARISON", customSelection.ReportTitle);
     }
 
     private static SessionAnalysis Session() =>

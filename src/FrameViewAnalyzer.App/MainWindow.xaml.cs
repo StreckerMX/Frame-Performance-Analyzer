@@ -386,13 +386,7 @@ public partial class MainWindow : Window
         var headerSession = first.Session;
         var isMultiReport = selection.Sessions.All(option => option.IsMultiPeer);
         var manual = _viewModel.ManualMetadataFor(headerSession);
-        var game = isMultiReport
-            ? ExportReport.MultiReportTitle
-            : manual is { BenchmarkName.Length: > 0 }
-                ? manual.BenchmarkName
-                : manual is { Game.Length: > 0 }
-                    ? manual.Game
-                    : ExportReport.SessionExportLabel(headerSession);
+        var title = ExportReportTitles.NormalizeTitle(selection.ReportTitle, isMultiReport);
         var lines = new List<string>();
 
         // Pair can safely use the first session as report context. Multi may
@@ -428,7 +422,7 @@ public partial class MainWindow : Window
             lines.Add(option.HeaderLine);
         }
 
-        return new ReportPlotBuilder.ReportHeader(game, lines);
+        return new ReportPlotBuilder.ReportHeader(title, lines);
     }
 
     private void ExportCsv_Click(object sender, RoutedEventArgs e)
