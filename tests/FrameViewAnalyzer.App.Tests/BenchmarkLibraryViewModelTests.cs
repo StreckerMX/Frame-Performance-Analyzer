@@ -205,4 +205,36 @@ public class BenchmarkLibraryViewModelTests
             Cleanup(directory);
         }
     }
+
+    [Fact]
+    public async Task Remove_from_library_persists_ignore_and_prunes_recent_comparisons()
+    {
+        var (viewModel, directory) = Create();
+        try
+        {
+            var storePath = Path.Combine(directory, "library.json");
+            Seed(
+                storePath,
+                new Dictionary<string, ManualMetadata>(),
+                ("a", "GTA5", "1920x1080", "RTX 4090"),
+                ("b", "Cyber", "3840x2160", "RTX 5090"));
+            await viewModel.RefreshAsync();
+            var row = Assert.Single(viewModel.Rows, item => item.Record.Identity == "a");
+
+            viewModel.RemoveFromLibrary(row);
+
+            Assert.Single(viewModel.Rows);
+            Assert.DoesNotContain(viewModel.Rows, item => item.Record.Identity == "a");
+            Assert.Empty(viewModel.RecentPairs);
+
+            var persisted = new JsonLibraryStore(storePath).Load();
+            Assert.Contains("a", persisted.IgnoredIdentities);
+            Assert.DoesNotContain("a", persisted.Records.Keys);
+            Assert.Empty(persisted.RecentComparisons);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
 }
