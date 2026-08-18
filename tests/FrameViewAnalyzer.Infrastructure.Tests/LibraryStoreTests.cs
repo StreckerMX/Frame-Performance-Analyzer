@@ -54,6 +54,28 @@ public class LibraryStoreTests
     }
 
     [Fact]
+    public void Ignored_identities_round_trip_and_prune_records_and_recent_pairs()
+    {
+        var path = TempPath();
+        try
+        {
+            var library = SampleLibrary();
+            library.IgnoredIdentities.Add("id-1");
+
+            new JsonLibraryStore(path).Save(library);
+            var loaded = new JsonLibraryStore(path).Load();
+
+            Assert.Contains("id-1", loaded.IgnoredIdentities);
+            Assert.DoesNotContain("id-1", loaded.Records.Keys);
+            Assert.Empty(loaded.RecentComparisons);
+        }
+        finally
+        {
+            DeleteDirectory(Path.GetDirectoryName(path)!);
+        }
+    }
+
+    [Fact]
     public void Missing_store_loads_as_empty()
     {
         Assert.Empty(new JsonLibraryStore(TempPath()).Load().Records);
