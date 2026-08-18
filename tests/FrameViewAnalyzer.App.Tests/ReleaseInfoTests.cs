@@ -9,7 +9,7 @@ public class ReleaseInfoTests
     public void Informational_version_is_the_stable_semver()
     {
         // The single authoritative version source is Directory.Build.props.
-        Assert.Equal("2.1.0", ReleaseInfo.InformationalVersion);
+        Assert.Equal("2.2.0", ReleaseInfo.InformationalVersion);
     }
 
     [Fact]
