@@ -9,6 +9,41 @@ A native Windows desktop application for analyzing and comparing **NVIDIA FrameV
 
 FrameView Analyzer turns FrameView CSV captures into an interactive performance workspace. Load a benchmark run, inspect frame-rate and telemetry data over time, compare two sessions side by side, isolate problem regions, attach benchmark metadata, and export presentation-ready results.
 
+## Screenshots
+
+### Performance analysis
+
+<p align="center">
+  <img src="docs/screenshots/analysis-dark.webp" alt="FrameView Analyzer performance analysis dashboard in dark theme" width="100%">
+</p>
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <strong>Light theme</strong><br>
+      <img src="docs/screenshots/analysis-light.webp" alt="FrameView Analyzer performance analysis dashboard in light theme">
+    </td>
+    <td width="50%" align="center">
+      <strong>Benchmark Library</strong><br>
+      <img src="docs/screenshots/benchmark-library.webp" alt="FrameView Analyzer Benchmark Library">
+    </td>
+  </tr>
+</table>
+
+<details>
+<summary><strong>More screenshots</strong></summary>
+<br>
+
+#### Empty workspace
+
+![FrameView Analyzer empty workspace](docs/screenshots/empty-dark.webp)
+
+#### Exported benchmark report
+
+![FrameView Analyzer exported benchmark report](docs/screenshots/export-report.webp)
+
+</details>
+
 ## Download
 
 Download the latest stable build from **[GitHub Releases](https://github.com/StreckerMX/FrameView-Analyzer/releases/latest)**.
