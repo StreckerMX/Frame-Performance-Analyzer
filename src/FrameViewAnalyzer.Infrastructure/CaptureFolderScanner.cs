@@ -5,17 +5,19 @@ using FrameViewAnalyzer.Infrastructure.Csv;
 namespace FrameViewAnalyzer.Infrastructure;
 
 /// <summary>
-/// Discovers and describes the real FrameView captures stored in a folder.
-/// Only *_Log.csv files are considered; summary files and unrelated CSVs are
-/// ignored. Missing directories and permission problems yield empty results.
+/// Discovers and describes supported detailed performance logs stored in a
+/// folder. FrameView *_Log.csv files and NVIDIA_App_Performance_Log_*.csv files
+/// are considered; summaries and unrelated CSVs are ignored. Missing
+/// directories and permission problems yield empty results.
 /// </summary>
 public sealed class CaptureFolderScanner
 {
+    private const string NvidiaAppLogPrefix = "NVIDIA_App_Performance_Log_";
     private readonly IFrameViewCsvReader _reader;
 
     public CaptureFolderScanner(IFrameViewCsvReader reader) => _reader = reader;
 
-    /// <summary>FrameView *_Log.csv files, newest first by last-write time.</summary>
+    /// <summary>Supported detailed performance CSVs, newest first by last-write time.</summary>
     public static IReadOnlyList<string> DiscoverLogFiles(string directory)
     {
         List<string> candidates = [];
@@ -23,12 +25,7 @@ public sealed class CaptureFolderScanner
         {
             foreach (var path in Directory.EnumerateFiles(directory))
             {
-                if (!Path.GetFileName(path).EndsWith(CaptureFileNaming.LogSuffix, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                if (!File.Exists(path))
+                if (!IsSupportedLogName(Path.GetFileName(path)) || !File.Exists(path))
                 {
                     continue;
                 }
@@ -56,7 +53,7 @@ public sealed class CaptureFolderScanner
         CancellationToken cancellationToken = default) =>
         _reader.ReadCaptureInfoAsync(path, cancellationToken);
 
-    /// <summary>Builds capture infos for every log found in the folder.</summary>
+    /// <summary>Builds capture infos for every supported log found in the folder.</summary>
     public async Task<IReadOnlyList<CaptureInfo>> ScanCaptureFolderAsync(
         string directory,
         CancellationToken cancellationToken = default)
@@ -74,6 +71,11 @@ public sealed class CaptureFolderScanner
 
         return infos;
     }
+
+    private static bool IsSupportedLogName(string fileName) =>
+        fileName.EndsWith(CaptureFileNaming.LogSuffix, StringComparison.Ordinal)
+        || (fileName.StartsWith(NvidiaAppLogPrefix, StringComparison.OrdinalIgnoreCase)
+            && fileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase));
 
     private static DateTime GetLastWriteTime(string path)
     {
