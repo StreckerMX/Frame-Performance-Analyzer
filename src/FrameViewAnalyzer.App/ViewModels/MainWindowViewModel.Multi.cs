@@ -13,8 +13,7 @@ public enum BenchmarkWorkspaceMode
 /// <summary>One loaded benchmark in the Multi workspace.</summary>
 public sealed record MultiBenchmarkSession(
     SessionAnalysis Session,
-    string Label,
-    bool IsReference)
+    string Label)
 {
     public string Path => Session.Capture.Path;
 }
@@ -58,9 +57,9 @@ public partial class MainWindowViewModel
         _ => $"{MultiSessions.Count} benchmarks selected",
     };
 
-    public string MultiReferenceText => MultiSessions.FirstOrDefault(item => item.IsReference) is { } reference
-        ? $"Reference: {reference.Label}"
-        : "Reference: not selected";
+    public string MultiComparisonText => MultiSessions.Count >= 2
+        ? "All selected benchmarks are compared equally."
+        : "Select 2–8 benchmarks to compare them together.";
 
     public string MultiBenchmarkNames
     {
@@ -80,8 +79,6 @@ public partial class MainWindowViewModel
     }
 
     public IReadOnlyList<string> MultiSelectedPaths => MultiSessions.Select(item => item.Path).ToList();
-
-    public string? MultiReferencePath => MultiSessions.FirstOrDefault(item => item.IsReference)?.Path;
 
     /// <summary>Raised when the Multi checklist dialog should open.</summary>
     public event EventHandler? MultiBenchmarkSelectionRequested;
@@ -109,13 +106,11 @@ public partial class MainWindowViewModel
     }
 
     /// <summary>
-    /// Loads a checked set of folder captures and activates the declared
-    /// reference. Loading is transactional: the current Multi workspace is
-    /// left untouched if any selected file fails.
+    /// Loads a checked set of folder captures. Loading is transactional: the
+    /// current Multi workspace is left untouched if any selected file fails.
+    /// No benchmark is designated as a base or reference.
     /// </summary>
-    public async Task LoadMultiBenchmarksAsync(
-        IReadOnlyList<string> selectedPaths,
-        string referencePath)
+    public async Task LoadMultiBenchmarksAsync(IReadOnlyList<string> selectedPaths)
     {
         var paths = selectedPaths
             .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -132,13 +127,7 @@ public partial class MainWindowViewModel
         {
             _dialogs.ShowInfo(
                 "Multi benchmark",
-                "Select up to 8 benchmarks so the chart and legend remain readable.");
-            return;
-        }
-
-        if (!paths.Contains(referencePath, StringComparer.OrdinalIgnoreCase))
-        {
-            _dialogs.ShowInfo("Multi benchmark", "Choose one selected benchmark as the reference.");
+                "Select up to 8 benchmarks so the chart and statistics remain readable.");
             return;
         }
 
@@ -155,19 +144,11 @@ public partial class MainWindowViewModel
                 }
 
                 var label = CardNameOf(session, ManualMetadataOf(session));
-                loaded.Add(new MultiBenchmarkSession(
-                    session,
-                    label,
-                    string.Equals(path, referencePath, StringComparison.OrdinalIgnoreCase)));
+                loaded.Add(new MultiBenchmarkSession(session, label));
             }
 
-            var reference = loaded.Single(item => item.IsReference);
-            var ordered = new[] { reference }
-                .Concat(loaded.Where(item => !item.IsReference))
-                .ToList();
-
             MultiSessions.Clear();
-            foreach (var item in ordered)
+            foreach (var item in loaded)
             {
                 MultiSessions.Add(item);
                 IndexSession(item.Session);
@@ -176,7 +157,7 @@ public partial class MainWindowViewModel
             SetWorkspaceMode(BenchmarkWorkspaceMode.Multi);
             ActivateMultiWorkspace();
             NotifyMultiStateChanged();
-            StatusText = $"MULTI WORKSPACE  ·  {MultiSessions.Count} benchmarks  ·  Reference: {reference.Label}";
+            StatusText = $"MULTI WORKSPACE  ·  Comparing {MultiSessions.Count} benchmarks";
         }
         catch (Exception error)
         {
@@ -227,14 +208,14 @@ public partial class MainWindowViewModel
             return;
         }
 
-        Chart.SetWorkspace(MultiSessions.Select(item => new ChartWorkspaceSession(
-            item.Session,
-            item.Label,
-            item.IsReference)).ToList());
+        Chart.SetWorkspace(
+            MultiSessions.Select(item => new ChartWorkspaceSession(
+                item.Session,
+                item.Label)).ToList(),
+            isMultiWorkspace: true);
 
-        // Phase 3 keeps the existing pair-only range editor disabled in Multi
-        // so changing a slider can never silently re-analyze only two of N
-        // sessions. The next Multi statistics phase will make this N-aware.
+        // Keep the existing pair-only range editor disabled in Multi so a
+        // slider can never silently re-analyze only two of N sessions.
         AnalysisRange.Attach(null, null);
         AnalysisRange.AnalysisSummaryText =
             $"Multi workspace loaded with {MultiSessions.Count} benchmarks. "
@@ -246,10 +227,9 @@ public partial class MainWindowViewModel
     {
         OnPropertyChanged(nameof(HasMultiSelection));
         OnPropertyChanged(nameof(MultiSelectionSummary));
-        OnPropertyChanged(nameof(MultiReferenceText));
+        OnPropertyChanged(nameof(MultiComparisonText));
         OnPropertyChanged(nameof(MultiBenchmarkNames));
         OnPropertyChanged(nameof(MultiSelectedPaths));
-        OnPropertyChanged(nameof(MultiReferencePath));
     }
 
     // Library's legacy "Load as Base/Comparison" actions remain Pair actions.
