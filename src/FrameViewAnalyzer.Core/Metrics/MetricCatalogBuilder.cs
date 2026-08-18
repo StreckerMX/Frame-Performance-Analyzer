@@ -23,6 +23,7 @@ public static partial class MetricCatalogBuilder
 
         var catalog = new List<MetricDefinition>();
         var usedColumns = new HashSet<string>(StringComparer.Ordinal);
+        var isNvidiaAppLog = CaptureSourceDetector.IsNvidiaAppPerformanceLog(capture);
 
         foreach (var metric in CoreMetricCatalog.CoreMetrics)
         {
@@ -45,7 +46,8 @@ public static partial class MetricCatalogBuilder
         {
             if (CoreMetricCatalog.SkipColumns.Contains(header)
                 || CoreMetricCatalog.TimeColumnKeys.Contains(header)
-                || usedColumns.Contains(header))
+                || usedColumns.Contains(header)
+                || (isNvidiaAppLog && (header == "PID" || header == "FPS")))
             {
                 continue;
             }
@@ -61,7 +63,7 @@ public static partial class MetricCatalogBuilder
                 Unit: GuessUnit(header),
                 Category: GuessCategory(header),
                 ColumnKeys: [header],
-                Direction: MetricDirection.Undefined));
+                Direction: GuessDirection(header)));
         }
 
         return catalog;
@@ -95,12 +97,18 @@ public static partial class MetricCatalogBuilder
 
     public static string GuessUnit(string column)
     {
+        if (column.StartsWith("FPS", StringComparison.OrdinalIgnoreCase))
+        {
+            return "FPS";
+        }
+
         if (Regex.IsMatch(column, @"\(%\)|Util%", RegexOptions.IgnoreCase))
         {
             return "%";
         }
 
-        if (Regex.IsMatch(column, @"\(MHz\)|Clk", RegexOptions.IgnoreCase))
+        if (Regex.IsMatch(column, @"\(MHz\)|Frequency", RegexOptions.IgnoreCase)
+            || column.Contains("Clk", StringComparison.OrdinalIgnoreCase))
         {
             return "MHz";
         }
@@ -110,12 +118,22 @@ public static partial class MetricCatalogBuilder
             return "°C";
         }
 
+        if (Regex.IsMatch(column, @"Milli\s*Volts|\bmV\b", RegexOptions.IgnoreCase))
+        {
+            return "mV";
+        }
+
+        if (Regex.IsMatch(column, @"\bRPM\b", RegexOptions.IgnoreCase))
+        {
+            return "RPM";
+        }
+
         if (Regex.IsMatch(column, @"\(W\)|Power|Watts|Pwr", RegexOptions.IgnoreCase))
         {
             return "W";
         }
 
-        if (Regex.IsMatch(column, @"\(ms\)|^Ms"))
+        if (Regex.IsMatch(column, @"\(msec\)|\(ms\)|^Ms", RegexOptions.IgnoreCase))
         {
             return "ms";
         }
@@ -136,6 +154,11 @@ public static partial class MetricCatalogBuilder
     public static string GuessCategory(string column)
     {
         var upper = column.ToUpperInvariant();
+        if (upper.StartsWith("FPS", StringComparison.Ordinal))
+        {
+            return "Performance";
+        }
+
         if (upper.Contains("CPU"))
         {
             return "CPU";
@@ -143,7 +166,7 @@ public static partial class MetricCatalogBuilder
 
         if (upper.Contains("GPU") || upper.Contains("NV") || upper.Contains("PCAT") || upper.Contains("PERF/W"))
         {
-            return upper.Contains("PWR") || upper.Contains("POWER") || upper.Contains("PERF")
+            return upper.Contains("PWR") || upper.Contains("POWER") || upper.Contains("PERF/W")
                 ? "Power"
                 : "GPU";
         }
@@ -159,6 +182,25 @@ public static partial class MetricCatalogBuilder
         }
 
         return "Other";
+    }
+
+    public static MetricDirection GuessDirection(string column)
+    {
+        var upper = column.ToUpperInvariant();
+        if (upper.StartsWith("FPS", StringComparison.Ordinal))
+        {
+            return MetricDirection.HigherIsBetter;
+        }
+
+        if (upper.Contains("LATENCY")
+            || upper.Contains("TEMP")
+            || upper.Contains("POWER")
+            || upper.Contains("PWR"))
+        {
+            return MetricDirection.LowerIsBetter;
+        }
+
+        return MetricDirection.Undefined;
     }
 
     private static uint Fnv1a32(byte[] bytes)
