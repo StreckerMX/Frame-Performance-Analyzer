@@ -23,7 +23,7 @@
             <TextBlock Text="MULTI BENCHMARK"
                        Style="{StaticResource SectionLabelStyle}" />
             <TextBlock Margin="0,6,0,0"
-                       Text="Select 2–8 captures. One selected benchmark must be the reference used for comparison."
+                       Text="Select 2–8 captures. Multi compares every selected benchmark equally; there is no Base or Reference."
                        TextWrapping="Wrap"
                        FontSize="{DynamicResource FontSize.Small}"
                        Foreground="{DynamicResource TextSoftBrush}" />
@@ -69,13 +69,12 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <CheckBox Grid.Column="0"
                                               VerticalAlignment="Center"
                                               IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                               Style="{StaticResource DarkCheckBoxStyle}" />
-                                    <StackPanel Grid.Column="1" Margin="10,0,12,0">
+                                    <StackPanel Grid.Column="1" Margin="10,0,0,0">
                                         <TextBlock Text="{Binding Display}"
                                                    FontWeight="SemiBold"
                                                    Foreground="{DynamicResource TextBrush}"
@@ -86,14 +85,6 @@
                                                    Foreground="{DynamicResource MutedBrush}"
                                                    TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
-                                    <RadioButton Grid.Column="2"
-                                                 GroupName="MultiReference"
-                                                 Content="Reference"
-                                                 VerticalAlignment="Center"
-                                                 IsEnabled="{Binding IsSelected}"
-                                                 IsChecked="{Binding IsReference, Mode=TwoWay}"
-                                                 Checked="Reference_Checked"
-                                                 Foreground="{DynamicResource TextSoftBrush}" />
                                 </Grid>
                             </Border>
                         </DataTemplate>
