@@ -13,6 +13,16 @@ namespace FrameViewAnalyzer.App.Charting;
 /// </summary>
 public static class ChartPlotBuilder
 {
+    private static readonly string[] MultiPalette =
+    [
+        "#E69F00",
+        "#CC79A7",
+        "#56B4E9",
+        "#F0E442",
+        "#D55E00",
+        "#009E73",
+    ];
+
     /// <summary>
     /// Per-metric plot kind: FPS series are uniformly one-second spaced, so
     /// gap-free FPS data renders as SignalXY (constant-time rendering);
@@ -34,6 +44,30 @@ public static class ChartPlotBuilder
         }
 
         return PlotKind.SignalXY;
+    }
+
+    /// <summary>
+    /// Pair mode preserves the theme's A/B colors. Multi mode keeps those two
+    /// anchors and then uses a compact color-blind-friendly palette so every
+    /// checked benchmark remains distinguishable in the legend and chart.
+    /// </summary>
+    public static ScottPlot.Color SeriesColor(
+        ChartStyle style,
+        int index,
+        int seriesCount,
+        SessionRole role)
+    {
+        if (seriesCount <= 2)
+        {
+            return role == SessionRole.Base ? style.SeriesA : style.SeriesB;
+        }
+
+        return index switch
+        {
+            0 => style.SeriesA,
+            1 => style.SeriesB,
+            _ => ScottPlot.Color.FromHex(MultiPalette[(index - 2) % MultiPalette.Length]),
+        };
     }
 
     public static void Build(
@@ -67,10 +101,8 @@ public static class ChartPlotBuilder
         for (var index = 0; index < seriesList.Count; index++)
         {
             var series = seriesList[index];
-            // Styling follows the session role, never the list position: a
-            // Comparison-only metric is index 0 but still uses SeriesB.
-            var isBase = series.Role == SessionRole.Base;
-            var color = isBase ? style.SeriesA : style.SeriesB;
+            var isReference = index == 0;
+            var color = SeriesColor(style, index, seriesList.Count, series.Role);
 
             // Real omitted ranges must be detected from the original series
             // before decimation. LTTB/min-max intentionally skip samples, and
@@ -84,7 +116,7 @@ public static class ChartPlotBuilder
             {
                 var signal = plot.Add.SignalXY(gapX, gapY);
                 signal.Color = color;
-                signal.LineWidth = 2.15f;
+                signal.LineWidth = isReference ? 2.15f : 1.8f;
                 signal.LegendText = series.LabelOrDefault;
                 signal.MarkerSize = showMarkers ? 4f : 0f;
                 signal.MarkerColor = color;
@@ -93,7 +125,7 @@ public static class ChartPlotBuilder
             {
                 var scatter = plot.Add.Scatter(gapX, gapY);
                 scatter.Color = color;
-                scatter.LineWidth = isBase ? 2.15f : 1.8f;
+                scatter.LineWidth = isReference ? 2.15f : 1.8f;
                 scatter.LegendText = series.LabelOrDefault;
                 scatter.MarkerSize = showMarkers ? 4f : 0f;
                 scatter.MarkerColor = color;
@@ -109,8 +141,6 @@ public static class ChartPlotBuilder
 
         if (showLegend)
         {
-            // Legend lives inside the plot, bottom-right, with a subtle
-            // outline — matching the reference screenshot.
             plot.ShowLegend();
             plot.Legend.Alignment = Alignment.LowerRight;
             plot.Legend.Margin = new PixelPadding(10);
