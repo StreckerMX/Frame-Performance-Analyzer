@@ -14,20 +14,36 @@ public enum ExportScope
 }
 
 /// <summary>
-/// One selectable export session: an explicit role prefix and the resolved
-/// session, so the UI label and the actual export target can never diverge.
+/// One selectable export session. Pair exports keep explicit Base/Comparison
+/// roles; Multi exports carry the stable workspace index used by the shared
+/// chart/report palette and intentionally have no Base or Reference semantics.
 /// </summary>
-public sealed record ExportSessionOption(SessionRole Role, string DisplayName, SessionAnalysis Session)
+public sealed record ExportSessionOption(
+    SessionRole Role,
+    string DisplayName,
+    SessionAnalysis Session,
+    int WorkspaceIndex = 0,
+    bool IsMultiPeer = false)
 {
-    /// <summary>Role-aware label, e.g. "Base — GTA5 Enhanced".</summary>
-    public string Label => Role == SessionRole.Base
-        ? $"Base — {DisplayName}"
-        : $"Comparison — {DisplayName}";
+    /// <summary>
+    /// Picker label. Pair keeps the role prefix; Multi shows the benchmark name
+    /// directly because every selected capture is an equal peer.
+    /// </summary>
+    public string Label => IsMultiPeer
+        ? DisplayName
+        : Role == SessionRole.Base
+            ? $"Base — {DisplayName}"
+            : $"Comparison — {DisplayName}";
+
+    /// <summary>Human-readable report-header line for this selected benchmark.</summary>
+    public string HeaderLine => IsMultiPeer
+        ? $"Benchmark: {DisplayName}"
+        : ExportReport.SessionRoleLine(Role, DisplayName);
 }
 
 /// <summary>
 /// Future-proof PNG report request. Sessions and metrics are explicit
-/// collections so the same contract can support Pair and Multi workspaces.
+/// collections so the same contract supports Pair and Multi workspaces.
 /// </summary>
 public sealed record ExportReportSelection(
     IReadOnlyList<ExportSessionOption> Sessions,
