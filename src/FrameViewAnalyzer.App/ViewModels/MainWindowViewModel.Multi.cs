@@ -22,7 +22,6 @@ public sealed record MultiBenchmarkSession(
 public partial class MainWindowViewModel
 {
     private BenchmarkWorkspaceMode _workspaceMode = BenchmarkWorkspaceMode.Pair;
-    private bool _suppressPairModeActivation;
 
     public ObservableCollection<MultiBenchmarkSession> MultiSessions { get; } = [];
 
@@ -258,7 +257,7 @@ public partial class MainWindowViewModel
     // the mode selector and chart describing different workspaces.
     partial void OnBaseSessionChanged(SessionAnalysis? value)
     {
-        if (!_suppressPairModeActivation && IsMultiMode && value is not null)
+        if (IsMultiMode && value is not null)
         {
             SetWorkspaceMode(BenchmarkWorkspaceMode.Pair);
         }
@@ -266,7 +265,7 @@ public partial class MainWindowViewModel
 
     partial void OnComparisonSessionChanged(SessionAnalysis? value)
     {
-        if (!_suppressPairModeActivation && IsMultiMode && value is not null)
+        if (IsMultiMode && value is not null)
         {
             SetWorkspaceMode(BenchmarkWorkspaceMode.Pair);
         }
