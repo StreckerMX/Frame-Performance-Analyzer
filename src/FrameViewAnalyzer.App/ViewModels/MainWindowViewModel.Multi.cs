@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Threading;
 using CommunityToolkit.Mvvm.Input;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.App.Busy;
@@ -180,6 +181,9 @@ public partial class MainWindowViewModel
     /// Re-analyzes every loaded Multi peer with one shared AnalysisOptions
     /// snapshot. All results are computed before the collection is mutated, so
     /// one failed benchmark leaves the previous N-session workspace untouched.
+    /// The shared analysis generation guarantees that an older overlapping
+    /// request (Pair or Multi) completing afterwards can never overwrite the
+    /// state a newer request set.
     /// </summary>
     public async Task ApplyMultiAnalysisOptionsAsync(AnalysisOptions options)
     {
@@ -189,6 +193,7 @@ public partial class MainWindowViewModel
         }
 
         var previous = MultiSessions.ToList();
+        var generation = Interlocked.Increment(ref _analysisGeneration);
         try
         {
             // Re-analysis is CPU-bound; run it off the UI thread so the busy
@@ -198,6 +203,13 @@ public partial class MainWindowViewModel
                 () => previous
                     .Select(item => item with { Session = _analysis.Reanalyze(item.Session, options) })
                     .ToList());
+
+            // A newer request superseded this one while it was computing;
+            // the stale result must never overwrite the newer state.
+            if (generation != Volatile.Read(ref _analysisGeneration))
+            {
+                return;
+            }
 
             MultiSessions.Clear();
             foreach (var item in reanalyzed)
@@ -211,6 +223,12 @@ public partial class MainWindowViewModel
         }
         catch (Exception error)
         {
+            if (generation != Volatile.Read(ref _analysisGeneration))
+            {
+                // Stale failure: a newer request owns the state now.
+                return;
+            }
+
             // The collection was not touched before every Reanalyze succeeded.
             // Re-attach the old snapshots so controls also return to the
             // effective options represented by the still-visible workspace.

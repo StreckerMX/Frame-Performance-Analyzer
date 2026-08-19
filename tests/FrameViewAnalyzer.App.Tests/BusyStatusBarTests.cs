@@ -187,6 +187,95 @@ public class BusyStatusBarTests
         });
 
     [Fact]
+    public void Overlay_blocks_input_immediately_before_the_dim_threshold() =>
+        WpfStaTestHost.Run(() =>
+        {
+            WpfStaTestHost.EnsureApplication();
+            // A far-away threshold: the operation below must never become
+            // visually busy, but its logical busy must block input at once.
+            var state = new BusyState(TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(100));
+            var root = new Grid();
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.Children.Add(new Border { Background = System.Windows.Media.Brushes.Black });
+            var window = new Window { Content = root };
+            try
+            {
+                WindowBusy.Attach(window, state);
+                var overlay = Assert.Single(root.Children.OfType<BusyOverlay>());
+
+                var scope = state.Begin("Loading benchmark library");
+                try
+                {
+                    // Blocking starts with IsBusy — no threshold wait.
+                    PumpUntil(() => overlay.IsHitTestVisible, TimeSpan.FromSeconds(5));
+                    Assert.True(overlay.IsHitTestVisible);
+                    Assert.Equal(Visibility.Visible, overlay.Visibility);
+                    Assert.False(state.IsBusyVisible);
+                    Assert.Equal(0.0, overlay.Opacity);
+                }
+                finally
+                {
+                    scope.Dispose();
+                }
+
+                // Fast operation: input is released promptly and the overlay
+                // never dimmed, so it collapses without a fade-out.
+                PumpUntil(() => !overlay.IsHitTestVisible, TimeSpan.FromSeconds(5));
+                Assert.False(overlay.IsHitTestVisible);
+                Assert.Equal(Visibility.Collapsed, overlay.Visibility);
+                Assert.Equal(0.0, overlay.Opacity);
+                Assert.False(state.IsBusyVisible);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+    [Fact]
+    public void Status_bar_stays_outside_the_interaction_blocker() =>
+        WpfStaTestHost.Run(() =>
+        {
+            WpfStaTestHost.EnsureApplication();
+            var state = FastState();
+            var root = new Grid();
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.Children.Add(new Border { Background = System.Windows.Media.Brushes.Black });
+            var statusBar = new BusyStatusBar { ReadyText = "READY" };
+            Grid.SetRow(statusBar, 1);
+            root.Children.Add(statusBar);
+            var window = new Window { Content = root };
+            try
+            {
+                WindowBusy.Attach(window, state);
+                var overlay = Assert.Single(root.Children.OfType<BusyOverlay>());
+
+                var scope = state.Begin("Loading benchmark library");
+                try
+                {
+                    PumpUntil(() => overlay.IsHitTestVisible, TimeSpan.FromSeconds(5));
+
+                    // The blocker covers only the content row; the status bar
+                    // row is outside its span and stays interactive.
+                    Assert.Equal(0, Grid.GetRow(overlay));
+                    Assert.Equal(1, Grid.GetRowSpan(overlay));
+                    Assert.Equal(1, Grid.GetRow(statusBar));
+                    Assert.True(statusBar.IsHitTestVisible);
+                    Assert.True(overlay.IsHitTestVisible);
+                }
+                finally
+                {
+                    scope.Dispose();
+                }
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+    [Fact]
     public void Closing_the_window_disposes_the_state_and_leaks_no_events() =>
         WpfStaTestHost.Run(() =>
         {

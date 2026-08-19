@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Threading;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Library;
 using FrameViewAnalyzer.Analytics.RangeAnalysis;
@@ -443,6 +444,15 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Monotonic request generation: every re-analysis request (Pair or
+    /// Multi) bumps it, and a result is only applied while its generation is
+    /// still the newest. An older overlapping request completing afterwards
+    /// is discarded, so it can never overwrite a newer user-requested
+    /// analysis state.
+    /// </summary>
+    private int _analysisGeneration;
+
+    /// <summary>
     /// Re-analyzes the loaded Base (and Comparison) with the new analysis
     /// options, rebuilds the chart series (preserving the selected metric),
     /// refreshes the KPI tiles, and updates the library digest together with
@@ -455,27 +465,36 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        var generation = Interlocked.Increment(ref _analysisGeneration);
         try
         {
             var previousBase = BaseSession;
+            var previousComparison = ComparisonSession;
             var baseSession = await _busy.RunOnThreadPoolAsync(
                 "Processing capture data...",
                 () => _analysis.Reanalyze(previousBase, options));
-            BaseSession = baseSession;
-            if (ComparisonSession is { } previousComparison)
-            {
-                ComparisonSession = await _busy.RunOnThreadPoolAsync(
+            var comparisonSession = previousComparison is null
+                ? null
+                : await _busy.RunOnThreadPoolAsync(
                     "Processing capture data...",
                     () => _analysis.Reanalyze(previousComparison, options));
+
+            // A newer request superseded this one while it was computing;
+            // the stale result must never overwrite the newer state.
+            if (generation != Volatile.Read(ref _analysisGeneration))
+            {
+                return;
             }
 
+            BaseSession = baseSession;
+            ComparisonSession = comparisonSession;
             RefreshSessionCards();
             Chart.SetSessions(BaseSession, ComparisonSession);
             AnalysisRange.Attach(BaseSession, ComparisonSession);
             IndexSession(baseSession);
-            if (ComparisonSession is not null)
+            if (comparisonSession is not null)
             {
-                IndexSession(ComparisonSession);
+                IndexSession(comparisonSession);
             }
 
             StatusText = $"REANALYZED  ·  {baseSession.Capture.DisplayName}";
@@ -484,8 +503,11 @@ public partial class MainWindowViewModel : ObservableObject
             or UnauthorizedAccessException
             or InvalidOperationException)
         {
-            // Library bookkeeping failures never break re-analysis.
-            StatusText = "REANALYZED";
+            if (generation == Volatile.Read(ref _analysisGeneration))
+            {
+                // Library bookkeeping failures never break re-analysis.
+                StatusText = "REANALYZED";
+            }
         }
     }
 

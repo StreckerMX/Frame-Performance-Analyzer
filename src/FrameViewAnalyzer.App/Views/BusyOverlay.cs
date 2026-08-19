@@ -8,12 +8,20 @@ using FrameViewAnalyzer.App.Busy;
 namespace FrameViewAnalyzer.App.Views;
 
 /// <summary>
-/// Dim layer shown over a Window's content while it is visibly busy. A 50%
-/// black translucent surface (theme-independent, matches both dark and light
-/// modes) fades in/out over <see cref="FadeDuration"/> and intercepts mouse
-/// input while visible, so controls underneath can neither be clicked nor
-/// receive hover feedback. <see cref="WindowBusy"/> places it so it never
-/// covers the status bar.
+/// Dim layer shown over a Window's content while it is busy. Input blocking
+/// and the dim are deliberately separated:
+/// <list type="bullet">
+/// <item>the moment the state becomes logically busy (<c>IsBusy</c>), the
+/// overlay turns visible and hit-testable at opacity 0, so conflicting
+/// pointer interaction is intercepted immediately — before any threshold;</item>
+/// <item>only when the state becomes visually busy (<c>IsBusyVisible</c>,
+/// after the presentation threshold) does it fade to the 50% black dim;</item>
+/// <item>when the last operation ends, input is released right away; the
+/// dim — if it was ever shown — fades out without blocking input, and an
+/// operation that never dimmed collapses instantly.</item>
+/// </list>
+/// <see cref="WindowBusy"/> places the overlay so it never covers the status
+/// bar.
 /// </summary>
 public sealed class BusyOverlay : Border
 {
@@ -26,7 +34,8 @@ public sealed class BusyOverlay : Border
     /// <summary>Fade in/out duration for the dim layer.</summary>
     public static readonly Duration FadeDuration = new(TimeSpan.FromMilliseconds(120));
 
-    private bool _shown;
+    private bool _blocking;
+    private bool _dimmed;
 
     public BusyOverlay()
     {
@@ -48,50 +57,68 @@ public sealed class BusyOverlay : Border
         var overlay = (BusyOverlay)d;
         if (e.OldValue is BusyState previous)
         {
+            previous.BusyChanged -= overlay.OnBusyChanged;
             previous.BusyVisibleChanged -= overlay.OnBusyVisibleChanged;
         }
 
-        var shown = false;
         if (e.NewValue is BusyState next)
         {
+            next.BusyChanged += overlay.OnBusyChanged;
             next.BusyVisibleChanged += overlay.OnBusyVisibleChanged;
-            shown = next.IsBusyVisible;
         }
 
-        overlay.Marshal(() => overlay.SetShown(shown));
+        overlay.Marshal(overlay.Sync);
     }
 
-    private void OnBusyVisibleChanged(object? sender, EventArgs e) =>
-        Marshal(() => SetShown(State is { IsBusyVisible: true }));
+    private void OnBusyChanged(object? sender, EventArgs e) => Marshal(Sync);
 
-    private void SetShown(bool shown)
+    private void OnBusyVisibleChanged(object? sender, EventArgs e) => Marshal(Sync);
+
+    /// <summary>Reconciles the overlay with the current state; dispatcher thread only.</summary>
+    private void Sync()
     {
-        if (_shown == shown)
-        {
-            return;
-        }
+        var state = State;
+        var busy = state is { IsBusy: true };
+        var visible = state is { IsBusyVisible: true };
+        _blocking = busy;
 
-        _shown = shown;
-        if (shown)
+        if (busy)
         {
+            // Intercept input immediately — before any dimming is visible.
             Visibility = Visibility.Visible;
             IsHitTestVisible = true;
-            BeginAnimation(OpacityProperty, new DoubleAnimation(1, FadeDuration));
+            if (_dimmed == visible)
+            {
+                // Presentation already matches (transparent while below the
+                // threshold, dimmed while above); avoid re-starting a fade.
+                return;
+            }
+
+            _dimmed = visible;
+            BeginAnimation(OpacityProperty, new DoubleAnimation(visible ? 1 : 0, FadeDuration));
         }
-        else
+        else if (_dimmed)
         {
+            // The dim was shown: release input now and let it fade out.
+            _dimmed = false;
+            IsHitTestVisible = false;
             var hide = new DoubleAnimation(0, FadeDuration);
             hide.Completed += (_, _) =>
             {
                 // A new operation may have begun during the fade; only
                 // collapse when the state is still idle.
-                if (!_shown)
+                if (!_blocking)
                 {
                     Visibility = Visibility.Collapsed;
-                    IsHitTestVisible = false;
                 }
             };
             BeginAnimation(OpacityProperty, hide);
+        }
+        else
+        {
+            // Never dimmed: nothing to fade, collapse immediately.
+            IsHitTestVisible = false;
+            Visibility = Visibility.Collapsed;
         }
     }
 
