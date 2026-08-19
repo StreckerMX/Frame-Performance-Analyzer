@@ -12,7 +12,7 @@ namespace FrameViewAnalyzer.App.Tests;
 /// <summary>
 /// Busy integration of the Benchmark Library view model: the Library owns
 /// its own busy state, its initial load runs inside a "Loading benchmark
-/// library..." scope that always returns to READY, and its row actions are
+/// library" scope that always returns to READY, and its row actions are
 /// guarded while busy.
 /// </summary>
 public class BenchmarkLibraryViewModelBusyTests
@@ -112,7 +112,7 @@ public class BenchmarkLibraryViewModelBusyTests
             viewModel.ToggleSelectedCommand.Execute(viewModel.Rows[1]);
             Assert.True(viewModel.CanCompareSelectedNow);
 
-            using (busy.Begin("Importing benchmark package..."))
+            using (busy.Begin("Importing benchmark package"))
             {
                 Assert.False(viewModel.LoadBaseCommand.CanExecute(viewModel.Rows[0]));
                 Assert.False(viewModel.LoadComparisonCommand.CanExecute(viewModel.Rows[0]));
@@ -142,12 +142,12 @@ public class BenchmarkLibraryViewModelBusyTests
 
             // Mimics ImportPackage_Click: an outer import scope whose inner
             // refresh must not return the window to READY early.
-            using (busy.Begin("Importing benchmark package..."))
+            using (busy.Begin("Importing benchmark package"))
             {
                 Assert.True(busy.IsBusy);
                 await viewModel.RefreshAsync();
                 Assert.True(busy.IsBusy);
-                Assert.Equal("Importing benchmark package...", busy.OperationText);
+                Assert.Equal("Importing benchmark package", busy.OperationText);
             }
 
             Assert.False(busy.IsBusy);

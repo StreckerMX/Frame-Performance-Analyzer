@@ -87,9 +87,9 @@ public partial class MainWindow : Window
         {
             // MainWindow owns the summary load; once the table window opens,
             // this window returns to READY.
-            var capture = await _busy.RunAsync("Reading capture data...", () => _reader.LoadCaptureAsync(path));
+            var capture = await _busy.RunAsync("Reading capture data", () => _reader.LoadCaptureAsync(path));
             var document = await _busy.RunOnThreadPoolAsync(
-                "Loading summary data...",
+                "Loading summary data",
                 () => SummaryTable.Build(capture));
             var window = new SummaryTableWindow(new SummaryTableViewModel(document))
             {
@@ -213,7 +213,7 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Prepares and shows the View Details window. MainWindow owns the
-    /// preparation ("Loading capture details..."); as soon as the child
+    /// preparation ("Loading capture details"); as soon as the child
     /// window opens, MainWindow returns to READY — the busy scope covers
     /// only the preparation, never the dialog itself.
     /// </summary>
@@ -233,7 +233,7 @@ public partial class MainWindow : Window
     internal async Task<SessionDetailsWindow> PrepareDetailsWindowAsync(SessionAnalysis session)
     {
         var viewModel = await _busy.RunOnThreadPoolAsync(
-            "Loading capture details...",
+            "Loading capture details",
             () => new SessionDetailsViewModel(session));
         return new SessionDetailsWindow(viewModel);
     }
@@ -362,7 +362,7 @@ public partial class MainWindow : Window
         // Series extraction over full-resolution samples is CPU-bound; run it
         // off the UI thread so the status bar keeps animating.
         var groups = await _busy.RunOnThreadPoolAsync(
-            "Preparing report...",
+            "Preparing report",
             () => BuildReportGroups(selection, byId, isMultiReport));
 
         if (groups.Count == 0)
@@ -389,7 +389,7 @@ public partial class MainWindow : Window
             // UI thread, then render and encode the PNG off the UI thread.
             var style = ChartStyle.FromApplicationResources();
             var header = BuildReportHeader(selection);
-            await _busy.RunOnThreadPoolAsync("Exporting report...", () =>
+            await _busy.RunOnThreadPoolAsync("Exporting report", () =>
             {
                 var multiplot = ReportPlotBuilder.Build(groups, style);
                 var height = groups.Count * 520 + ReportPlotBuilder.MeasureHeaderHeight(header);
@@ -519,7 +519,7 @@ public partial class MainWindow : Window
         try
         {
             var comparison = _viewModel.ComparisonSession;
-            var count = await _busy.RunOnThreadPoolAsync("Exporting CSV...", () =>
+            var count = await _busy.RunOnThreadPoolAsync("Exporting CSV", () =>
             {
                 var rows = ExportReport.BuildStatisticsRows(baseSession, comparison);
                 return _exportService.WriteStatisticsCsv(path, rows);
@@ -557,7 +557,7 @@ public partial class MainWindow : Window
         try
         {
             var comparison = _viewModel.ComparisonSession;
-            await _busy.RunOnThreadPoolAsync("Exporting benchmark data...", () =>
+            await _busy.RunOnThreadPoolAsync("Exporting benchmark data", () =>
             {
                 var document = ExportReport.BuildStatisticsPayload(
                     baseSession,

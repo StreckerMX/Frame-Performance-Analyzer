@@ -120,7 +120,7 @@ public partial class MainWindowViewModel
     /// No benchmark is designated as a base or reference.
     /// </summary>
     public Task LoadMultiBenchmarksAsync(IReadOnlyList<string> selectedPaths) =>
-        _busy.RunAsync("Loading benchmark captures...", () => LoadMultiBenchmarksCoreAsync(selectedPaths));
+        _busy.RunAsync("Loading benchmark captures", () => LoadMultiBenchmarksCoreAsync(selectedPaths));
 
     private async Task LoadMultiBenchmarksCoreAsync(IReadOnlyList<string> selectedPaths)
     {
@@ -199,7 +199,7 @@ public partial class MainWindowViewModel
             // Re-analysis is CPU-bound; run it off the UI thread so the busy
             // presentation keeps animating.
             var reanalyzed = await _busy.RunOnThreadPoolAsync(
-                "Processing capture data...",
+                "Processing capture data",
                 () => previous
                     .Select(item => item with { Session = _analysis.Reanalyze(item.Session, options) })
                     .ToList());

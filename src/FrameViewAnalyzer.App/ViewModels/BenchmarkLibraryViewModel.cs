@@ -147,7 +147,7 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     /// left untouched; a failed save never breaks browsing.
     /// </summary>
     public Task RefreshAsync() =>
-        _busy.RunAsync("Loading benchmark library...", RefreshCoreAsync);
+        _busy.RunAsync("Loading benchmark library", RefreshCoreAsync);
 
     private async Task RefreshCoreAsync()
     {

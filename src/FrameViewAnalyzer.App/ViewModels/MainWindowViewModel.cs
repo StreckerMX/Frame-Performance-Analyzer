@@ -182,7 +182,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand(CanExecute = nameof(CanLoadCapture))]
     private Task RefreshCapturesAsync() =>
-        _busy.RunAsync("Scanning capture folder...", RefreshCapturesCoreAsync);
+        _busy.RunAsync("Scanning capture folder", RefreshCapturesCoreAsync);
 
     private async Task RefreshCapturesCoreAsync()
     {
@@ -259,7 +259,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Loads a capture by path (Library "Load as Base").</summary>
     public Task LoadBaseFromPathAsync(string path) =>
-        _busy.RunAsync("Loading base capture...", () => LoadBaseFromPathCoreAsync(path));
+        _busy.RunAsync("Loading base capture", () => LoadBaseFromPathCoreAsync(path));
 
     private async Task LoadBaseFromPathCoreAsync(string path)
     {
@@ -306,7 +306,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Loads a comparison by path (Library "Load as Comparison").</summary>
     public Task LoadComparisonFromPathAsync(string path) =>
-        _busy.RunAsync("Loading comparison capture...", () => LoadComparisonFromPathCoreAsync(path));
+        _busy.RunAsync("Loading comparison capture", () => LoadComparisonFromPathCoreAsync(path));
 
     private async Task LoadComparisonFromPathCoreAsync(string path)
     {
@@ -471,12 +471,12 @@ public partial class MainWindowViewModel : ObservableObject
             var previousBase = BaseSession;
             var previousComparison = ComparisonSession;
             var baseSession = await _busy.RunOnThreadPoolAsync(
-                "Processing capture data...",
+                "Processing capture data",
                 () => _analysis.Reanalyze(previousBase, options));
             var comparisonSession = previousComparison is null
                 ? null
                 : await _busy.RunOnThreadPoolAsync(
-                    "Processing capture data...",
+                    "Processing capture data",
                     () => _analysis.Reanalyze(previousComparison, options));
 
             // A newer request superseded this one while it was computing;
@@ -566,7 +566,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task<SessionAnalysis?> LoadSessionAsync(string path)
     {
-        var capture = await _busy.RunAsync("Reading capture data...", () => _reader.LoadCaptureAsync(path));
+        var capture = await _busy.RunAsync("Reading capture data", () => _reader.LoadCaptureAsync(path));
         var kind = _reader.DetectKind(capture.Headers, Path.GetFileName(path));
         if (kind == CsvKind.Summary)
         {
@@ -578,7 +578,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         // Sample parsing and statistics are CPU-bound; run them off the UI
         // thread so the busy presentation keeps animating.
-        return await _busy.RunOnThreadPoolAsync("Processing capture data...", () => _analysis.Analyze(capture));
+        return await _busy.RunOnThreadPoolAsync("Processing capture data", () => _analysis.Analyze(capture));
     }
 
     private void RefreshSessionCards()

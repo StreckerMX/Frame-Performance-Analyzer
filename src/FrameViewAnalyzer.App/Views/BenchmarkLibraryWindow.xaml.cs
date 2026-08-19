@@ -123,7 +123,7 @@ public partial class BenchmarkLibraryWindow : Window
             // Legacy stores live in files outside this app; the whole import
             // is blocking file I/O, so it runs off the UI thread.
             var result = await _busy.RunOnThreadPoolAsync(
-                "Reading legacy data...",
+                "Reading legacy data",
                 () => _legacyImporter.Import());
             await _viewModel.RefreshAsync();
             MessageBox.Show(
@@ -158,7 +158,7 @@ public partial class BenchmarkLibraryWindow : Window
 
         try
         {
-            var result = await _busy.RunAsync("Creating benchmark package...", async () =>
+            var result = await _busy.RunAsync("Creating benchmark package", async () =>
             {
                 var library = _libraryStore.Load();
                 var prepared = await _exportService.PreparePackageAsync(
@@ -210,7 +210,7 @@ public partial class BenchmarkLibraryWindow : Window
         {
             // Reading, validating, and committing the package are blocking
             // file I/O; run them off the UI thread.
-            var proposal = await _busy.RunOnThreadPoolAsync("Importing benchmark package...", () =>
+            var proposal = await _busy.RunOnThreadPoolAsync("Importing benchmark package", () =>
             {
                 var parsed = _exportService.ImportBenchmarkPackage(
                     _libraryStore.Load(),

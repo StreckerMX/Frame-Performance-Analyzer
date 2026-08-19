@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using FrameViewAnalyzer.App.Busy;
 
 namespace FrameViewAnalyzer.App.Tests;
@@ -56,7 +57,7 @@ public class BusyStateTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             state.RunAsync(
-                "Loading base capture...",
+                "Loading base capture",
                 () => throw new InvalidOperationException("Boom")));
 
         Assert.False(state.IsBusy);
@@ -69,7 +70,7 @@ public class BusyStateTests
     {
         var state = new BusyState();
 
-        var result = await state.RunAsync("Processing capture data...", () => Task.FromResult(42));
+        var result = await state.RunAsync("Processing capture data", () => Task.FromResult(42));
 
         Assert.Equal(42, result);
         Assert.False(state.IsBusy);
@@ -80,13 +81,13 @@ public class BusyStateTests
     {
         var state = new BusyState();
 
-        var outer = state.Begin("Loading base capture...");
-        var inner = state.Begin("Processing capture data...");
+        var outer = state.Begin("Loading base capture");
+        var inner = state.Begin("Processing capture data");
         outer.Dispose();
 
         // The window must not return to READY while the inner work continues.
         Assert.True(state.IsBusy);
-        Assert.Equal("Processing capture data...", state.OperationText);
+        Assert.Equal("Processing capture data", state.OperationText);
 
         inner.Dispose();
         Assert.False(state.IsBusy);
@@ -98,11 +99,11 @@ public class BusyStateTests
     {
         var state = new BusyState();
 
-        var first = state.Begin("Loading base capture...");
-        var second = state.Begin("Loading comparison capture...");
+        var first = state.Begin("Loading base capture");
+        var second = state.Begin("Loading comparison capture");
         first.Dispose();
 
-        Assert.Equal("Loading comparison capture...", state.OperationText);
+        Assert.Equal("Loading comparison capture", state.OperationText);
 
         second.Dispose();
         Assert.Null(state.OperationText);
@@ -138,24 +139,56 @@ public class BusyStateTests
         var state = new BusyState(
             TimeSpan.FromMilliseconds(60),
             TimeSpan.FromMilliseconds(120));
-        var dots = new List<int>();
-        state.EllipsisChanged += (_, _) => dots.Add(state.EllipsisDots);
+
+        // EllipsisChanged fires from BusyState's thread-pool timers, so the
+        // test captures values into a thread-safe queue and awaits a signal
+        // once the full 1 → 2 → 3 cycle has been observed — no Task.Delay
+        // racing the timer and no unsynchronized List access.
+        var dots = new ConcurrentQueue<int>();
+        var cycleObserved = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var nextExpectedDot = 1;
+        state.EllipsisChanged += (_, _) =>
+        {
+            var dot = state.EllipsisDots;
+            if (dot == 0)
+            {
+                return;
+            }
+
+            dots.Enqueue(dot);
+            if (dot == nextExpectedDot)
+            {
+                nextExpectedDot++;
+                if (nextExpectedDot > BusyState.MaxEllipsisDots)
+                {
+                    cycleObserved.TrySetResult();
+                }
+            }
+            else if (dot == 1)
+            {
+                // The cycle wrapped before the expected step was observed (a
+                // handler can run after the next tick already advanced the
+                // state): restart the pattern from the fresh 1.
+                nextExpectedDot = 2;
+            }
+        };
 
         var scope = state.Begin("Loading benchmark library");
         try
         {
-            await Task.Delay(900);
+            // Generous ceiling: the pattern completes in well under a second;
+            // the timeout only guards against a regression that never ticks.
+            await cycleObserved.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
             Assert.True(state.IsBusyVisible);
-            // Dots start at one and cycle 1 → 2 → 3 → 1...
-            Assert.Equal(1, dots[0]);
-            Assert.Contains(1, dots);
-            Assert.Contains(2, dots);
-            Assert.Contains(3, dots);
-            var first = dots.FindIndex(value => value == 1);
-            var second = dots.FindIndex(first + 1, value => value == 2);
-            var third = dots.FindIndex(second + 1, value => value == 3);
-            Assert.True(first < second && second < third, "Dots must cycle in order 1 → 2 → 3.");
+
+            // The signal only completes on an observed 1 → 2 → 3 run, but
+            // assert the order independently from the captured values too.
+            var captured = dots.ToArray();
+            Assert.True(
+                ContainsOrderedCycle(captured),
+                $"Dots must cycle in order 1 → 2 → 3, captured: {string.Join(", ", captured)}");
         }
         finally
         {
@@ -164,6 +197,30 @@ public class BusyStateTests
 
         Assert.False(state.IsBusyVisible);
         Assert.Equal(0, state.EllipsisDots);
+    }
+
+    /// <summary>True when the values contain 1, then 2, then 3 in that order.</summary>
+    private static bool ContainsOrderedCycle(IEnumerable<int> values)
+    {
+        var expected = 1;
+        foreach (var value in values)
+        {
+            if (value == expected)
+            {
+                expected++;
+                if (expected > BusyState.MaxEllipsisDots)
+                {
+                    return true;
+                }
+            }
+            else if (value == 1)
+            {
+                // The pattern restarts at the fresh 1 after a wrap.
+                expected = 2;
+            }
+        }
+
+        return false;
     }
 
     [Fact]
