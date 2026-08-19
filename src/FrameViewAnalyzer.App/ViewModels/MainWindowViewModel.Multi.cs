@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Threading;
 using CommunityToolkit.Mvvm.Input;
 using FrameViewAnalyzer.Analytics;
+using FrameViewAnalyzer.App.Busy;
 using FrameViewAnalyzer.Core.Models;
 
 namespace FrameViewAnalyzer.App.ViewModels;
@@ -117,7 +119,10 @@ public partial class MainWindowViewModel
     /// current Multi workspace is left untouched if any selected file fails.
     /// No benchmark is designated as a base or reference.
     /// </summary>
-    public async Task LoadMultiBenchmarksAsync(IReadOnlyList<string> selectedPaths)
+    public Task LoadMultiBenchmarksAsync(IReadOnlyList<string> selectedPaths) =>
+        _busy.RunAsync("Loading benchmark captures", () => LoadMultiBenchmarksCoreAsync(selectedPaths));
+
+    private async Task LoadMultiBenchmarksCoreAsync(IReadOnlyList<string> selectedPaths)
     {
         var paths = selectedPaths
             .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -176,20 +181,35 @@ public partial class MainWindowViewModel
     /// Re-analyzes every loaded Multi peer with one shared AnalysisOptions
     /// snapshot. All results are computed before the collection is mutated, so
     /// one failed benchmark leaves the previous N-session workspace untouched.
+    /// The shared analysis generation guarantees that an older overlapping
+    /// request (Pair or Multi) completing afterwards can never overwrite the
+    /// state a newer request set.
     /// </summary>
-    public Task ApplyMultiAnalysisOptionsAsync(AnalysisOptions options)
+    public async Task ApplyMultiAnalysisOptionsAsync(AnalysisOptions options)
     {
         if (!IsMultiMode || MultiSessions.Count == 0)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         var previous = MultiSessions.ToList();
+        var generation = Interlocked.Increment(ref _analysisGeneration);
         try
         {
-            var reanalyzed = previous
-                .Select(item => item with { Session = _analysis.Reanalyze(item.Session, options) })
-                .ToList();
+            // Re-analysis is CPU-bound; run it off the UI thread so the busy
+            // presentation keeps animating.
+            var reanalyzed = await _busy.RunOnThreadPoolAsync(
+                "Processing capture data",
+                () => previous
+                    .Select(item => item with { Session = _analysis.Reanalyze(item.Session, options) })
+                    .ToList());
+
+            // A newer request superseded this one while it was computing;
+            // the stale result must never overwrite the newer state.
+            if (generation != Volatile.Read(ref _analysisGeneration))
+            {
+                return;
+            }
 
             MultiSessions.Clear();
             foreach (var item in reanalyzed)
@@ -203,6 +223,12 @@ public partial class MainWindowViewModel
         }
         catch (Exception error)
         {
+            if (generation != Volatile.Read(ref _analysisGeneration))
+            {
+                // Stale failure: a newer request owns the state now.
+                return;
+            }
+
             // The collection was not touched before every Reanalyze succeeded.
             // Re-attach the old snapshots so controls also return to the
             // effective options represented by the still-visible workspace.
@@ -210,8 +236,6 @@ public partial class MainWindowViewModel
             StatusText = "MULTI REANALYSIS FAILED  ·  Previous workspace kept";
             _dialogs.ShowError("Multi analysis error", error.Message);
         }
-
-        return Task.CompletedTask;
     }
 
     private void SetWorkspaceMode(BenchmarkWorkspaceMode mode)

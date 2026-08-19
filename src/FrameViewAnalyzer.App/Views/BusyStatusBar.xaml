@@ -1,0 +1,22 @@
+<UserControl x:Class="FrameViewAnalyzer.App.Views.BusyStatusBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border x:Name="RootBorder"
+            CornerRadius="10"
+            Padding="12,8">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="StatusTextBlock"
+                       VerticalAlignment="Center"
+                       FontSize="{DynamicResource FontSize.Small}"
+                       TextTrimming="CharacterEllipsis" />
+            <ContentPresenter Grid.Column="1"
+                              x:Name="RightContentPresenter"
+                              Margin="16,0,0,0"
+                              VerticalAlignment="Center" />
+        </Grid>
+    </Border>
+</UserControl>

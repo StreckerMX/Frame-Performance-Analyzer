@@ -629,15 +629,17 @@
                 <views:SessionChartView x:Name="ChartView" />
             </Border>
 
-        <!-- Status bar (full window width) -->
-        <Grid Grid.Row="3" Margin="0,8,0,0">
-            <TextBlock Text="{Binding StatusText}"
-                       Foreground="{DynamicResource TextSoftBrush}"
-                       FontSize="{DynamicResource FontSize.Small}" />
-            <TextBlock Text="{Binding VersionText}"
-                       HorizontalAlignment="Right"
-                       Foreground="{DynamicResource MutedBrush}"
-                       FontSize="{DynamicResource FontSize.Small}" />
-        </Grid>
+        <!-- Status bar (full window width): shared busy/ready presentation.
+             WindowBusy.Attach inserts the dim overlay over the rows above,
+             so the status bar itself always stays bright. -->
+        <views:BusyStatusBar Grid.Row="3"
+                             Margin="0,8,0,0"
+                             ReadyText="{Binding StatusText}">
+            <views:BusyStatusBar.RightContent>
+                <TextBlock Text="{Binding VersionText}"
+                           Foreground="{DynamicResource MutedBrush}"
+                           FontSize="{DynamicResource FontSize.Small}" />
+            </views:BusyStatusBar.RightContent>
+        </views:BusyStatusBar>
     </Grid>
 </Window>

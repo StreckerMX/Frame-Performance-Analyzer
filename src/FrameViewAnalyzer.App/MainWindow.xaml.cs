@@ -7,6 +7,7 @@ using FrameViewAnalyzer.Analytics.Comparison;
 using FrameViewAnalyzer.Analytics.Exports;
 using FrameViewAnalyzer.Analytics.RangeAnalysis;
 using FrameViewAnalyzer.Analytics.Series;
+using FrameViewAnalyzer.App.Busy;
 using FrameViewAnalyzer.App.Charting;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
@@ -34,6 +35,7 @@ public partial class MainWindow : Window
     private readonly IDialogService _dialogs;
     private readonly IFrameViewCsvReader _reader;
     private readonly ICaptureAnalysisService _analysis;
+    private readonly BusyState _busy;
 
     public MainWindow(
         MainWindowViewModel viewModel,
@@ -47,7 +49,8 @@ public partial class MainWindow : Window
         IExportService exportService,
         IDialogService dialogs,
         IFrameViewCsvReader reader,
-        ICaptureAnalysisService analysis)
+        ICaptureAnalysisService analysis,
+        BusyState busy)
     {
         InitializeComponent();
         _placement = placement;
@@ -62,7 +65,9 @@ public partial class MainWindow : Window
         _dialogs = dialogs;
         _reader = reader;
         _analysis = analysis;
+        _busy = busy;
         DataContext = viewModel;
+        WindowBusy.Attach(this, _busy);
 
         // Restore once the native window exists; save on every close. The
         // native caption theme is painted as soon as the HWND is available.
@@ -80,9 +85,13 @@ public partial class MainWindow : Window
         viewModel.MetadataEditorRequested += OnMetadataEditorRequested;
         viewModel.SummaryRequested += async (_, path) =>
         {
-            var capture = await _reader.LoadCaptureAsync(path);
-            var window = new SummaryTableWindow(
-                new SummaryTableViewModel(SummaryTable.Build(capture)))
+            // MainWindow owns the summary load; once the table window opens,
+            // this window returns to READY.
+            var capture = await _busy.RunAsync("Reading capture data", () => _reader.LoadCaptureAsync(path));
+            var document = await _busy.RunOnThreadPoolAsync(
+                "Loading summary data",
+                () => SummaryTable.Build(capture));
+            var window = new SummaryTableWindow(new SummaryTableViewModel(document))
             {
                 Owner = this,
             };
@@ -178,32 +187,66 @@ public partial class MainWindow : Window
 
     private void BaseDetails_Click(object sender, RoutedEventArgs e)
     {
+        if (_busy.IsBusy)
+        {
+            return;
+        }
+
         if (_viewModel.BaseSession is { } session)
         {
-            OpenDetails(session);
+            _ = OpenDetailsAsync(session);
         }
     }
 
     private void ComparisonDetails_Click(object sender, RoutedEventArgs e)
     {
+        if (_busy.IsBusy)
+        {
+            return;
+        }
+
         if (_viewModel.ComparisonSession is { } session)
         {
-            OpenDetails(session);
+            _ = OpenDetailsAsync(session);
         }
     }
 
-    private void OpenDetails(SessionAnalysis session)
+    /// <summary>
+    /// Prepares and shows the View Details window. MainWindow owns the
+    /// preparation ("Loading capture details"); as soon as the child
+    /// window opens, MainWindow returns to READY — the busy scope covers
+    /// only the preparation, never the dialog itself.
+    /// </summary>
+    private async Task OpenDetailsAsync(SessionAnalysis session)
     {
-        var window = new SessionDetailsWindow(new SessionDetailsViewModel(session))
-        {
-            Owner = this,
-        };
+        var window = await PrepareDetailsWindowAsync(session);
+        window.Owner = this;
         WindowThemeBootstrap.Attach(window, _themes);
         window.ShowDialog();
     }
 
+    /// <summary>
+    /// Builds the read-only details window inside a busy scope. Extracted so
+    /// tests can verify that the preparation completes with the main window
+    /// READY again before the child window is shown.
+    /// </summary>
+    internal async Task<SessionDetailsWindow> PrepareDetailsWindowAsync(SessionAnalysis session)
+    {
+        var viewModel = await _busy.RunOnThreadPoolAsync(
+            "Loading capture details",
+            () => new SessionDetailsViewModel(session));
+        return new SessionDetailsWindow(viewModel);
+    }
+
     private void Library_Click(object sender, RoutedEventArgs e)
     {
+        // Opening the Library is instant; MainWindow never turns busy for it.
+        // The Library window owns whatever loading it performs.
+        if (_busy.IsBusy)
+        {
+            return;
+        }
+
         var captureDirectory = _settings.Load().CaptureDirectory;
         var library = new BenchmarkLibraryWindow(
             _libraryStore,
@@ -231,6 +274,11 @@ public partial class MainWindow : Window
 
     private void ExportPng_Click(object sender, RoutedEventArgs e)
     {
+        if (_busy.IsBusy)
+        {
+            return;
+        }
+
         List<ExportSessionOption> options;
         IReadOnlyList<FrameViewAnalyzer.Core.Metrics.MetricDefinition> metrics;
 
@@ -298,7 +346,7 @@ public partial class MainWindow : Window
         return ExportReport.SessionExportLabel(session);
     }
 
-    private void PerformPngExport(ExportReportSelection selection)
+    private async void PerformPngExport(ExportReportSelection selection)
     {
         if (selection.Sessions.Count == 0 || selection.MetricIds.Count == 0)
         {
@@ -310,6 +358,59 @@ public partial class MainWindow : Window
             .SelectMany(option => option.Session.Catalog)
             .GroupBy(metric => metric.Id, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        // Series extraction over full-resolution samples is CPU-bound; run it
+        // off the UI thread so the status bar keeps animating.
+        var groups = await _busy.RunOnThreadPoolAsync(
+            "Preparing report",
+            () => BuildReportGroups(selection, byId, isMultiReport));
+
+        if (groups.Count == 0)
+        {
+            _dialogs.ShowInfo("Export", "No selected metrics are available to export.");
+            return;
+        }
+
+        var stemSession = selection.Sessions[0].Session;
+        var initialFile = ExportReport.BuildPngFileName(
+            stemSession,
+            selection.MetricIds,
+            isMultiReport,
+            DateTime.Now);
+        var path = _dialogs.PickSaveFile(initialFile, "PNG (*.png)|*.png", ".png");
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            // ChartStyle reads WPF application resources; capture it on the
+            // UI thread, then render and encode the PNG off the UI thread.
+            var style = ChartStyle.FromApplicationResources();
+            var header = BuildReportHeader(selection);
+            await _busy.RunOnThreadPoolAsync("Exporting report", () =>
+            {
+                var multiplot = ReportPlotBuilder.Build(groups, style);
+                var height = groups.Count * 520 + ReportPlotBuilder.MeasureHeaderHeight(header);
+                ReportPlotBuilder.SavePng(multiplot, style, header, path, 1600, height);
+            });
+            _dialogs.ShowInfo(
+                "Export",
+                $"Report saved with {selection.Sessions.Count} benchmark(s) and {groups.Count} chart(s) to:\n{path}");
+        }
+        catch (Exception error)
+        {
+            _dialogs.ShowError("Export", error.Message);
+        }
+    }
+
+    /// <summary>One report plot group per selected metric, with the selected sessions' series.</summary>
+    private static List<ReportPlotBuilder.ReportGroup> BuildReportGroups(
+        ExportReportSelection selection,
+        IReadOnlyDictionary<string, FrameViewAnalyzer.Core.Metrics.MetricDefinition> byId,
+        bool isMultiReport)
+    {
         var groups = new List<ReportPlotBuilder.ReportGroup>();
         foreach (var metricId in selection.MetricIds)
         {
@@ -345,39 +446,7 @@ public partial class MainWindow : Window
             }
         }
 
-        if (groups.Count == 0)
-        {
-            _dialogs.ShowInfo("Export", "No selected metrics are available to export.");
-            return;
-        }
-
-        var stemSession = selection.Sessions[0].Session;
-        var initialFile = ExportReport.BuildPngFileName(
-            stemSession,
-            selection.MetricIds,
-            isMultiReport,
-            DateTime.Now);
-        var path = _dialogs.PickSaveFile(initialFile, "PNG (*.png)|*.png", ".png");
-        if (path is null)
-        {
-            return;
-        }
-
-        try
-        {
-            var style = ChartStyle.FromApplicationResources();
-            var multiplot = ReportPlotBuilder.Build(groups, style);
-            var header = BuildReportHeader(selection);
-            var height = groups.Count * 520 + ReportPlotBuilder.MeasureHeaderHeight(header);
-            ReportPlotBuilder.SavePng(multiplot, style, header, path, 1600, height);
-            _dialogs.ShowInfo(
-                "Export",
-                $"Report saved with {selection.Sessions.Count} benchmark(s) and {groups.Count} chart(s) to:\n{path}");
-        }
-        catch (Exception error)
-        {
-            _dialogs.ShowError("Export", error.Message);
-        }
+        return groups;
     }
 
     private ReportPlotBuilder.ReportHeader BuildReportHeader(ExportReportSelection selection)
@@ -425,8 +494,13 @@ public partial class MainWindow : Window
         return new ReportPlotBuilder.ReportHeader(title, lines);
     }
 
-    private void ExportCsv_Click(object sender, RoutedEventArgs e)
+    private async void ExportCsv_Click(object sender, RoutedEventArgs e)
     {
+        if (_busy.IsBusy)
+        {
+            return;
+        }
+
         if (_viewModel.BaseSession is not { } baseSession)
         {
             _dialogs.ShowInfo("Export statistics", "Load at least one base session.");
@@ -444,8 +518,12 @@ public partial class MainWindow : Window
 
         try
         {
-            var rows = ExportReport.BuildStatisticsRows(baseSession, _viewModel.ComparisonSession);
-            var count = _exportService.WriteStatisticsCsv(path, rows);
+            var comparison = _viewModel.ComparisonSession;
+            var count = await _busy.RunOnThreadPoolAsync("Exporting CSV", () =>
+            {
+                var rows = ExportReport.BuildStatisticsRows(baseSession, comparison);
+                return _exportService.WriteStatisticsCsv(path, rows);
+            });
             _dialogs.ShowInfo("Export", $"Statistics saved with {count} rows to:\n{path}");
         }
         catch (Exception error)
@@ -454,8 +532,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ExportJson_Click(object sender, RoutedEventArgs e)
+    private async void ExportJson_Click(object sender, RoutedEventArgs e)
     {
+        if (_busy.IsBusy)
+        {
+            return;
+        }
+
         if (_viewModel.BaseSession is not { } baseSession)
         {
             _dialogs.ShowInfo("Export statistics", "Load at least one base session.");
@@ -473,14 +556,18 @@ public partial class MainWindow : Window
 
         try
         {
-            var document = ExportReport.BuildStatisticsPayload(
-                baseSession,
-                _viewModel.ComparisonSession,
-                _viewModel.ManualMetadataFor(baseSession),
-                _viewModel.ComparisonSession is { } comparison
-                    ? _viewModel.ManualMetadataFor(comparison)
-                    : null);
-            _exportService.WriteStatisticsJson(path, document);
+            var comparison = _viewModel.ComparisonSession;
+            await _busy.RunOnThreadPoolAsync("Exporting benchmark data", () =>
+            {
+                var document = ExportReport.BuildStatisticsPayload(
+                    baseSession,
+                    comparison,
+                    _viewModel.ManualMetadataFor(baseSession),
+                    comparison is not null
+                        ? _viewModel.ManualMetadataFor(comparison)
+                        : null);
+                _exportService.WriteStatisticsJson(path, document);
+            });
             _dialogs.ShowInfo("Export", $"Benchmark data saved to:\n{path}");
         }
         catch (Exception error)

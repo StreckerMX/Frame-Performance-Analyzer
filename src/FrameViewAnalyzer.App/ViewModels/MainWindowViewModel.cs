@@ -2,10 +2,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Threading;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Library;
 using FrameViewAnalyzer.Analytics.RangeAnalysis;
 using FrameViewAnalyzer.Analytics.Series;
+using FrameViewAnalyzer.App.Busy;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Core.Formatting;
@@ -36,6 +38,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IManualMetadataStore _metadataStore;
     private readonly ILibraryStore _libraryStore;
     private readonly CaptureFolderScanner _scanner;
+    private readonly BusyState _busy;
 
     [ObservableProperty]
     private string _appearanceMode = "dark";
@@ -95,6 +98,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>Analysis-range controls (GPU threshold / trim / transitions).</summary>
     public AnalysisRangeViewModel AnalysisRange { get; }
 
+    /// <summary>Main-window busy state (shared with the window's status bar and overlay).</summary>
+    public BusyState Busy => _busy;
+
     /// <summary>
     /// Raised when an Analyze action wants the chart to jump somewhere; a
     /// null range means "Full capture" (reset to the complete series).
@@ -128,7 +134,8 @@ public partial class MainWindowViewModel : ObservableObject
         IManualMetadataStore metadataStore,
         ILibraryStore libraryStore,
         CaptureFolderScanner scanner,
-        IDialogService dialogs)
+        IDialogService dialogs,
+        BusyState busy)
     {
         _settings = settings;
         _themes = themes;
@@ -139,9 +146,19 @@ public partial class MainWindowViewModel : ObservableObject
         _metadataStore = metadataStore;
         _libraryStore = libraryStore;
         _scanner = scanner;
+        _busy = busy;
         Chart = chart;
         AnalysisRange = new AnalysisRangeViewModel();
         AnalysisRange.OptionsChanged += (_, options) => _ = ApplyAnalysisOptionsAsync(options);
+        _busy.BusyChanged += (_, _) =>
+        {
+            LoadBaseCommand.NotifyCanExecuteChanged();
+            LoadComparisonCommand.NotifyCanExecuteChanged();
+            RefreshCapturesCommand.NotifyCanExecuteChanged();
+            ExportPngReportCommand.NotifyCanExecuteChanged();
+            ExportStatisticsCsvCommand.NotifyCanExecuteChanged();
+            ExportBenchmarkJsonCommand.NotifyCanExecuteChanged();
+        };
 
         var mode = Normalize(settings.Load().AppearanceMode);
         _appearanceMode = mode;
@@ -151,16 +168,23 @@ public partial class MainWindowViewModel : ObservableObject
             ?? PlatformFolders.FrameViewDirectory();
     }
 
+    /// <summary>True when no operation is in flight; guards commands that mutate the workspace.</summary>
+    private bool CanLoadCapture => !_busy.IsBusy;
+
     partial void OnSelectedCaptureChanged(CaptureOption? value)
     {
-        if (value is not null)
+        // Switching captures mid-operation would race the loader.
+        if (value is not null && !_busy.IsBusy)
         {
             _ = LoadBaseFromPathAsync(value.Path);
         }
     }
 
-    [RelayCommand]
-    private async Task RefreshCapturesAsync()
+    [RelayCommand(CanExecute = nameof(CanLoadCapture))]
+    private Task RefreshCapturesAsync() =>
+        _busy.RunAsync("Scanning capture folder", RefreshCapturesCoreAsync);
+
+    private async Task RefreshCapturesCoreAsync()
     {
         try
         {
@@ -221,7 +245,7 @@ public partial class MainWindowViewModel : ObservableObject
         await RefreshCapturesAsync();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanLoadCapture))]
     private async Task LoadBaseAsync()
     {
         var path = _dialogs.PickCsvFile(null);
@@ -234,7 +258,10 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>Loads a capture by path (Library "Load as Base").</summary>
-    public async Task LoadBaseFromPathAsync(string path)
+    public Task LoadBaseFromPathAsync(string path) =>
+        _busy.RunAsync("Loading base capture", () => LoadBaseFromPathCoreAsync(path));
+
+    private async Task LoadBaseFromPathCoreAsync(string path)
     {
         try
         {
@@ -257,7 +284,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanLoadCapture))]
     private async Task LoadComparisonAsync()
     {
         if (BaseSession is null)
@@ -278,7 +305,10 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>Loads a comparison by path (Library "Load as Comparison").</summary>
-    public async Task LoadComparisonFromPathAsync(string path)
+    public Task LoadComparisonFromPathAsync(string path) =>
+        _busy.RunAsync("Loading comparison capture", () => LoadComparisonFromPathCoreAsync(path));
+
+    private async Task LoadComparisonFromPathCoreAsync(string path)
     {
         if (BaseSession is null)
         {
@@ -414,6 +444,15 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Monotonic request generation: every re-analysis request (Pair or
+    /// Multi) bumps it, and a result is only applied while its generation is
+    /// still the newest. An older overlapping request completing afterwards
+    /// is discarded, so it can never overwrite a newer user-requested
+    /// analysis state.
+    /// </summary>
+    private int _analysisGeneration;
+
+    /// <summary>
     /// Re-analyzes the loaded Base (and Comparison) with the new analysis
     /// options, rebuilds the chart series (preserving the selected metric),
     /// refreshes the KPI tiles, and updates the library digest together with
@@ -426,22 +465,36 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        var generation = Interlocked.Increment(ref _analysisGeneration);
         try
         {
-            var baseSession = _analysis.Reanalyze(BaseSession, options);
-            BaseSession = baseSession;
-            if (ComparisonSession is not null)
+            var previousBase = BaseSession;
+            var previousComparison = ComparisonSession;
+            var baseSession = await _busy.RunOnThreadPoolAsync(
+                "Processing capture data",
+                () => _analysis.Reanalyze(previousBase, options));
+            var comparisonSession = previousComparison is null
+                ? null
+                : await _busy.RunOnThreadPoolAsync(
+                    "Processing capture data",
+                    () => _analysis.Reanalyze(previousComparison, options));
+
+            // A newer request superseded this one while it was computing;
+            // the stale result must never overwrite the newer state.
+            if (generation != Volatile.Read(ref _analysisGeneration))
             {
-                ComparisonSession = _analysis.Reanalyze(ComparisonSession, options);
+                return;
             }
 
+            BaseSession = baseSession;
+            ComparisonSession = comparisonSession;
             RefreshSessionCards();
             Chart.SetSessions(BaseSession, ComparisonSession);
             AnalysisRange.Attach(BaseSession, ComparisonSession);
             IndexSession(baseSession);
-            if (ComparisonSession is not null)
+            if (comparisonSession is not null)
             {
-                IndexSession(ComparisonSession);
+                IndexSession(comparisonSession);
             }
 
             StatusText = $"REANALYZED  ·  {baseSession.Capture.DisplayName}";
@@ -450,8 +503,11 @@ public partial class MainWindowViewModel : ObservableObject
             or UnauthorizedAccessException
             or InvalidOperationException)
         {
-            // Library bookkeeping failures never break re-analysis.
-            StatusText = "REANALYZED";
+            if (generation == Volatile.Read(ref _analysisGeneration))
+            {
+                // Library bookkeeping failures never break re-analysis.
+                StatusText = "REANALYZED";
+            }
         }
     }
 
@@ -496,18 +552,21 @@ public partial class MainWindowViewModel : ObservableObject
         ExportBenchmarkJsonCommand.NotifyCanExecuteChanged();
     }
 
-    [RelayCommand(CanExecute = nameof(HasBaseSession))]
+    /// <summary>Exports are blocked while any operation is in flight.</summary>
+    private bool CanExportStatistics => HasBaseSession && !_busy.IsBusy;
+
+    [RelayCommand(CanExecute = nameof(CanExportStatistics))]
     private void ExportPngReport() => ExportPngReportRequested?.Invoke(this, EventArgs.Empty);
 
-    [RelayCommand(CanExecute = nameof(HasBaseSession))]
+    [RelayCommand(CanExecute = nameof(CanExportStatistics))]
     private void ExportStatisticsCsv() => ExportStatisticsCsvRequested?.Invoke(this, EventArgs.Empty);
 
-    [RelayCommand(CanExecute = nameof(HasBaseSession))]
+    [RelayCommand(CanExecute = nameof(CanExportStatistics))]
     private void ExportBenchmarkJson() => ExportBenchmarkJsonRequested?.Invoke(this, EventArgs.Empty);
 
     private async Task<SessionAnalysis?> LoadSessionAsync(string path)
     {
-        var capture = await _reader.LoadCaptureAsync(path);
+        var capture = await _busy.RunAsync("Reading capture data", () => _reader.LoadCaptureAsync(path));
         var kind = _reader.DetectKind(capture.Headers, Path.GetFileName(path));
         if (kind == CsvKind.Summary)
         {
@@ -517,7 +576,9 @@ public partial class MainWindowViewModel : ObservableObject
             return null;
         }
 
-        return _analysis.Analyze(capture);
+        // Sample parsing and statistics are CPU-bound; run them off the UI
+        // thread so the busy presentation keeps animating.
+        return await _busy.RunOnThreadPoolAsync("Processing capture data", () => _analysis.Analyze(capture));
     }
 
     private void RefreshSessionCards()
