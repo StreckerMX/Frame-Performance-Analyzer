@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Exports;
+using FrameViewAnalyzer.App.Busy;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.Core.Models;
@@ -17,6 +18,9 @@ namespace FrameViewAnalyzer.App.Views;
 /// Benchmark Library browser: search, filters, sorting, Multi selection,
 /// recent Pair comparisons, non-destructive record removal, legacy import,
 /// and package export/import. Loading requests are forwarded to the owner.
+/// The Library owns its own busy state: opening the window is instant, and
+/// any work the Library performs (loading, imports, exports) is presented
+/// on the Library's own status bar, not the owner's.
 /// </summary>
 public partial class BenchmarkLibraryWindow : Window
 {
@@ -28,6 +32,7 @@ public partial class BenchmarkLibraryWindow : Window
     private readonly IManualMetadataStore _manualStore;
     private readonly IFrameViewCsvReader _reader;
     private readonly ICaptureAnalysisService _analysis;
+    private readonly BusyState _busy;
 
     public BenchmarkLibraryWindow(
         ILibraryStore libraryStore,
@@ -51,8 +56,10 @@ public partial class BenchmarkLibraryWindow : Window
         _manualStore = manualStore;
         _reader = reader;
         _analysis = analysis;
-        _viewModel = new BenchmarkLibraryViewModel(libraryStore, manualStore, scanner, captureDirectory);
+        _busy = new BusyState();
+        _viewModel = new BenchmarkLibraryViewModel(libraryStore, manualStore, scanner, captureDirectory, _busy);
         DataContext = _viewModel;
+        WindowBusy.Attach(this, _busy);
 
         _viewModel.LoadBaseRequested += path => LoadBaseRequested?.Invoke(path);
         _viewModel.LoadComparisonRequested += path => LoadComparisonRequested?.Invoke(path);
@@ -106,9 +113,18 @@ public partial class BenchmarkLibraryWindow : Window
 
     private async void ImportLegacy_Click(object sender, RoutedEventArgs e)
     {
+        if (_busy.IsBusy)
+        {
+            return;
+        }
+
         try
         {
-            var result = _legacyImporter.Import();
+            // Legacy stores live in files outside this app; the whole import
+            // is blocking file I/O, so it runs off the UI thread.
+            var result = await _busy.RunOnThreadPoolAsync(
+                "Reading legacy data...",
+                () => _legacyImporter.Import());
             await _viewModel.RefreshAsync();
             MessageBox.Show(
                 this,
@@ -126,6 +142,11 @@ public partial class BenchmarkLibraryWindow : Window
 
     private async void ExportPackage_Click(object sender, RoutedEventArgs e)
     {
+        if (_busy.IsBusy)
+        {
+            return;
+        }
+
         var path = _dialogs.PickSaveFile(
             "FrameView_benchmarks.json",
             "JSON (*.json)|*.json",
@@ -137,18 +158,27 @@ public partial class BenchmarkLibraryWindow : Window
 
         try
         {
-            var library = _libraryStore.Load();
-            var result = await _exportService.PreparePackageAsync(
-                library,
-                _manualStore.Load(),
-                _reader,
-                _analysis);
-            if (result.Analyzed > 0)
+            var result = await _busy.RunAsync("Creating benchmark package...", async () =>
             {
-                _libraryStore.Save(library);
-            }
+                var library = _libraryStore.Load();
+                var prepared = await _exportService.PreparePackageAsync(
+                    library,
+                    _manualStore.Load(),
+                    _reader,
+                    _analysis);
+                // Hydrated digests and the package write are blocking I/O;
+                // keep them off the UI thread.
+                await Task.Run(() =>
+                {
+                    if (prepared.Analyzed > 0)
+                    {
+                        _libraryStore.Save(library);
+                    }
 
-            _exportService.WriteBenchmarkPackage(path, result.Package);
+                    _exportService.WriteBenchmarkPackage(path, prepared.Package);
+                });
+                return prepared;
+            });
             _dialogs.ShowInfo(
                 "Export",
                 $"Package saved to:\n{path}\n\n"
@@ -165,6 +195,11 @@ public partial class BenchmarkLibraryWindow : Window
 
     private async void ImportPackage_Click(object sender, RoutedEventArgs e)
     {
+        if (_busy.IsBusy)
+        {
+            return;
+        }
+
         var path = _dialogs.PickOpenFile("JSON (*.json)|*.json");
         if (path is null)
         {
@@ -173,16 +208,22 @@ public partial class BenchmarkLibraryWindow : Window
 
         try
         {
-            var proposal = _exportService.ImportBenchmarkPackage(
-                _libraryStore.Load(),
-                _manualStore.Load(),
-                File.ReadAllText(path));
+            // Reading, validating, and committing the package are blocking
+            // file I/O; run them off the UI thread.
+            var proposal = await _busy.RunOnThreadPoolAsync("Importing benchmark package...", () =>
+            {
+                var parsed = _exportService.ImportBenchmarkPackage(
+                    _libraryStore.Load(),
+                    _manualStore.Load(),
+                    File.ReadAllText(path));
 
-            // Coordinated commit: both stores are serialized first, both
-            // destinations are version-checked, and the two files are written
-            // with rollback — a failure leaves both stores in their original
-            // state and throws instead of claiming success.
-            _exportService.CommitBenchmarkImport(proposal, _libraryStore, _manualStore);
+                // Coordinated commit: both stores are serialized first, both
+                // destinations are version-checked, and the two files are
+                // written with rollback — a failure leaves both stores in
+                // their original state and throws instead of claiming success.
+                _exportService.CommitBenchmarkImport(parsed, _libraryStore, _manualStore);
+                return parsed;
+            });
 
             // Only after both stores are persisted is the live in-memory
             // state published (the metadata cache re-reads the files).

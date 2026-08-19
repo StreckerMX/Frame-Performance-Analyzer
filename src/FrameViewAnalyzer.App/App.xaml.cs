@@ -3,6 +3,7 @@ using System.Windows.Threading;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Comparison;
 using FrameViewAnalyzer.Analytics.RangeAnalysis;
+using FrameViewAnalyzer.App.Busy;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.Infrastructure;
@@ -63,6 +64,10 @@ public partial class App : Application
             services.AddSingleton<IThemeService, ThemeService>();
             services.AddSingleton<IWindowPlacementService, WindowPlacementService>();
             services.AddSingleton<IDialogService, DialogService>();
+            // The main window's busy state is shared by the window (status bar,
+            // overlay, exports) and its view model (loads, analysis), so both
+            // singletons resolve the same instance.
+            services.AddSingleton<BusyState>();
             services.AddSingleton<ChartViewModel>();
             services.AddSingleton<MainWindowViewModel>();
             services.AddSingleton<MainWindow>();

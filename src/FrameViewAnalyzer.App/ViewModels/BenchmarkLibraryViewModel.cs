@@ -3,6 +3,7 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FrameViewAnalyzer.Analytics.Library;
+using FrameViewAnalyzer.App.Busy;
 using FrameViewAnalyzer.Core.Models;
 using FrameViewAnalyzer.Infrastructure;
 using FrameViewAnalyzer.Infrastructure.Stores;
@@ -40,6 +41,7 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     private readonly LibraryIndexer _indexer = new();
     private readonly string? _captureDirectory;
     private readonly List<string> _selectedIdentities = [];
+    private readonly BusyState _busy;
 
     private LibraryModel _library = new();
     private IReadOnlyDictionary<string, ManualMetadata> _manualLookup =
@@ -80,6 +82,9 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
 
     public bool CanCompareSelected => SelectedCount is >= 2 and <= MaxMultiSelection;
 
+    /// <summary>Selection valid AND the window idle; the footer button binding.</summary>
+    public bool CanCompareSelectedNow => CanCompareSelected && !IsBusy;
+
     public string SelectionSummary => SelectedCount switch
     {
         0 => "Select 2–8 benchmarks for Multi comparison.",
@@ -108,20 +113,43 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
         ILibraryStore store,
         IManualMetadataStore manualStore,
         CaptureFolderScanner scanner,
-        string? captureDirectory = null)
+        string? captureDirectory = null,
+        BusyState? busy = null)
     {
         _store = store;
         _manualStore = manualStore;
         _scanner = scanner;
         _captureDirectory = captureDirectory;
+        _busy = busy ?? new BusyState();
+        _busy.BusyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(IsBusy));
+            OnPropertyChanged(nameof(CanCompareSelectedNow));
+            LoadBaseCommand.NotifyCanExecuteChanged();
+            LoadComparisonCommand.NotifyCanExecuteChanged();
+            ComparePairCommand.NotifyCanExecuteChanged();
+            CompareSelectedCommand.NotifyCanExecuteChanged();
+        };
     }
+
+    /// <summary>True while the Library window is busy; drives the footer button guards.</summary>
+    public bool IsBusy => _busy.IsBusy;
+
+    /// <summary>The busy state of the owning Library window (loading, imports, exports).</summary>
+    public BusyState Busy => _busy;
+
+    /// <summary>Library actions are blocked while any operation is in flight.</summary>
+    private bool CanInteract => !_busy.IsBusy;
 
     /// <summary>
     /// Loads the persisted index, refreshes it against the capture folder,
     /// and rebuilds the browser. Unknown-version stores load empty and are
     /// left untouched; a failed save never breaks browsing.
     /// </summary>
-    public async Task RefreshAsync()
+    public Task RefreshAsync() =>
+        _busy.RunAsync("Loading benchmark library...", RefreshCoreAsync);
+
+    private async Task RefreshCoreAsync()
     {
         _library = _store.Load();
         _manualLookup = _manualStore.Load();
@@ -145,7 +173,7 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
         RebuildRecentPairs();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanInteract))]
     private void LoadBase(LibraryRow? row)
     {
         if (row is { Available: true })
@@ -154,7 +182,7 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanInteract))]
     private void LoadComparison(LibraryRow? row)
     {
         if (row is { Available: true })
@@ -185,7 +213,7 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
         RebuildRows();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanInteract))]
     private void CompareSelected()
     {
         if (!CanCompareSelected)
@@ -204,7 +232,7 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanInteract))]
     private void ComparePair(RecentPairRow? pair)
     {
         if (pair is { RecordA.Available: true, RecordB.Available: true })
@@ -263,6 +291,7 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(SelectedCount));
         OnPropertyChanged(nameof(CanCompareSelected));
+        OnPropertyChanged(nameof(CanCompareSelectedNow));
         OnPropertyChanged(nameof(SelectionSummary));
         CompareSelectedCommand.NotifyCanExecuteChanged();
     }

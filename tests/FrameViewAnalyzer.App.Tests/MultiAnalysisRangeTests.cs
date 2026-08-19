@@ -2,6 +2,7 @@ using System.IO;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.RangeAnalysis;
 using FrameViewAnalyzer.Analytics.Samples;
+using FrameViewAnalyzer.App.Busy;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.Core.Models;
@@ -105,6 +106,11 @@ public class MultiAnalysisRangeTests
             setup.ViewModel.AnalysisRange.ExcludeTransitionsEnabled = false;
             setup.ViewModel.AnalysisRange.ApplyNow();
 
+            // Re-analysis runs off the UI thread (busy system); wait for it.
+            await WaitUntilAsync(
+                () => setup.ViewModel.StatusText.Contains("REANALYZED", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(10));
+
             Assert.Equal(3, setup.Analysis.ReanalyzeCalls);
             Assert.Equal(3, setup.ViewModel.MultiSessions.Count);
             Assert.Equal(3, setup.ViewModel.Chart.SeriesList.Count);
@@ -146,6 +152,12 @@ public class MultiAnalysisRangeTests
             setup.ViewModel.AnalysisRange.GpuThreshold = 47.0;
             setup.ViewModel.AnalysisRange.ApplyNow();
 
+            // Re-analysis runs off the UI thread (busy system); wait for the
+            // failure handling to finish.
+            await WaitUntilAsync(
+                () => setup.ViewModel.StatusText.Contains("Previous workspace kept", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(10));
+
             Assert.Equal(2, setup.Analysis.ReanalyzeCalls);
             Assert.Equal(previous.Length, setup.ViewModel.MultiSessions.Count);
             for (var index = 0; index < previous.Length; index++)
@@ -185,7 +197,8 @@ public class MultiAnalysisRangeTests
             new JsonManualMetadataStore(Path.Combine(directory, "metadata.json")),
             new JsonLibraryStore(Path.Combine(directory, "library.json")),
             new CaptureFolderScanner(reader),
-            dialogs);
+            dialogs,
+            new BusyState());
         return new TestSetup(viewModel, analysis, dialogs, directory);
     }
 
@@ -198,6 +211,20 @@ public class MultiAnalysisRangeTests
                     $"{second + offset},{frameTime},80\n")));
         File.WriteAllText(path, "TimeInSeconds,MsBetweenPresents,GPU0Util(%)\n" + rows);
         return path;
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new TimeoutException("Condition was not met before the timeout.");
+            }
+
+            await Task.Delay(20);
+        }
     }
 
     private static void Cleanup(string directory)

@@ -1,6 +1,7 @@
 using System.IO;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.RangeAnalysis;
+using FrameViewAnalyzer.App.Busy;
 using FrameViewAnalyzer.App.Services;
 using FrameViewAnalyzer.App.ViewModels;
 using FrameViewAnalyzer.Core.Models;
@@ -94,7 +95,8 @@ public class MainWindowViewModelTests
             new JsonManualMetadataStore(Path.Combine(directory, "metadata.json")),
             new JsonLibraryStore(Path.Combine(directory, "library.json")),
             new CaptureFolderScanner(reader),
-            dialogs);
+            dialogs,
+            new BusyState());
         return (viewModel, settings, themes, dialogs, directory);
     }
 
