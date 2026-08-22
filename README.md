@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="docs/assets/readme-hero.svg" width="100%" alt="Strecker developer hero" />
+</div>
+
 # FrameView Analyzer
 
 A native Windows desktop application for analyzing and comparing **NVIDIA FrameView** captures and **NVIDIA App performance-overlay logs**.
