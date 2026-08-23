@@ -1,0 +1,45 @@
+name: Add SignPath note to latest release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/signpath-release-note.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update-release-note:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add SignPath Foundation note to latest release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          body="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq .body)"
+          marker="Free code signing provided by SignPath.io, certificate by SignPath Foundation"
+
+          if printf '%s' "$body" | grep -Fq "$marker"; then
+            echo "Latest release already contains the SignPath Foundation note."
+            exit 0
+          fi
+
+          tmp="$(mktemp)"
+          printf '%s\n' "$body" > "$tmp"
+          cat >> "$tmp" <<'EOF'
+
+          ## Code signing
+
+          FrameView Analyzer is applying to use SignPath Foundation for code signing. The integration is pending approval, so the binaries attached to this release remain unsigned and Windows SmartScreen may still show an unknown-publisher warning.
+
+          Once approved, official future Windows release binaries will use **Free code signing provided by SignPath.io, certificate by SignPath Foundation**. See the repository's `CODE_SIGNING_POLICY.md` for signing scope, build provenance, privacy, and verification details.
+          EOF
+
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file "$tmp"
+          echo "Updated release $tag with SignPath Foundation code-signing information."
