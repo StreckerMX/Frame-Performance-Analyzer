@@ -71,6 +71,12 @@ The application is distributed as a **self-contained Windows x64 build**, so ins
 
 > Windows SmartScreen may show an unknown-publisher warning because the executable is not code-signed.
 
+## Code signing policy
+
+FrameView Analyzer is applying for the SignPath Foundation Open Source Code Signing program. If approved, official release binaries will use **Free code signing provided by SignPath.io, certificate by SignPath Foundation**.
+
+The current application has no telemetry and makes no network calls during normal operation. Signing scope, project roles, privacy guarantees, build provenance, and verification details are documented in the **[Code signing policy](CODE_SIGNING_POLICY.md)**.
+
 ## Highlights in 2.2.0
 
 - **Pair and Multi workspaces.** Keep the fast Base vs. Comparison workflow or switch to Multi to compare **2–8 captures as equal peers**.
