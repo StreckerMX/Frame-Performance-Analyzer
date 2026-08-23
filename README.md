@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/assets/readme-hero.svg" width="100%" alt="Strecker developer hero" />
+  <img src="docs/assets/readme-hero.svg" width="100%" alt="FrameView Analyzer animated hero" />
 </div>
 
 # FrameView Analyzer
