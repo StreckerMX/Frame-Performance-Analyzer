@@ -1,0 +1,26 @@
+{
+  "creators": [
+    {
+      "name": "Strecker",
+      "orcid": "0009-0002-6313-0948",
+      "type": "ProjectMember"
+    }
+  ],
+  "title": "FrameView Analyzer",
+  "description": "Native Windows desktop application for analyzing and comparing NVIDIA FrameView captures and NVIDIA App performance-overlay logs, with interactive performance charts, Pair and Multi benchmark comparison, visible-range statistics, filtering, a benchmark library, and presentation-ready exports.",
+  "access_right": "open",
+  "license": "mit",
+  "upload_type": "software",
+  "language": "eng",
+  "keywords": [
+    "Windows software",
+    "performance analysis",
+    "benchmarking",
+    "NVIDIA FrameView",
+    "NVIDIA App",
+    "C#",
+    ".NET",
+    "WPF",
+    "data visualization"
+  ]
+}
