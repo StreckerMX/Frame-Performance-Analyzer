@@ -68,6 +68,12 @@ Windows SmartScreen may warn about an unknown publisher because the executable
 is not code-signed. Choose **More info > Run anyway** only if you trust the
 source of the download.
 
+## Code signing policy
+
+FrameView Analyzer is applying for the SignPath Foundation Open Source Code Signing program. If approved, official releases will use **Free code signing provided by SignPath.io, certificate by SignPath Foundation**.
+
+The complete signing scope, maintainer roles, privacy statement, build provenance, and verification process are documented in [`CODE_SIGNING_POLICY.md`](../CODE_SIGNING_POLICY.md).
+
 ## Supported files
 
 - **FrameView Log CSVs** (`*_Log.csv`) - analyzed from per-frame timing data and available in Pair or Multi.
