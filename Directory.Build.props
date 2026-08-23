@@ -8,6 +8,15 @@
     <Deterministic>true</Deterministic>
     <InvariantGlobalization>false</InvariantGlobalization>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- Stable Windows file metadata used by SignPath artifact restrictions. -->
+    <Product>FrameView Analyzer</Product>
+    <AssemblyTitle>FrameView Analyzer</AssemblyTitle>
+    <Description>Native Windows benchmark analysis for NVIDIA FrameView captures and NVIDIA App performance logs.</Description>
+    <Company>StreckerMX</Company>
+    <Authors>StreckerMX</Authors>
+    <Copyright>Copyright © StreckerMX</Copyright>
+
     <!-- Single source of truth for the product version:
          Version/InformationalVersion = 2.3.0 (UI, startup log, and packaging
          read this); AssemblyVersion/FileVersion stay numeric for Windows. -->
