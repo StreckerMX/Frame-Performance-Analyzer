@@ -5,7 +5,7 @@ namespace FrameViewAnalyzer.App.Services;
 /// <summary>
 /// Reads the product version for the UI and diagnostics. The authoritative
 /// declaration lives in <c>Directory.Build.props</c> (VersionPrefix →
-/// informational version <c>2.0.1</c>); nothing else in the application
+/// informational version <c>3.1.4</c>); nothing else in the application
 /// declares a version string.
 /// </summary>
 public static class ReleaseInfo
@@ -14,5 +14,5 @@ public static class ReleaseInfo
         typeof(ReleaseInfo).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             ?.InformationalVersion
-        ?? "2.0.1";
+        ?? "3.1.4";
 }
