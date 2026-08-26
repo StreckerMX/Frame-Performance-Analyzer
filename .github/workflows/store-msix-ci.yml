@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   package:
-    name: Build unsigned Store MSIX
+    name: Build production-identity Store MSIX
     runs-on: windows-latest
 
     steps:
@@ -26,13 +26,9 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Build validation MSIX
+      - name: Build Store MSIX
         shell: pwsh
-        run: |
-          ./scripts/build-store-msix.ps1 `
-            -PackageIdentityName "FrameViewAnalyzer.StoreValidation" `
-            -Publisher "CN=FrameView Analyzer Store Validation" `
-            -PublisherDisplayName "StreckerMX"
+        run: ./scripts/build-store-msix.ps1
 
       - name: Show artifact sizes
         shell: pwsh
@@ -40,3 +36,13 @@ jobs:
           Get-ChildItem artifacts/store -File | ForEach-Object {
             "{0}  {1:N0} bytes" -f $_.Name, $_.Length
           }
+
+      - name: Upload Store package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FrameViewAnalyzer-Store-MSIX
+          path: |
+            artifacts/store/*.msix
+            artifacts/store/*.sha256
+          if-no-files-found: error
+          retention-days: 14
