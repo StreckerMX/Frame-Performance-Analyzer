@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - Directory.Build.props
+  workflow_dispatch:
 
 permissions:
   contents: write
