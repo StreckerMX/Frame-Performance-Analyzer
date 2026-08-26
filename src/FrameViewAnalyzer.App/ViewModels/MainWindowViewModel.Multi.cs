@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Threading;
 using CommunityToolkit.Mvvm.Input;
 using FrameViewAnalyzer.Analytics;
+using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.App.Busy;
 using FrameViewAnalyzer.Core.Models;
 
@@ -23,6 +24,7 @@ public sealed record MultiBenchmarkSession(
 
 public partial class MainWindowViewModel
 {
+    private const int MultiLoadConcurrency = 3;
     private BenchmarkWorkspaceMode _workspaceMode = BenchmarkWorkspaceMode.Pair;
     private bool _multiAnalysisRangeSubscribed;
 
@@ -145,19 +147,43 @@ public partial class MainWindowViewModel
 
         try
         {
-            var loaded = new List<MultiBenchmarkSession>(paths.Count);
-            foreach (var path in paths)
+            // CSV reading and analysis are independent per capture. A bounded
+            // fan-out cuts Multi load time substantially while avoiding the
+            // memory/I/O spike of starting all eight long captures at once.
+            using var gate = new SemaphoreSlim(Math.Min(MultiLoadConcurrency, paths.Count));
+            var tasks = paths.Select(async (path, index) =>
             {
-                var session = await LoadSessionAsync(path);
-                if (session is null)
+                await gate.WaitAsync();
+                try
                 {
-                    throw new InvalidOperationException(
-                        $"The selected file is not a benchmark log: {System.IO.Path.GetFileName(path)}");
-                }
+                    var session = await LoadSessionAsync(path);
+                    if (session is null)
+                    {
+                        throw new InvalidOperationException(
+                            $"The selected file is not a benchmark log: {System.IO.Path.GetFileName(path)}");
+                    }
 
-                var label = CardNameOf(session, ManualMetadataOf(session));
-                loaded.Add(new MultiBenchmarkSession(session, label));
-            }
+                    var label = CardNameOf(session, ManualMetadataOf(session));
+                    return (Index: index, Item: new MultiBenchmarkSession(session, label));
+                }
+                finally
+                {
+                    gate.Release();
+                }
+            }).ToList();
+
+            var results = await Task.WhenAll(tasks);
+            var loaded = results
+                .OrderBy(result => result.Index)
+                .Select(result => result.Item)
+                .ToList();
+
+            // Metric discovery asks the first peer for every available series.
+            // Warm that immutable session off the UI thread so opening a large
+            // workspace never freezes between the busy overlay and the chart.
+            await _busy.RunOnThreadPoolAsync(
+                "Preparing chart data",
+                () => SeriesBuilder.Warm(loaded[0].Session));
 
             MultiSessions.Clear();
             foreach (var item in loaded)
@@ -170,6 +196,18 @@ public partial class MainWindowViewModel
             ActivateMultiWorkspace();
             NotifyMultiStateChanged();
             StatusText = $"MULTI WORKSPACE  ·  Comparing {MultiSessions.Count} benchmarks";
+
+            // The remaining peers warm quietly after the first frame is on
+            // screen. SeriesBuilder's thread-safe lazy cache means a user can
+            // switch metrics immediately; each peer/metric is still computed
+            // at most once even if foreground and warm-up race.
+            _ = Task.Run(() =>
+            {
+                foreach (var item in loaded.Skip(1))
+                {
+                    SeriesBuilder.Warm(item.Session);
+                }
+            });
         }
         catch (Exception error)
         {
