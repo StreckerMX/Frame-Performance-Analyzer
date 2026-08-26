@@ -368,5 +368,13 @@ public partial class MainWindowViewModel
         {
             SetWorkspaceMode(BenchmarkWorkspaceMode.Pair);
         }
+
+        // Base metric discovery already warms the first Pair session. Prime
+        // the second session quietly so switching Pair metrics does not pay a
+        // second full-capture scan the first time each metric is selected.
+        if (value is not null)
+        {
+            _ = Task.Run(() => SeriesBuilder.Warm(value));
+        }
     }
 }
