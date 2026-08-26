@@ -4,8 +4,8 @@ namespace FrameViewAnalyzer.App.Tests;
 
 /// <summary>
 /// Regression coverage for PNG report geometry: the header owns its band,
-/// one metric remains full-width, and multi-metric exports use the compact
-/// adaptive two-column grid.
+/// a lone metric remains full-width, FPS can occupy a principal full-width
+/// row, and secondary metrics use the compact adaptive two-column grid.
 /// </summary>
 public class ReportLayoutGeometryTests
 {
@@ -23,7 +23,7 @@ public class ReportLayoutGeometryTests
     }
 
     [Fact]
-    public void Single_metric_report_keeps_one_full_width_panel()
+    public void Single_metric_report_keeps_one_large_full_width_panel()
     {
         var height = ReportPlotBuilder.RecommendedHeight(panelCount: 1, headerHeight: 110);
         var rect = Assert.Single(ReportPlotBuilder.ReportPanelRects(
@@ -32,6 +32,7 @@ public class ReportLayoutGeometryTests
             headerHeight: 110,
             panelCount: 1));
 
+        Assert.Equal(110 + ReportPlotBuilder.PrimaryRowHeight, height);
         Assert.Equal(0, rect.Left);
         Assert.Equal(1600, rect.Right);
         Assert.Equal(110, rect.Top);
@@ -39,7 +40,7 @@ public class ReportLayoutGeometryTests
     }
 
     [Fact]
-    public void Multiple_metrics_use_two_columns()
+    public void Multiple_metrics_without_primary_fps_use_two_columns()
     {
         var height = ReportPlotBuilder.RecommendedHeight(panelCount: 6, headerHeight: 110);
         var rects = ReportPlotBuilder.ReportPanelRects(
@@ -58,7 +59,53 @@ public class ReportLayoutGeometryTests
     }
 
     [Fact]
-    public void Odd_final_metric_spans_the_complete_last_row()
+    public void Fps_primary_panel_spans_the_full_first_row()
+    {
+        var height = ReportPlotBuilder.RecommendedHeight(
+            panelCount: 5,
+            headerHeight: 110,
+            hasPrimaryFps: true);
+        var rects = ReportPlotBuilder.ReportPanelRects(
+            width: 1600,
+            height,
+            headerHeight: 110,
+            panelCount: 5,
+            hasPrimaryFps: true);
+
+        Assert.Equal(5, rects.Count);
+        Assert.Equal(0, rects[0].Left);
+        Assert.Equal(1600, rects[0].Right);
+        Assert.Equal(110, rects[0].Top);
+        Assert.Equal(110 + ReportPlotBuilder.PrimaryRowHeight, rects[0].Bottom);
+
+        Assert.Equal(rects[0].Bottom + ReportPlotBuilder.GridGap, rects[1].Top);
+        Assert.Equal(rects[1].Top, rects[2].Top);
+        Assert.True(rects[1].Right < rects[2].Left);
+    }
+
+    [Fact]
+    public void Odd_final_secondary_metric_spans_the_complete_last_row()
+    {
+        var height = ReportPlotBuilder.RecommendedHeight(
+            panelCount: 6,
+            headerHeight: 110,
+            hasPrimaryFps: true);
+        var rects = ReportPlotBuilder.ReportPanelRects(
+            width: 1600,
+            height,
+            headerHeight: 110,
+            panelCount: 6,
+            hasPrimaryFps: true);
+
+        var last = rects[^1];
+        Assert.Equal(0, last.Left);
+        Assert.Equal(1600, last.Right);
+        Assert.Equal(height, last.Bottom);
+        Assert.True(last.Top > rects[3].Top);
+    }
+
+    [Fact]
+    public void Odd_final_metric_without_primary_spans_the_complete_last_row()
     {
         var height = ReportPlotBuilder.RecommendedHeight(panelCount: 5, headerHeight: 110);
         var rects = ReportPlotBuilder.ReportPanelRects(
@@ -75,21 +122,32 @@ public class ReportLayoutGeometryTests
     }
 
     [Fact]
-    public void Recommended_height_grows_by_grid_rows_instead_of_metric_count()
+    public void Recommended_height_uses_primary_and_secondary_rows_instead_of_metric_count()
     {
         const int headerHeight = 110;
 
         var one = ReportPlotBuilder.RecommendedHeight(1, headerHeight);
-        var two = ReportPlotBuilder.RecommendedHeight(2, headerHeight);
-        var three = ReportPlotBuilder.RecommendedHeight(3, headerHeight);
-        var six = ReportPlotBuilder.RecommendedHeight(6, headerHeight);
+        var twoPlain = ReportPlotBuilder.RecommendedHeight(2, headerHeight);
+        var fiveWithFps = ReportPlotBuilder.RecommendedHeight(5, headerHeight, hasPrimaryFps: true);
+        var sixWithFps = ReportPlotBuilder.RecommendedHeight(6, headerHeight, hasPrimaryFps: true);
 
-        Assert.Equal(one, two);
-        Assert.True(three > two);
-        Assert.True(six > three);
+        Assert.Equal(headerHeight + ReportPlotBuilder.PrimaryRowHeight, one);
+        Assert.Equal(headerHeight + ReportPlotBuilder.GridRowHeight, twoPlain);
         Assert.Equal(
-            headerHeight + 3 * ReportPlotBuilder.GridRowHeight + 2 * ReportPlotBuilder.GridGap,
-            six);
+            headerHeight
+            + ReportPlotBuilder.PrimaryRowHeight
+            + ReportPlotBuilder.GridGap
+            + 2 * ReportPlotBuilder.GridRowHeight
+            + ReportPlotBuilder.GridGap,
+            fiveWithFps);
+        Assert.Equal(
+            headerHeight
+            + ReportPlotBuilder.PrimaryRowHeight
+            + ReportPlotBuilder.GridGap
+            + 3 * ReportPlotBuilder.GridRowHeight
+            + 2 * ReportPlotBuilder.GridGap,
+            sixWithFps);
+        Assert.True(sixWithFps > fiveWithFps);
     }
 
     [Fact]
