@@ -245,7 +245,7 @@ public static class PortableAnalysisExport
         return new PortableSessionDto(
             sessionIndex,
             role,
-            option.Label,
+            option.DisplayName,
             Path.GetFileName(session.Capture.Path),
             new AnalysisOptionsDto(
                 session.EffectiveOptions.GpuThreshold,
