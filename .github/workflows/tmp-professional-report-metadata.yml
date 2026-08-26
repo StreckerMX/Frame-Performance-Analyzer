@@ -1,0 +1,157 @@
+name: Temporary professional report metadata fix
+
+on:
+  push:
+    branches:
+      - experiment/export-report-grid
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/export-report-grid
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Apply report fixes and regression tests
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected 1 match, found {count}")
+              return text.replace(old, new, 1)
+
+          report_path = Path('src/FrameViewAnalyzer.App/Charting/ReportPlotBuilder.cs')
+          text = report_path.read_text(encoding='utf-8')
+
+          text = replace_once(
+              text,
+              'using FrameViewAnalyzer.Core.Metrics;\n',
+              'using FrameViewAnalyzer.Core.Metrics;\nusing FrameViewAnalyzer.Core.Models;\n',
+              'models using')
+
+          text = replace_once(
+              text,
+              '    /// <summary>Report title plus legacy/free-form header lines.</summary>\n    public sealed record ReportHeader(string Title, IReadOnlyList<string> Lines);',
+              '''    /// <summary>Report title plus export semantics and optional per-run manual metadata.</summary>\n    public sealed record ReportHeader(\n        string Title,\n        IReadOnlyList<string> Lines,\n        bool UseProfessionalLayout = false,\n        bool IsMultiReport = false,\n        IReadOnlyDictionary<string, ManualMetadata?>? ManualMetadataByPath = null);''',
+              'ReportHeader')
+
+          text = replace_once(
+              text,
+              '''    private sealed record ReportRunContext(\n        string Role,\n        string Label,\n        ScottPlot.Color Color,\n        SessionAnalysis? Session);''',
+              '''    private sealed record ReportRunContext(\n        string Role,\n        string Label,\n        ScottPlot.Color Color,\n        SessionAnalysis? Session,\n        ManualMetadata? ManualMetadata);''',
+              'ReportRunContext')
+
+          text = replace_once(text, '    private const int ReportRunCardHeight = 132;', '    private const int ReportRunCardHeight = 198;', 'card height')
+
+          text = replace_once(
+              text,
+              '        var professional = header is not null && IsBenchmarkReportTitle(header.Title);',
+              '        var professional = header is not null && ShouldUseProfessionalLayout(header);',
+              'professional routing')
+
+          text = replace_once(
+              text,
+              '        var runs = BuildRunContexts(buildContext, style);',
+              '        var runs = BuildRunContexts(buildContext, style, header.ManualMetadataByPath);',
+              'run metadata wiring')
+
+          text = replace_once(
+              text,
+              '''        var isMulti = buildContext?.Groups.FirstOrDefault()?.IsMultiWorkspace == true\n            || header.Title.Contains("MULTI BENCHMARK COMPARISON", StringComparison.OrdinalIgnoreCase);''',
+              '''        var isMulti = header.IsMultiReport\n            || buildContext?.Groups.FirstOrDefault()?.IsMultiWorkspace == true\n            || header.Title.Contains("MULTI BENCHMARK COMPARISON", StringComparison.OrdinalIgnoreCase);''',
+              'multi semantic routing')
+
+          text = replace_once(
+              text,
+              '''        var commonApplication = CommonSessionValue(\n            sessions,\n            session => session.Metadata?.Application,\n            DisplayText.CleanGameName);\n        var commonResolution = CommonSessionValue(sessions, session => session.Metadata?.Resolution);\n        var commonGpu = CommonSessionValue(\n            sessions,\n            session => session.Metadata?.Gpu,\n            DisplayText.CompactHardware);\n        var commonCpu = CommonSessionValue(\n            sessions,\n            session => session.Metadata?.Cpu,\n            DisplayText.CompactHardware);''',
+              '''        var commonApplication = CommonRunValue(runs, RunApplication, DisplayText.CleanGameName);\n        var commonResolution = CommonRunValue(runs, RunResolution);\n        var commonGpu = CommonRunValue(runs, RunGpu, DisplayText.CompactHardware);\n        var commonCpu = CommonRunValue(runs, RunCpu, DisplayText.CompactHardware);\n        var commonDriver = CommonRunValue(runs, run => run.ManualMetadata?.DriverVersion);''',
+              'common report values')
+
+          text = replace_once(
+              text,
+              '''        AddConfig(config, "GPU", commonGpu);\n        AddConfig(config, "CPU", commonCpu);''',
+              '''        AddConfig(config, "GPU", commonGpu);\n        AddConfig(config, "CPU", commonCpu);\n        AddConfig(config, "DRIVER", commonDriver);''',
+              'driver config')
+
+          text = replace_once(
+              text,
+              '''    private static IReadOnlyList<ReportRunContext> BuildRunContexts(\n        ReportBuildContext? context,\n        ChartStyle style)''',
+              '''    private static IReadOnlyList<ReportRunContext> BuildRunContexts(\n        ReportBuildContext? context,\n        ChartStyle style,\n        IReadOnlyDictionary<string, ManualMetadata?>? manualMetadataByPath)''',
+              'BuildRunContexts signature')
+
+          text = replace_once(
+              text,
+              '''            runs.Add(new ReportRunContext(\n                role,\n                ReportRunDisplayLabel(series.LabelOrDefault),\n                SeriesColor(group, series, style),\n                series.SourceSession));''',
+              '''            runs.Add(new ReportRunContext(\n                role,\n                ReportRunDisplayLabel(series.LabelOrDefault),\n                SeriesColor(group, series, style),\n                series.SourceSession,\n                ResolveManualMetadata(series, manualMetadataByPath)));''',
+              'run context construction')
+
+          insert_after = '''        return runs;\n    }\n\n    /// <summary>\n    /// Removes Pair picker role prefixes because the report card already has a'''
+          replacement = '''        return runs;\n    }\n\n    private static ManualMetadata? ResolveManualMetadata(\n        MetricSeries series,\n        IReadOnlyDictionary<string, ManualMetadata?>? manualMetadataByPath)\n    {\n        var path = series.SourceSession?.Capture.Path;\n        if (manualMetadataByPath is null || string.IsNullOrWhiteSpace(path))\n        {\n            return null;\n        }\n\n        return manualMetadataByPath.TryGetValue(path, out var manual) ? manual : null;\n    }\n\n    private static string? RunApplication(ReportRunContext run) =>\n        IsUseful(run.ManualMetadata?.Game)\n            ? run.ManualMetadata!.Game\n            : run.Session?.Metadata?.Application;\n\n    private static string? RunResolution(ReportRunContext run) =>\n        IsUseful(run.ManualMetadata?.Resolution)\n            ? run.ManualMetadata!.Resolution\n            : run.Session?.Metadata?.Resolution;\n\n    private static string? RunGpu(ReportRunContext run) => run.Session?.Metadata?.Gpu;\n\n    private static string? RunCpu(ReportRunContext run) => run.Session?.Metadata?.Cpu;\n\n    private static string? CommonRunValue(\n        IReadOnlyList<ReportRunContext> runs,\n        Func<ReportRunContext, string?> selector,\n        Func<string, string>? transform = null)\n    {\n        if (runs.Count == 0)\n        {\n            return null;\n        }\n\n        var values = new List<string>(runs.Count);\n        foreach (var run in runs)\n        {\n            var raw = selector(run);\n            if (!IsUseful(raw))\n            {\n                return null;\n            }\n\n            var value = transform is null ? raw!.Trim() : transform(raw!);\n            if (!IsUseful(value))\n            {\n                return null;\n            }\n\n            values.Add(value);\n        }\n\n        var first = values[0];\n        return values.All(value => string.Equals(value, first, StringComparison.OrdinalIgnoreCase))\n            ? first\n            : null;\n    }\n\n    /// <summary>\n    /// Removes Pair picker role prefixes because the report card already has a'''
+          text = replace_once(text, insert_after, replacement, 'manual metadata helpers')
+
+          text = replace_once(
+              text,
+              '''        var sessions = context.Runs\n            .Select(run => run.Session)\n            .Where(session => session is not null)\n            .Cast<SessionAnalysis>()\n            .ToList();\n        var commonApplication = CommonSessionValue(\n            sessions,\n            session => session.Metadata?.Application,\n            DisplayText.CleanGameName);\n        var commonResolution = CommonSessionValue(sessions, session => session.Metadata?.Resolution);\n        var commonGpu = CommonSessionValue(\n            sessions,\n            session => session.Metadata?.Gpu,\n            DisplayText.CompactHardware);\n        var commonCpu = CommonSessionValue(\n            sessions,\n            session => session.Metadata?.Cpu,\n            DisplayText.CompactHardware);''',
+              '''        var commonApplication = CommonRunValue(context.Runs, RunApplication, DisplayText.CleanGameName);\n        var commonResolution = CommonRunValue(context.Runs, RunResolution);\n        var commonGpu = CommonRunValue(context.Runs, RunGpu, DisplayText.CompactHardware);\n        var commonCpu = CommonRunValue(context.Runs, RunCpu, DisplayText.CompactHardware);''',
+              'run card common values')
+
+          text = replace_once(
+              text,
+              '''            var session = context.Runs[i].Session;\n            var contextLine = RunContextLine(\n                session,\n                commonApplication,\n                commonResolution,\n                commonGpu,\n                commonCpu);\n            var dataLines = RunDataLines(session);\n            var analysisLine = RunAnalysisLine(session, context.Methodology);\n\n            var cursor = cardTop + 66;\n            if (contextLine.Length > 0)\n            {\n                DrawDetailLine(canvas, contextLine, left, cardWidth, cursor, detailFont, detailPaint);\n                cursor += 19;\n            }\n\n            foreach (var line in dataLines)\n            {\n                DrawDetailLine(canvas, line, left, cardWidth, cursor, detailFont, detailPaint);\n                cursor += 19;\n            }\n\n            if (analysisLine.Length > 0 && cursor <= cardTop + ReportRunCardHeight - 12)\n            {\n                DrawDetailLine(canvas, analysisLine, left, cardWidth, cursor, detailFont, detailPaint);\n            }''',
+              '''            var run = context.Runs[i];\n            var session = run.Session;\n            var contextLine = RunContextLine(\n                run,\n                commonApplication,\n                commonResolution,\n                commonGpu,\n                commonCpu);\n            var manualLines = ReportManualMetadataLines(run.ManualMetadata);\n            var dataLines = RunDataLines(session);\n            var analysisLine = RunAnalysisLine(session, context.Methodology);\n\n            var cursor = cardTop + 66;\n            if (contextLine.Length > 0)\n            {\n                DrawDetailLine(canvas, contextLine, left, cardWidth, cursor, detailFont, detailPaint);\n                cursor += 19;\n            }\n\n            foreach (var line in manualLines)\n            {\n                if (cursor > cardTop + ReportRunCardHeight - 12)\n                {\n                    break;\n                }\n\n                DrawDetailLine(canvas, line, left, cardWidth, cursor, detailFont, detailPaint);\n                cursor += 19;\n            }\n\n            foreach (var line in dataLines)\n            {\n                if (cursor > cardTop + ReportRunCardHeight - 12)\n                {\n                    break;\n                }\n\n                DrawDetailLine(canvas, line, left, cardWidth, cursor, detailFont, detailPaint);\n                cursor += 19;\n            }\n\n            if (analysisLine.Length > 0 && cursor <= cardTop + ReportRunCardHeight - 12)\n            {\n                DrawDetailLine(canvas, analysisLine, left, cardWidth, cursor, detailFont, detailPaint);\n            }''',
+              'run card metadata drawing')
+
+          text = replace_once(
+              text,
+              '''    private static string RunContextLine(\n        SessionAnalysis? session,\n        string? commonApplication,\n        string? commonResolution,\n        string? commonGpu,\n        string? commonCpu)\n    {\n        if (session?.Metadata is not { } metadata)\n        {\n            return string.Empty;\n        }\n\n        var parts = new List<string>();\n        if (commonApplication is null && IsUseful(metadata.Application))\n        {\n            parts.Add(DisplayText.CleanGameName(metadata.Application));\n        }\n\n        if (commonResolution is null && IsUseful(metadata.Resolution))\n        {\n            parts.Add(metadata.Resolution);\n        }\n\n        if (commonGpu is null && IsUseful(metadata.Gpu))\n        {\n            parts.Add(DisplayText.CompactHardware(metadata.Gpu));\n        }\n\n        if (commonCpu is null && IsUseful(metadata.Cpu))\n        {\n            parts.Add(DisplayText.CompactHardware(metadata.Cpu));\n        }\n\n        return string.Join("  ·  ", parts);\n    }''',
+              '''    private static string RunContextLine(\n        ReportRunContext run,\n        string? commonApplication,\n        string? commonResolution,\n        string? commonGpu,\n        string? commonCpu)\n    {\n        var parts = new List<string>();\n        var application = RunApplication(run);\n        var resolution = RunResolution(run);\n        var gpu = RunGpu(run);\n        var cpu = RunCpu(run);\n\n        if (commonApplication is null && IsUseful(application))\n        {\n            parts.Add(DisplayText.CleanGameName(application!));\n        }\n\n        if (commonResolution is null && IsUseful(resolution))\n        {\n            parts.Add(resolution!);\n        }\n\n        if (commonGpu is null && IsUseful(gpu))\n        {\n            parts.Add(DisplayText.CompactHardware(gpu!));\n        }\n\n        if (commonCpu is null && IsUseful(cpu))\n        {\n            parts.Add(DisplayText.CompactHardware(cpu!));\n        }\n\n        return string.Join("  ·  ", parts);\n    }\n\n    /// <summary>Human-authored metadata lines shown inside each benchmark card.</summary>\n    internal static IReadOnlyList<string> ReportManualMetadataLines(ManualMetadata? manual)\n    {\n        if (manual is null)\n        {\n            return [];\n        }\n\n        var lines = new List<string>();\n        var config = new List<string>();\n        if (IsUseful(manual.GraphicsPreset))\n        {\n            config.Add(manual.GraphicsPreset.Trim());\n        }\n\n        if (IsUseful(manual.Upscaler))\n        {\n            var upscaler = manual.Upscaler.Trim();\n            if (IsUseful(manual.UpscalerQuality))\n            {\n                upscaler += " " + manual.UpscalerQuality.Trim();\n            }\n\n            config.Add(upscaler);\n        }\n\n        if (IsUseful(manual.FrameGeneration))\n        {\n            config.Add(manual.FrameGeneration.Trim());\n        }\n\n        if (IsUseful(manual.RayTracing))\n        {\n            config.Add(manual.RayTracing.Trim());\n        }\n\n        if (config.Count > 0)\n        {\n            lines.Add(string.Join("  ·  ", config));\n        }\n\n        var technical = new List<string>();\n        if (IsUseful(manual.DriverVersion))\n        {\n            technical.Add("Driver " + manual.DriverVersion.Trim());\n        }\n\n        if (manual.Tags.Count > 0)\n        {\n            technical.Add("Tags: " + string.Join(", ", manual.Tags.Where(IsUseful)));\n        }\n\n        if (technical.Count > 0)\n        {\n            lines.Add(string.Join("  ·  ", technical));\n        }\n\n        if (IsUseful(manual.Notes))\n        {\n            lines.Add("Notes: " + manual.Notes.Trim());\n        }\n\n        return lines;\n    }''',
+              'RunContextLine and manual lines')
+
+          text = replace_once(
+              text,
+              '''    private static bool IsBenchmarkReportTitle(string title) =>\n        title.Contains("BENCHMARK COMPARISON", StringComparison.OrdinalIgnoreCase);''',
+              '''    internal static bool ShouldUseProfessionalLayout(ReportHeader header) =>\n        header.UseProfessionalLayout || IsBenchmarkReportTitle(header.Title);\n\n    private static bool IsBenchmarkReportTitle(string title) =>\n        title.Contains("BENCHMARK COMPARISON", StringComparison.OrdinalIgnoreCase);''',
+              'professional helper')
+
+          report_path.write_text(text, encoding='utf-8')
+
+          main_path = Path('src/FrameViewAnalyzer.App/MainWindow.xaml.cs')
+          text = main_path.read_text(encoding='utf-8')
+          text = replace_once(
+              text,
+              '''        foreach (var option in selection.Sessions)\n        {\n            lines.Add(option.HeaderLine);\n        }\n\n        return new ReportPlotBuilder.ReportHeader(title, lines);''',
+              '''        foreach (var option in selection.Sessions)\n        {\n            lines.Add(option.HeaderLine);\n        }\n\n        var manualMetadataByPath = selection.Sessions\n            .GroupBy(option => option.Session.Capture.Path, StringComparer.OrdinalIgnoreCase)\n            .ToDictionary(\n                group => group.Key,\n                group => _viewModel.ManualMetadataFor(group.First().Session),\n                StringComparer.OrdinalIgnoreCase);\n\n        return new ReportPlotBuilder.ReportHeader(\n            title,\n            lines,\n            UseProfessionalLayout: true,\n            IsMultiReport: isMultiReport,\n            ManualMetadataByPath: manualMetadataByPath);''',
+              'MainWindow professional header')
+          main_path.write_text(text, encoding='utf-8')
+
+          tests = Path('tests/FrameViewAnalyzer.App.Tests/ProfessionalReportMetadataTests.cs')
+          tests.write_text(r'''using FrameViewAnalyzer.App.Charting;\nusing FrameViewAnalyzer.Core.Models;\n\nnamespace FrameViewAnalyzer.App.Tests;\n\npublic class ProfessionalReportMetadataTests\n{\n    [Fact]\n    public void Custom_user_title_can_still_force_professional_layout()\n    {\n        var header = new ReportPlotBuilder.ReportHeader(\n            "BENCHMARK CRIMSON DESERT",\n            [],\n            UseProfessionalLayout: true);\n\n        Assert.True(ReportPlotBuilder.ShouldUseProfessionalLayout(header));\n    }\n\n    [Fact]\n    public void Arbitrary_legacy_title_remains_legacy_without_explicit_report_semantics()\n    {\n        var header = new ReportPlotBuilder.ReportHeader("Night Run", []);\n\n        Assert.False(ReportPlotBuilder.ShouldUseProfessionalLayout(header));\n    }\n\n    [Fact]\n    public void Manual_metadata_lines_include_configuration_driver_tags_and_notes()\n    {\n        var metadata = new ManualMetadata(\n            GraphicsPreset: "Optimized",\n            Upscaler: "DLSS",\n            UpscalerQuality: "Quality",\n            FrameGeneration: "FG x4",\n            RayTracing: "Full RT",\n            DriverVersion: "581.29",\n            Notes: "No background apps",\n            Tags: ["clean", "comparison"]);\n\n        var lines = ReportPlotBuilder.ReportManualMetadataLines(metadata);\n\n        Assert.Equal(3, lines.Count);\n        Assert.Contains("Optimized", lines[0]);\n        Assert.Contains("DLSS Quality", lines[0]);\n        Assert.Contains("FG x4", lines[0]);\n        Assert.Contains("Full RT", lines[0]);\n        Assert.Contains("Driver 581.29", lines[1]);\n        Assert.Contains("Tags: clean, comparison", lines[1]);\n        Assert.Equal("Notes: No background apps", lines[2]);\n    }\n}\n'''.replace('\\n', '\n'), encoding='utf-8')
+
+          Path('.github/workflows/tmp-professional-report-metadata.yml').unlink()
+          '@ | python -
+      - name: Restore
+        run: dotnet restore FrameViewAnalyzer.sln
+      - name: Build
+        run: dotnet build FrameViewAnalyzer.sln --configuration Release --no-restore
+      - name: Test
+        run: dotnet test FrameViewAnalyzer.sln --configuration Release --no-build
+      - name: Commit patch and remove temporary workflow
+        shell: pwsh
+        run: |
+          git config user.name "Strecker"
+          git config user.email "101173645+StreckerMX@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: keep professional layout and include report metadata"
+          git push origin HEAD:experiment/export-report-grid
