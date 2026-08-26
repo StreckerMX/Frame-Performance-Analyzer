@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FrameView Analyzer — NVIDIA FrameView Benchmark Analysis Tool</title>
+  <meta name="description" content="FrameView Analyzer is a free, open-source Windows app for NVIDIA FrameView and NVIDIA App performance logs. Compare 2–8 benchmarks, inspect FPS and telemetry, filter loading screens, organize captures, and export professional PNG reports.">
+  <meta name="keywords" content="FrameView Analyzer, NVIDIA FrameView, NVIDIA App performance log, benchmark analyzer, FPS benchmark, GPU benchmark, PC latency, frame time, benchmark comparison, Windows">
+  <meta name="author" content="Strecker">
+  <meta name="theme-color" content="#000000">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <link rel="canonical" href="https://streckermx.github.io/FrameView-Analyzer/">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="FrameView Analyzer">
+  <meta property="og:title" content="FrameView Analyzer — NVIDIA FrameView Benchmark Analysis Tool">
+  <meta property="og:description" content="Analyze NVIDIA FrameView and NVIDIA App performance logs, compare up to 8 benchmark runs, filter noisy capture regions, and export professional reports.">
+  <meta property="og:url" content="https://streckermx.github.io/FrameView-Analyzer/">
+  <meta property="og:image" content="https://streckermx.github.io/FrameView-Analyzer/site-assets/pair-comparison.webp">
+  <meta property="og:image:alt" content="FrameView Analyzer Pair benchmark comparison workspace">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "FrameView Analyzer",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "Windows 10, Windows 11",
+    "softwareVersion": "3.0.0",
+    "isAccessibleForFree": true,
+    "description": "Free and open-source Windows desktop application for analyzing and comparing NVIDIA FrameView captures and NVIDIA App performance logs.",
+    "url": "https://streckermx.github.io/FrameView-Analyzer/",
+    "downloadUrl": "https://github.com/StreckerMX/FrameView-Analyzer/releases/latest",
+    "codeRepository": "https://github.com/StreckerMX/FrameView-Analyzer",
+    "license": "https://github.com/StreckerMX/FrameView-Analyzer/blob/main/LICENSE",
+    "author": {"@type": "Person", "name": "Strecker"}
+  }
+  </script>
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #000000;
+      --panel: #090909;
+      --panel-2: #0d0d0d;
+      --line: #242424;
+      --line-soft: #171717;
+      --text: #f5f5f5;
+      --muted: #9b9b9b;
+      --muted-2: #727272;
+      --green: #76b900;
+      --green-bright: #8dde00;
+      --cyan: #48b9ea;
+      --radius: 18px;
+      --max: 1240px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--bg); }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    a { color: inherit; }
+    img { max-width: 100%; display: block; }
+    .shell { width: min(calc(100% - 40px), var(--max)); margin: 0 auto; }
+
+    .nav-wrap {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(0, 0, 0, .88);
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--line-soft);
+    }
+    nav {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 800; }
+    .mark {
+      width: 38px; height: 38px; border-radius: 9px;
+      border: 1px solid #3a3a3a; background: #111;
+      display: grid; place-items: center; box-shadow: inset 0 0 0 1px #080808;
+    }
+    .mark svg { width: 27px; height: 27px; }
+    .nav-links { display: flex; align-items: center; gap: 24px; color: #c4c4c4; font-size: 14px; }
+    .nav-links a { text-decoration: none; }
+    .nav-links a:hover { color: white; }
+    .nav-cta { padding: 10px 15px; border: 1px solid #4b7500; border-radius: 10px; color: #dfffad !important; background: #132000; }
+
+    .hero { padding: 92px 0 64px; overflow: hidden; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 9px;
+      color: var(--green-bright); font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-bright); box-shadow: 0 0 18px rgba(141, 222, 0, .55); }
+    h1 { margin: 0; max-width: 950px; font-size: clamp(48px, 8vw, 92px); line-height: .98; letter-spacing: -.052em; }
+    .hero h1 span { color: var(--green-bright); }
+    .lead { max-width: 790px; margin: 28px 0 0; color: #b5b5b5; font-size: clamp(18px, 2.1vw, 23px); line-height: 1.6; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 34px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 50px; padding: 0 19px; border-radius: 11px; text-decoration: none; font-weight: 800; font-size: 15px; border: 1px solid var(--line); transition: .18s ease; }
+    .btn.primary { color: #0a0a0a; background: var(--green-bright); border-color: var(--green-bright); }
+    .btn.primary:hover { transform: translateY(-1px); filter: brightness(1.07); }
+    .btn.secondary { background: #0d0d0d; color: white; }
+    .btn.secondary:hover { border-color: #555; background: #131313; }
+    .pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 25px; }
+    .pill { border: 1px solid var(--line); background: #080808; color: #a7a7a7; border-radius: 999px; padding: 7px 11px; font-size: 12px; }
+
+    .hero-shot-wrap { margin-top: 60px; position: relative; }
+    .hero-shot-wrap::before {
+      content: ""; position: absolute; inset: -20% 12% auto; height: 40%; z-index: -1;
+      background: radial-gradient(circle, rgba(118,185,0,.16), transparent 66%); filter: blur(32px);
+    }
+    .shot {
+      border: 1px solid #2b2b2b; border-radius: 16px; overflow: hidden; background: #050505;
+      box-shadow: 0 40px 100px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.015) inset;
+    }
+    .shot img { width: 100%; height: auto; }
+
+    section { padding: 90px 0; border-top: 1px solid var(--line-soft); }
+    .section-kicker { color: var(--green-bright); text-transform: uppercase; letter-spacing: .1em; font-weight: 800; font-size: 12px; margin-bottom: 12px; }
+    h2 { margin: 0; font-size: clamp(34px, 5vw, 56px); line-height: 1.05; letter-spacing: -.035em; max-width: 800px; }
+    .section-copy { margin: 20px 0 0; color: var(--muted); max-width: 730px; font-size: 18px; line-height: 1.65; }
+
+    .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 42px; }
+    .card { border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(180deg, #0c0c0c, #070707); padding: 25px; min-height: 220px; }
+    .card .num { color: var(--green-bright); font-size: 12px; font-weight: 900; letter-spacing: .08em; }
+    .card h3 { margin: 22px 0 10px; font-size: 20px; letter-spacing: -.02em; }
+    .card p { color: var(--muted); line-height: 1.62; margin: 0; font-size: 15px; }
+
+    .gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 44px; align-items: start; }
+    .gallery figure { margin: 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: #060606; }
+    .gallery figure.tall { grid-row: span 2; }
+    .gallery img { width: 100%; }
+    .gallery figcaption { padding: 14px 16px 16px; border-top: 1px solid var(--line-soft); }
+    .gallery strong { display: block; font-size: 14px; }
+    .gallery span { display: block; color: var(--muted-2); font-size: 12px; margin-top: 4px; }
+
+    .flow { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 42px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+    .flow article { padding: 28px; background: #070707; }
+    .flow article + article { border-left: 1px solid var(--line); }
+    .flow b { display: inline-grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; background: var(--green); color: #050505; font-size: 13px; }
+    .flow h3 { margin: 18px 0 9px; font-size: 19px; }
+    .flow p { margin: 0; color: var(--muted); line-height: 1.6; font-size: 14px; }
+
+    .privacy { display: grid; grid-template-columns: 1.1fr .9fr; gap: 36px; align-items: center; }
+    .privacy-box { border: 1px solid #294400; background: linear-gradient(145deg,#0b1200,#050805); border-radius: 20px; padding: 30px; }
+    .privacy-box ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 17px; }
+    .privacy-box li { color: #d1d1d1; display: flex; gap: 12px; align-items: flex-start; }
+    .check { color: var(--green-bright); font-weight: 900; }
+
+    .download-panel { border: 1px solid #355800; border-radius: 24px; padding: 40px; background: radial-gradient(circle at 90% 0%, rgba(118,185,0,.16), transparent 35%), #070907; display: flex; align-items: center; justify-content: space-between; gap: 28px; }
+    .download-panel h2 { font-size: clamp(32px, 4vw, 48px); }
+    .download-panel p { color: var(--muted); margin: 12px 0 0; }
+
+    footer { border-top: 1px solid var(--line-soft); padding: 34px 0 50px; color: #777; font-size: 13px; }
+    .footer-row { display: flex; gap: 20px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+    footer a { color: #aaa; text-decoration: none; }
+    footer a:hover { color: white; }
+
+    @media (max-width: 900px) {
+      .nav-links a:not(.nav-cta) { display: none; }
+      .hero { padding-top: 68px; }
+      .feature-grid, .flow { grid-template-columns: 1fr; }
+      .flow article + article { border-left: 0; border-top: 1px solid var(--line); }
+      .gallery { grid-template-columns: 1fr; }
+      .gallery figure.tall { grid-row: auto; }
+      .privacy { grid-template-columns: 1fr; }
+      .download-panel { display: block; }
+      .download-panel .actions { margin-top: 26px; }
+    }
+    @media (max-width: 560px) {
+      .shell { width: min(calc(100% - 24px), var(--max)); }
+      nav { min-height: 62px; }
+      .brand span:last-child { font-size: 14px; }
+      .nav-cta { padding: 8px 10px; font-size: 12px; }
+      .hero { padding-bottom: 50px; }
+      h1 { font-size: clamp(44px, 14vw, 68px); }
+      .lead { font-size: 17px; }
+      section { padding: 68px 0; }
+      .card, .flow article, .privacy-box, .download-panel { padding: 22px; }
+      .actions .btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="nav-wrap">
+    <nav class="shell" aria-label="Main navigation">
+      <a class="brand" href="#top" aria-label="FrameView Analyzer home">
+        <span class="mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none"><path d="M6 25V7h10" stroke="#bfc5c8" stroke-width="2.2" stroke-linecap="round"/><path d="M8 23l5-6 4 3 7-10" stroke="#8dde00" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 10h4v4" stroke="#8dde00" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span>FrameView Analyzer</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#screenshots">Screenshots</a>
+        <a href="https://github.com/StreckerMX/FrameView-Analyzer" rel="noopener">GitHub</a>
+        <a class="nav-cta" href="https://github.com/StreckerMX/FrameView-Analyzer/releases/latest" rel="noopener">Download</a>
+      </div>
+    </nav>
+  </div>
+
+  <main id="top">
+    <header class="hero shell">
+      <div class="eyebrow"><span class="dot"></span> Free · Open source · Windows x64</div>
+      <h1>Benchmark data,<br><span>finally readable.</span></h1>
+      <p class="lead">FrameView Analyzer turns NVIDIA FrameView captures and NVIDIA App performance logs into an interactive benchmark workspace for serious comparisons, clean telemetry analysis, and presentation-ready reports.</p>
+      <div class="actions">
+        <a class="btn primary" href="https://github.com/StreckerMX/FrameView-Analyzer/releases/download/v3.0.0/FrameViewAnalyzer-v3.0.0-win-x64.zip">Download v3.0.0</a>
+        <a class="btn secondary" href="https://github.com/StreckerMX/FrameView-Analyzer" rel="noopener">View source on GitHub</a>
+      </div>
+      <div class="pills" aria-label="Project highlights">
+        <span class="pill">Pair + Multi comparison</span>
+        <span class="pill">2–8 benchmark runs</span>
+        <span class="pill">Local-only processing</span>
+        <span class="pill">No telemetry</span>
+        <span class="pill">MIT licensed</span>
+      </div>
+      <div class="hero-shot-wrap">
+        <div class="shot">
+          <img src="site-assets/pair-comparison.webp" width="1542" height="1056" alt="FrameView Analyzer comparing two Crimson Desert benchmark runs with FPS calculated over time" fetchpriority="high">
+        </div>
+      </div>
+    </header>
+
+    <section id="features">
+      <div class="shell">
+        <div class="section-kicker">Built for benchmark workflows</div>
+        <h2>More than a CSV viewer.</h2>
+        <p class="section-copy">FrameView Analyzer keeps the raw capture useful while removing the spreadsheet archaeology. Compare runs, focus on the section that matters, preserve benchmark context, and export results without rebuilding every graph by hand.</p>
+
+        <div class="feature-grid">
+          <article class="card"><div class="num">01</div><h3>Pair comparison</h3><p>Load a Base and Comparison run, inspect FPS, frame time, PC latency, GPU/CPU utilization and other available telemetry, and see direction-aware KPI deltas at a glance.</p></article>
+          <article class="card"><div class="num">02</div><h3>Multi benchmark</h3><p>Compare 2–8 captures as equal peers with stable colors across charts, KPI rows, selectors, and exported reports. Ideal for graphics-setting and technology shootouts.</p></article>
+          <article class="card"><div class="num">03</div><h3>Cleaner analysis ranges</h3><p>Detect GPU-active regions, trim capture edges, and exclude loading screens, transitions, and abnormal FPS regions so the benchmark reflects the gameplay you intended to measure.</p></article>
+          <article class="card"><div class="num">04</div><h3>Visible-range statistics</h3><p>Zoom and pan through a capture while statistics recalculate for the visible time range. FPS exposes Average, 1% Low, 0.1% Low, Max, Min, and Visible Time.</p></article>
+          <article class="card"><div class="num">05</div><h3>Benchmark Library</h3><p>Keep captures organized with search, filters, metadata, tags, sorting, recent comparisons, and direct Base/Comparison or Multi selection without modifying the original CSV files.</p></article>
+          <article class="card"><div class="num">06</div><h3>Professional PNG reports</h3><p>Choose the benchmarks and metrics you want, add a report title, preserve benchmark metadata, and generate a clean black-background report ready for posts, videos, documentation, or review.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="screenshots">
+      <div class="shell">
+        <div class="section-kicker">Real interface · Real output</div>
+        <h2>What you see is what you benchmark.</h2>
+        <p class="section-copy">These screenshots are from FrameView Analyzer 3.0.0 using real benchmark captures.</p>
+
+        <div class="gallery">
+          <figure>
+            <img src="site-assets/multi-benchmark.webp" width="1542" height="1056" loading="lazy" alt="FrameView Analyzer Multi workspace comparing six benchmarks at once">
+            <figcaption><strong>Multi benchmark workspace</strong><span>Six runs compared as equal peers with stable color identity.</span></figcaption>
+          </figure>
+          <figure>
+            <img src="site-assets/benchmark-library.webp" width="966" height="673" loading="lazy" alt="FrameView Analyzer Benchmark Library with saved benchmark metadata and comparison controls">
+            <figcaption><strong>Benchmark Library</strong><span>Organize, filter, tag, and reopen benchmark captures.</span></figcaption>
+          </figure>
+          <figure class="tall">
+            <img src="site-assets/professional-png-report.webp" width="1560" height="2048" loading="lazy" alt="Professional benchmark comparison PNG report exported by FrameView Analyzer">
+            <figcaption><strong>Professional PNG report</strong><span>Structured test configuration, methodology, benchmark runs, and performance telemetry.</span></figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="shell">
+        <div class="section-kicker">Simple workflow</div>
+        <h2>Capture. Compare. Publish.</h2>
+        <div class="flow">
+          <article><b>1</b><h3>Capture</h3><p>Record a supported NVIDIA FrameView detailed log or NVIDIA App performance-overlay CSV.</p></article>
+          <article><b>2</b><h3>Analyze</h3><p>Open Pair or Multi, refine the analysis range, inspect telemetry, zoom into a region, and add benchmark metadata.</p></article>
+          <article><b>3</b><h3>Export</h3><p>Select the runs and metrics you need, then create a professional PNG report or export structured benchmark data.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="shell privacy">
+        <div>
+          <div class="section-kicker">Your benchmark data stays yours</div>
+          <h2>Local by design.</h2>
+          <p class="section-copy">FrameView Analyzer processes captures on your PC. It is open source, contains no telemetry, and makes no network calls during normal analysis. You can inspect the source, build it yourself, or verify release checksums on GitHub.</p>
+          <div class="actions">
+            <a class="btn secondary" href="https://github.com/StreckerMX/FrameView-Analyzer/blob/main/PRIVACY.md" rel="noopener">Privacy policy</a>
+            <a class="btn secondary" href="https://github.com/StreckerMX/FrameView-Analyzer/blob/main/LICENSE" rel="noopener">MIT license</a>
+          </div>
+        </div>
+        <div class="privacy-box">
+          <ul>
+            <li><span class="check">✓</span><span>No analytics or usage telemetry.</span></li>
+            <li><span class="check">✓</span><span>No account required to analyze local captures.</span></li>
+            <li><span class="check">✓</span><span>Original capture files are not modified by Library removal.</span></li>
+            <li><span class="check">✓</span><span>Source code is publicly available for inspection.</span></li>
+            <li><span class="check">✓</span><span>Release ZIP includes a SHA-256 checksum file.</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="shell">
+        <div class="download-panel">
+          <div>
+            <div class="section-kicker">FrameView Analyzer 3.0.0</div>
+            <h2>Ready for your next benchmark.</h2>
+            <p>Self-contained Windows x64 build. No separate .NET runtime installation required.</p>
+          </div>
+          <div class="actions">
+            <a class="btn primary" href="https://github.com/StreckerMX/FrameView-Analyzer/releases/latest">Get latest release</a>
+            <a class="btn secondary" href="https://github.com/StreckerMX/FrameView-Analyzer#building-from-source">Build from source</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell footer-row">
+      <span>© 2026 Strecker · FrameView Analyzer</span>
+      <span><a href="https://github.com/StreckerMX/FrameView-Analyzer">GitHub</a> · <a href="https://github.com/StreckerMX/FrameView-Analyzer/releases/latest">Releases</a> · <a href="https://github.com/StreckerMX/FrameView-Analyzer/issues">Issues</a></span>
+      <span>Independent project. Not affiliated with or endorsed by NVIDIA Corporation.</span>
+    </div>
+  </footer>
+</body>
+</html>
