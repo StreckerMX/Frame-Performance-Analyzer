@@ -46,9 +46,9 @@ public sealed class ExportMetricChecklistItem
 /// <summary>
 /// Checklist-based PNG report picker. Pair and Multi both carry explicit
 /// session and metric collections; Multi items also expose the same stable
-/// colors used by the interactive chart and final PNG report. The report title
-/// is editable and is carried with the export request rather than being
-/// inferred again later from benchmark metadata.
+/// colors used by the interactive chart and final PNG report. The last
+/// successfully exported metric set may be supplied so repeated exports open
+/// with the previous checklist restored instead of resetting to FPS only.
 /// </summary>
 public partial class ExportReportWindow : Window
 {
@@ -57,23 +57,21 @@ public partial class ExportReportWindow : Window
 
     public ExportReportWindow(
         IReadOnlyList<ExportSessionOption> sessions,
-        IReadOnlyList<MetricDefinition> metrics)
+        IReadOnlyList<MetricDefinition> metrics,
+        IReadOnlyCollection<string>? preferredMetricIds = null)
     {
         InitializeComponent();
 
         _sessions = sessions
             .Select(option => new ExportSessionChecklistItem(option))
             .ToList();
-        _metrics = metrics
-            .Select(metric => new ExportMetricChecklistItem(metric, metric.Id == "fps"))
-            .ToList();
 
-        // A capture with no explicit FPS metric should still have a usable
-        // default rather than opening a dialog with no metric selected.
-        if (_metrics.Count > 0 && !_metrics.Any(item => item.IsSelected))
-        {
-            _metrics[0].IsSelected = true;
-        }
+        var initialMetricIds = ResolveInitialMetricIds(metrics, preferredMetricIds);
+        _metrics = metrics
+            .Select(metric => new ExportMetricChecklistItem(
+                metric,
+                initialMetricIds.Contains(metric.Id)))
+            .ToList();
 
         var isMultiReport = sessions.Count > 0 && sessions.All(option => option.IsMultiPeer);
         ReportTitleTextBox.Text = ExportReportTitles.DefaultTitle(isMultiReport);
@@ -88,6 +86,48 @@ public partial class ExportReportWindow : Window
         selectedSessions > 0
         && selectedMetrics > 0
         && selectedMetrics <= ExportReport.MaxReportMetrics;
+
+    /// <summary>
+    /// Restores the previous export's metrics when they still exist in the
+    /// current captures. If none are available, FPS remains the default; if a
+    /// capture has no FPS metric, the first available metric is selected.
+    /// </summary>
+    internal static IReadOnlySet<string> ResolveInitialMetricIds(
+        IReadOnlyList<MetricDefinition> metrics,
+        IReadOnlyCollection<string>? preferredMetricIds)
+    {
+        var availableIds = metrics
+            .Select(metric => metric.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        var selected = new HashSet<string>(StringComparer.Ordinal);
+
+        if (preferredMetricIds is not null)
+        {
+            foreach (var id in preferredMetricIds)
+            {
+                if (selected.Count >= ExportReport.MaxReportMetrics)
+                {
+                    break;
+                }
+
+                if (!string.IsNullOrWhiteSpace(id) && availableIds.Contains(id))
+                {
+                    selected.Add(id);
+                }
+            }
+        }
+
+        if (selected.Count == 0 && availableIds.Contains("fps"))
+        {
+            selected.Add("fps");
+        }
+        else if (selected.Count == 0 && metrics.Count > 0)
+        {
+            selected.Add(metrics[0].Id);
+        }
+
+        return selected;
+    }
 
     public static ExportReportSelection BuildSelection(
         IEnumerable<ExportSessionChecklistItem> sessions,
