@@ -58,10 +58,12 @@ public partial class MainWindowViewModel
         RefreshSessionCards();
         Chart.SetSessions(BaseSession, ComparisonSession);
         AnalysisRange.AttachPortable(
-            ComparisonSession is null ? [BaseSession] : [BaseSession, ComparisonSession],
+            comparisonItem is null
+                ? [baseItem.Session]
+                : [baseItem.Session, comparisonItem.Session],
             isMultiWorkspace: false);
-        StatusText = ComparisonSession is null
+        StatusText = comparisonItem is null
             ? $"IMPORTED ANALYZED DATA  ·  {baseItem.Label}"
-            : $"IMPORTED ANALYZED DATA  ·  {baseItem.Label} vs {comparisonItem!.Label}";
+            : $"IMPORTED ANALYZED DATA  ·  {baseItem.Label} vs {comparisonItem.Label}";
     }
 }
