@@ -107,6 +107,19 @@ public class ExportSessionOptionTests
     }
 
     [Fact]
+    public void First_available_metric_is_used_when_fps_does_not_exist()
+    {
+        var metrics = new[]
+        {
+            CoreMetricCatalog.CoreById["frametime"],
+        };
+
+        var selected = ExportReportWindow.ResolveInitialMetricIds(metrics, null);
+
+        Assert.Equal(["frametime"], selected);
+    }
+
+    [Fact]
     public void Build_selection_returns_only_checked_sessions_metrics_and_pair_title()
     {
         var baseOption = new ExportSessionOption(SessionRole.Base, "Base run", Session());
