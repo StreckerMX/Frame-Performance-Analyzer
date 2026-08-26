@@ -93,6 +93,20 @@ public class ExportSessionOptionTests
     }
 
     [Fact]
+    public void First_export_still_defaults_to_fps_when_no_preference_exists()
+    {
+        var metrics = new[]
+        {
+            CoreMetricCatalog.CoreById["fps"],
+            CoreMetricCatalog.CoreById["frametime"],
+        };
+
+        var selected = ExportReportWindow.ResolveInitialMetricIds(metrics, null);
+
+        Assert.Equal(["fps"], selected);
+    }
+
+    [Fact]
     public void Build_selection_returns_only_checked_sessions_metrics_and_pair_title()
     {
         var baseOption = new ExportSessionOption(SessionRole.Base, "Base run", Session());
