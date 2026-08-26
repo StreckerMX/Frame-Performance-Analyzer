@@ -1,0 +1,73 @@
+name: Temporary report header cleanup
+
+on:
+  push:
+    branches:
+      - experiment/export-report-grid
+    paths:
+      - tools/.trigger-report-header-cleanup
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/export-report-grid
+          fetch-depth: 0
+
+      - name: Remove duplicated subtitle context
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/FrameViewAnalyzer.App/Charting/ReportPlotBuilder.cs")
+          text = path.read_text(encoding="utf-8")
+
+          replacements = [
+              (
+                  "    private const int ReportContextHeight = 26;\n",
+                  "",
+              ),
+              (
+                  "            + ReportContextHeight\n",
+                  "",
+              ),
+              (
+                  "        using var contextFont = CreateProfessionalContextFont();\n",
+                  "",
+              ),
+              (
+                  "        using var mutedPaint = new SKPaint { Color = ToSkColor(style.Muted) };\n",
+                  "",
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one match for {old!r}, found {count}")
+              text = text.replace(old, new, 1)
+
+          start = text.index("        y += ReportTitleHeight;\n") + len("        y += ReportTitleHeight;\n")
+          end_marker = "        y += ReportContextHeight;\n"
+          end = text.index(end_marker, start) + len(end_marker)
+          removed = text[start:end]
+          if "context.CommonContext" not in removed or "canvas.DrawText" not in removed:
+              raise SystemExit("Subtitle block did not match the expected professional-header context block")
+          text = text[:start] + text[end:]
+
+          path.write_text(text, encoding="utf-8")
+
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          rm -f tools/.trigger-report-header-cleanup
+          git config user.name "Strecker"
+          git config user.email "101173645+StreckerMX@users.noreply.github.com"
+          git add src/FrameViewAnalyzer.App/Charting/ReportPlotBuilder.cs tools/.trigger-report-header-cleanup
+          git commit -m "fix: remove duplicate report subtitle context"
+          git push origin HEAD:experiment/export-report-grid
