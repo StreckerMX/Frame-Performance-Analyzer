@@ -516,7 +516,19 @@ public partial class MainWindow : Window
             lines.Add(option.HeaderLine);
         }
 
-        return new ReportPlotBuilder.ReportHeader(title, lines);
+        var manualMetadataByPath = selection.Sessions
+            .GroupBy(option => option.Session.Capture.Path, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => _viewModel.ManualMetadataFor(group.First().Session),
+                StringComparer.OrdinalIgnoreCase);
+
+        return new ReportPlotBuilder.ReportHeader(
+            title,
+            lines,
+            UseProfessionalLayout: true,
+            IsMultiReport: isMultiReport,
+            ManualMetadataByPath: manualMetadataByPath);
     }
 
     private async void ExportCsv_Click(object sender, RoutedEventArgs e)

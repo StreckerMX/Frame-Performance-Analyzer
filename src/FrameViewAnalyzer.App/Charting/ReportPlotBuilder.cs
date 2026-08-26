@@ -6,6 +6,7 @@ using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Core.Charting;
 using FrameViewAnalyzer.Core.Formatting;
 using FrameViewAnalyzer.Core.Metrics;
+using FrameViewAnalyzer.Core.Models;
 using ScottPlot;
 using SkiaSharp;
 
@@ -23,8 +24,13 @@ public static class ReportPlotBuilder
         IReadOnlyList<MetricSeries> Series,
         bool IsMultiWorkspace = false);
 
-    /// <summary>Report title plus legacy/free-form header lines.</summary>
-    public sealed record ReportHeader(string Title, IReadOnlyList<string> Lines);
+    /// <summary>Report title plus export semantics and optional per-run manual metadata.</summary>
+    public sealed record ReportHeader(
+        string Title,
+        IReadOnlyList<string> Lines,
+        bool UseProfessionalLayout = false,
+        bool IsMultiReport = false,
+        IReadOnlyDictionary<string, ManualMetadata?>? ManualMetadataByPath = null);
 
     private sealed record ReportBuildContext(IReadOnlyList<ReportGroup> Groups);
 
@@ -32,7 +38,8 @@ public static class ReportPlotBuilder
         string Role,
         string Label,
         ScottPlot.Color Color,
-        SessionAnalysis? Session);
+        SessionAnalysis? Session,
+        ManualMetadata? ManualMetadata);
 
     private sealed record ReportField(string Label, string Value);
 
@@ -77,7 +84,7 @@ public static class ReportPlotBuilder
     private const int ReportSectionLabelHeight = 22;
     private const int ReportSectionGap = 18;
     private const int ReportConfigHeight = 76;
-    private const int ReportRunCardHeight = 132;
+    private const int ReportRunCardHeight = 198;
     private const int ReportRunCardGap = 14;
     private const int ReportMethodHeight = 92;
     private const int ReportHeaderBottomGap = 18;
@@ -177,7 +184,7 @@ public static class ReportPlotBuilder
         int height)
     {
         BuildContexts.TryGetValue(multiplot, out var buildContext);
-        var professional = header is not null && IsBenchmarkReportTitle(header.Title);
+        var professional = header is not null && ShouldUseProfessionalLayout(header);
         if (professional)
         {
             SaveProfessionalPng(multiplot, style, header!, buildContext, path, width);
@@ -478,31 +485,24 @@ public static class ReportPlotBuilder
         ReportBuildContext? buildContext,
         ChartStyle style)
     {
-        var runs = BuildRunContexts(buildContext, style);
+        var runs = BuildRunContexts(buildContext, style, header.ManualMetadataByPath);
         var sessions = runs
             .Select(run => run.Session)
             .Where(session => session is not null)
             .Cast<SessionAnalysis>()
             .ToList();
 
-        var isMulti = buildContext?.Groups.FirstOrDefault()?.IsMultiWorkspace == true
+        var isMulti = header.IsMultiReport
+            || buildContext?.Groups.FirstOrDefault()?.IsMultiWorkspace == true
             || header.Title.Contains("MULTI BENCHMARK COMPARISON", StringComparison.OrdinalIgnoreCase);
         var reportType = isMulti ? "MULTI BENCHMARK COMPARISON" : "BENCHMARK COMPARISON";
         var isDefaultTitle = string.Equals(header.Title.Trim(), reportType, StringComparison.OrdinalIgnoreCase);
 
-        var commonApplication = CommonSessionValue(
-            sessions,
-            session => session.Metadata?.Application,
-            DisplayText.CleanGameName);
-        var commonResolution = CommonSessionValue(sessions, session => session.Metadata?.Resolution);
-        var commonGpu = CommonSessionValue(
-            sessions,
-            session => session.Metadata?.Gpu,
-            DisplayText.CompactHardware);
-        var commonCpu = CommonSessionValue(
-            sessions,
-            session => session.Metadata?.Cpu,
-            DisplayText.CompactHardware);
+        var commonApplication = CommonRunValue(runs, RunApplication, DisplayText.CleanGameName);
+        var commonResolution = CommonRunValue(runs, RunResolution);
+        var commonGpu = CommonRunValue(runs, RunGpu, DisplayText.CompactHardware);
+        var commonCpu = CommonRunValue(runs, RunCpu, DisplayText.CompactHardware);
+        var commonDriver = CommonRunValue(runs, run => run.ManualMetadata?.DriverVersion);
 
         var mainTitle = isDefaultTitle && commonApplication is not null
             ? commonApplication
@@ -522,6 +522,7 @@ public static class ReportPlotBuilder
         AddConfig(config, "RESOLUTION", commonResolution);
         AddConfig(config, "GPU", commonGpu);
         AddConfig(config, "CPU", commonCpu);
+        AddConfig(config, "DRIVER", commonDriver);
         if (config.Count == 0)
         {
             config.Add(new ReportField("SHARED TEST CONTEXT", "Varies by benchmark"));
@@ -547,7 +548,8 @@ public static class ReportPlotBuilder
 
     private static IReadOnlyList<ReportRunContext> BuildRunContexts(
         ReportBuildContext? context,
-        ChartStyle style)
+        ChartStyle style,
+        IReadOnlyDictionary<string, ManualMetadata?>? manualMetadataByPath)
     {
         if (context is null || context.Groups.Count == 0)
         {
@@ -573,10 +575,72 @@ public static class ReportPlotBuilder
                 role,
                 ReportRunDisplayLabel(series.LabelOrDefault),
                 SeriesColor(group, series, style),
-                series.SourceSession));
+                series.SourceSession,
+                ResolveManualMetadata(series, manualMetadataByPath)));
         }
 
         return runs;
+    }
+
+    private static ManualMetadata? ResolveManualMetadata(
+        MetricSeries series,
+        IReadOnlyDictionary<string, ManualMetadata?>? manualMetadataByPath)
+    {
+        var path = series.SourceSession?.Capture.Path;
+        if (manualMetadataByPath is null || string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        return manualMetadataByPath.TryGetValue(path, out var manual) ? manual : null;
+    }
+
+    private static string? RunApplication(ReportRunContext run) =>
+        IsUseful(run.ManualMetadata?.Game)
+            ? run.ManualMetadata!.Game
+            : run.Session?.Metadata?.Application;
+
+    private static string? RunResolution(ReportRunContext run) =>
+        IsUseful(run.ManualMetadata?.Resolution)
+            ? run.ManualMetadata!.Resolution
+            : run.Session?.Metadata?.Resolution;
+
+    private static string? RunGpu(ReportRunContext run) => run.Session?.Metadata?.Gpu;
+
+    private static string? RunCpu(ReportRunContext run) => run.Session?.Metadata?.Cpu;
+
+    private static string? CommonRunValue(
+        IReadOnlyList<ReportRunContext> runs,
+        Func<ReportRunContext, string?> selector,
+        Func<string, string>? transform = null)
+    {
+        if (runs.Count == 0)
+        {
+            return null;
+        }
+
+        var values = new List<string>(runs.Count);
+        foreach (var run in runs)
+        {
+            var raw = selector(run);
+            if (!IsUseful(raw))
+            {
+                return null;
+            }
+
+            var value = transform is null ? raw!.Trim() : transform(raw!);
+            if (!IsUseful(value))
+            {
+                return null;
+            }
+
+            values.Add(value);
+        }
+
+        var first = values[0];
+        return values.All(value => string.Equals(value, first, StringComparison.OrdinalIgnoreCase))
+            ? first
+            : null;
     }
 
     /// <summary>
@@ -857,24 +921,10 @@ public static class ReportPlotBuilder
             - (columns - 1) * ReportRunCardGap;
         var cardWidth = availableWidth / (float)columns;
 
-        var sessions = context.Runs
-            .Select(run => run.Session)
-            .Where(session => session is not null)
-            .Cast<SessionAnalysis>()
-            .ToList();
-        var commonApplication = CommonSessionValue(
-            sessions,
-            session => session.Metadata?.Application,
-            DisplayText.CleanGameName);
-        var commonResolution = CommonSessionValue(sessions, session => session.Metadata?.Resolution);
-        var commonGpu = CommonSessionValue(
-            sessions,
-            session => session.Metadata?.Gpu,
-            DisplayText.CompactHardware);
-        var commonCpu = CommonSessionValue(
-            sessions,
-            session => session.Metadata?.Cpu,
-            DisplayText.CompactHardware);
+        var commonApplication = CommonRunValue(context.Runs, RunApplication, DisplayText.CleanGameName);
+        var commonResolution = CommonRunValue(context.Runs, RunResolution);
+        var commonGpu = CommonRunValue(context.Runs, RunGpu, DisplayText.CompactHardware);
+        var commonCpu = CommonRunValue(context.Runs, RunCpu, DisplayText.CompactHardware);
 
         using var roleFont = CreateRunRoleFont();
         using var nameFont = CreateRunNameFont();
@@ -914,13 +964,15 @@ public static class ReportPlotBuilder
                 nameFont,
                 namePaint);
 
-            var session = context.Runs[i].Session;
+            var run = context.Runs[i];
+            var session = run.Session;
             var contextLine = RunContextLine(
-                session,
+                run,
                 commonApplication,
                 commonResolution,
                 commonGpu,
                 commonCpu);
+            var manualLines = ReportManualMetadataLines(run.ManualMetadata);
             var dataLines = RunDataLines(session);
             var analysisLine = RunAnalysisLine(session, context.Methodology);
 
@@ -931,8 +983,24 @@ public static class ReportPlotBuilder
                 cursor += 19;
             }
 
+            foreach (var line in manualLines)
+            {
+                if (cursor > cardTop + ReportRunCardHeight - 12)
+                {
+                    break;
+                }
+
+                DrawDetailLine(canvas, line, left, cardWidth, cursor, detailFont, detailPaint);
+                cursor += 19;
+            }
+
             foreach (var line in dataLines)
             {
+                if (cursor > cardTop + ReportRunCardHeight - 12)
+                {
+                    break;
+                }
+
                 DrawDetailLine(canvas, line, left, cardWidth, cursor, detailFont, detailPaint);
                 cursor += 19;
             }
@@ -963,39 +1031,105 @@ public static class ReportPlotBuilder
     }
 
     private static string RunContextLine(
-        SessionAnalysis? session,
+        ReportRunContext run,
         string? commonApplication,
         string? commonResolution,
         string? commonGpu,
         string? commonCpu)
     {
-        if (session?.Metadata is not { } metadata)
-        {
-            return string.Empty;
-        }
-
         var parts = new List<string>();
-        if (commonApplication is null && IsUseful(metadata.Application))
+        var application = RunApplication(run);
+        var resolution = RunResolution(run);
+        var gpu = RunGpu(run);
+        var cpu = RunCpu(run);
+
+        if (commonApplication is null && IsUseful(application))
         {
-            parts.Add(DisplayText.CleanGameName(metadata.Application));
+            parts.Add(DisplayText.CleanGameName(application!));
         }
 
-        if (commonResolution is null && IsUseful(metadata.Resolution))
+        if (commonResolution is null && IsUseful(resolution))
         {
-            parts.Add(metadata.Resolution);
+            parts.Add(resolution!);
         }
 
-        if (commonGpu is null && IsUseful(metadata.Gpu))
+        if (commonGpu is null && IsUseful(gpu))
         {
-            parts.Add(DisplayText.CompactHardware(metadata.Gpu));
+            parts.Add(DisplayText.CompactHardware(gpu!));
         }
 
-        if (commonCpu is null && IsUseful(metadata.Cpu))
+        if (commonCpu is null && IsUseful(cpu))
         {
-            parts.Add(DisplayText.CompactHardware(metadata.Cpu));
+            parts.Add(DisplayText.CompactHardware(cpu!));
         }
 
         return string.Join("  ·  ", parts);
+    }
+
+    /// <summary>Human-authored metadata lines shown inside each benchmark card.</summary>
+    internal static IReadOnlyList<string> ReportManualMetadataLines(ManualMetadata? manual)
+    {
+        if (manual is null)
+        {
+            return [];
+        }
+
+        var lines = new List<string>();
+        var config = new List<string>();
+        if (IsUseful(manual.GraphicsPreset))
+        {
+            config.Add(manual.GraphicsPreset.Trim());
+        }
+
+        if (IsUseful(manual.Upscaler))
+        {
+            var upscaler = manual.Upscaler.Trim();
+            if (IsUseful(manual.UpscalerQuality))
+            {
+                upscaler += " " + manual.UpscalerQuality.Trim();
+            }
+
+            config.Add(upscaler);
+        }
+
+        if (IsUseful(manual.FrameGeneration))
+        {
+            config.Add(manual.FrameGeneration.Trim());
+        }
+
+        if (IsUseful(manual.RayTracing))
+        {
+            config.Add(manual.RayTracing.Trim());
+        }
+
+        if (config.Count > 0)
+        {
+            lines.Add(string.Join("  ·  ", config));
+        }
+
+        var technical = new List<string>();
+        if (IsUseful(manual.DriverVersion))
+        {
+            technical.Add("Driver " + manual.DriverVersion.Trim());
+        }
+
+        var tags = manual.Tags.Where(IsUseful).Select(tag => tag.Trim()).ToList();
+        if (tags.Count > 0)
+        {
+            technical.Add("Tags: " + string.Join(", ", tags));
+        }
+
+        if (technical.Count > 0)
+        {
+            lines.Add(string.Join("  ·  ", technical));
+        }
+
+        if (IsUseful(manual.Notes))
+        {
+            lines.Add("Notes: " + manual.Notes.Trim());
+        }
+
+        return lines;
     }
 
     private static bool IsUseful(string? value) =>
@@ -1275,6 +1409,9 @@ public static class ReportPlotBuilder
             paint);
         _ = bottom;
     }
+
+    internal static bool ShouldUseProfessionalLayout(ReportHeader header) =>
+        header.UseProfessionalLayout || IsBenchmarkReportTitle(header.Title);
 
     private static bool IsBenchmarkReportTitle(string title) =>
         title.Contains("BENCHMARK COMPARISON", StringComparison.OrdinalIgnoreCase);
