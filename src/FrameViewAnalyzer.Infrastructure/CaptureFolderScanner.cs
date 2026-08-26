@@ -13,6 +13,7 @@ namespace FrameViewAnalyzer.Infrastructure;
 public sealed class CaptureFolderScanner
 {
     private const string NvidiaAppLogPrefix = "NVIDIA_App_Performance_Log_";
+    private const int MetadataScanConcurrency = 6;
     private readonly IFrameViewCsvReader _reader;
 
     public CaptureFolderScanner(IFrameViewCsvReader reader) => _reader = reader;
@@ -53,23 +54,44 @@ public sealed class CaptureFolderScanner
         CancellationToken cancellationToken = default) =>
         _reader.ReadCaptureInfoAsync(path, cancellationToken);
 
+    /// <summary>
+    /// Builds capture infos for a stable ordered set of files. Metadata reads
+    /// are I/O-bound and independent, so a small bounded fan-out is much faster
+    /// than walking a large benchmark folder serially without flooding Windows
+    /// with hundreds of simultaneous file handles.
+    /// </summary>
+    public async Task<IReadOnlyList<CaptureInfo>> ReadCaptureInfosAsync(
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken = default)
+    {
+        if (paths.Count == 0)
+        {
+            return [];
+        }
+
+        var results = new CaptureInfo?[paths.Count];
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, paths.Count),
+            new ParallelOptions
+            {
+                CancellationToken = cancellationToken,
+                MaxDegreeOfParallelism = Math.Min(MetadataScanConcurrency, paths.Count),
+            },
+            async (index, token) =>
+            {
+                results[index] = await _reader.ReadCaptureInfoAsync(paths[index], token).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+
+        return results.Where(info => info is not null).Select(info => info!).ToList();
+    }
+
     /// <summary>Builds capture infos for every supported log found in the folder.</summary>
-    public async Task<IReadOnlyList<CaptureInfo>> ScanCaptureFolderAsync(
+    public Task<IReadOnlyList<CaptureInfo>> ScanCaptureFolderAsync(
         string directory,
         CancellationToken cancellationToken = default)
     {
-        var infos = new List<CaptureInfo>();
-        foreach (var path in DiscoverLogFiles(directory))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var info = await _reader.ReadCaptureInfoAsync(path, cancellationToken).ConfigureAwait(false);
-            if (info is not null)
-            {
-                infos.Add(info);
-            }
-        }
-
-        return infos;
+        var paths = DiscoverLogFiles(directory);
+        return ReadCaptureInfosAsync(paths, cancellationToken);
     }
 
     private static bool IsSupportedLogName(string fileName) =>

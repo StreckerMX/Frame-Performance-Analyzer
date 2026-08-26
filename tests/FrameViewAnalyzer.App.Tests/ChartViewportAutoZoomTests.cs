@@ -29,7 +29,7 @@ public class ChartViewportAutoZoomTests
     [Fact]
     public void Bounds_cover_every_visible_series()
     {
-        var fitted = ChartViewport.AutoZoomToSeries(View, [Base, Comparison], fpsBaselineZero: false);
+        var fitted = ChartViewport.AutoZoomToSeries(View, [Base, Comparison], fpsAdaptiveScale: false);
 
         Assert.NotNull(fitted);
         Assert.Equal(0, fitted.Value.Left, precision: 9);
@@ -43,7 +43,7 @@ public class ChartViewportAutoZoomTests
     {
         var higher = Series([0.0, 1.0, 2.0, 3.0, 4.0], [400.0, 400.0, 400.0, 400.0, 400.0], "Comparison");
 
-        var fitted = ChartViewport.AutoZoomToSeries(View, [Base, higher], fpsBaselineZero: false);
+        var fitted = ChartViewport.AutoZoomToSeries(View, [Base, higher], fpsAdaptiveScale: false);
 
         Assert.NotNull(fitted);
         Assert.True(fitted.Value.Top >= 400);
@@ -54,7 +54,7 @@ public class ChartViewportAutoZoomTests
     {
         var lower = Series([0.0, 1.0, 2.0, 3.0, 4.0], [10.0, 10.0, 10.0, 10.0, 10.0], "Comparison");
 
-        var fitted = ChartViewport.AutoZoomToSeries(View, [Base, lower], fpsBaselineZero: false);
+        var fitted = ChartViewport.AutoZoomToSeries(View, [Base, lower], fpsAdaptiveScale: false);
 
         Assert.NotNull(fitted);
         Assert.True(fitted.Value.Bottom <= 10);
@@ -65,7 +65,7 @@ public class ChartViewportAutoZoomTests
     {
         var farComparison = Series([50.0, 51.0, 52.0], [10.0, 10.0, 10.0], "Comparison");
 
-        var fitted = ChartViewport.AutoZoomToSeries(View, [Base, farComparison], fpsBaselineZero: false);
+        var fitted = ChartViewport.AutoZoomToSeries(View, [Base, farComparison], fpsAdaptiveScale: false);
 
         Assert.NotNull(fitted);
         Assert.True(fitted.Value.Bottom <= 100);
@@ -77,7 +77,7 @@ public class ChartViewportAutoZoomTests
     {
         var farBase = Series([50.0, 51.0, 52.0], [100.0, 100.0, 100.0]);
 
-        var fitted = ChartViewport.AutoZoomToSeries(View, [farBase, Comparison], fpsBaselineZero: false);
+        var fitted = ChartViewport.AutoZoomToSeries(View, [farBase, Comparison], fpsAdaptiveScale: false);
 
         Assert.NotNull(fitted);
         Assert.True(fitted.Value.Bottom <= 80);
@@ -90,22 +90,24 @@ public class ChartViewportAutoZoomTests
         var farBase = Series([50.0, 51.0], [100.0, 100.0]);
         var farComparison = Series([60.0, 61.0], [50.0, 50.0], "Comparison");
 
-        Assert.Null(ChartViewport.AutoZoomToSeries(View, [farBase, farComparison], fpsBaselineZero: false));
+        Assert.Null(ChartViewport.AutoZoomToSeries(View, [farBase, farComparison], fpsAdaptiveScale: false));
     }
 
     [Fact]
-    public void Fps_keeps_the_zero_baseline()
+    public void Fps_uses_adaptive_non_zero_baseline()
     {
-        var fitted = ChartViewport.AutoZoomToSeries(View, [Base, Comparison], fpsBaselineZero: true);
+        var fitted = ChartViewport.AutoZoomToSeries(View, [Base, Comparison], fpsAdaptiveScale: true);
 
         Assert.NotNull(fitted);
-        Assert.Equal(0, fitted.Value.Bottom, precision: 9);
+        Assert.True(fitted.Value.Bottom > 0);
+        Assert.True(fitted.Value.Bottom <= 80);
         Assert.True(fitted.Value.Top >= 100);
+        Assert.True(fitted.Value.VerticalSpan >= ChartViewport.MinimumFpsVerticalSpan);
     }
 
     [Fact]
     public void Empty_series_list_returns_null()
     {
-        Assert.Null(ChartViewport.AutoZoomToSeries(View, [], fpsBaselineZero: false));
+        Assert.Null(ChartViewport.AutoZoomToSeries(View, [], fpsAdaptiveScale: false));
     }
 }

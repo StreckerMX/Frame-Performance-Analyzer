@@ -90,11 +90,16 @@ public sealed class LibraryIndexer
             }
         }
 
+        // The folder was already enumerated completely above. Re-running
+        // LocateIdentity once per stored record turns refresh into O(N²) file
+        // enumeration on large libraries. A moved file inside the active
+        // directory is already represented by foundIdentities, while a source
+        // outside that directory only needs its recorded path checked once.
         foreach (var identity in library.Records.Keys.ToList())
         {
             var record = library.Records[identity];
             var available = foundIdentities.Contains(identity)
-                || ResolveAvailability(record, directory);
+                || ResolveAvailability(record);
             if (available != record.Available)
             {
                 library.Records[identity] = record with { Available = available };

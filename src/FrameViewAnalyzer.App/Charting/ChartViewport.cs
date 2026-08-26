@@ -6,7 +6,7 @@ namespace FrameViewAnalyzer.App.Charting;
 
 /// <summary>
 /// Pure viewport math mirroring the Python chart interactions: cursor-anchored
-/// wheel zoom, clamped drag pan, and Y auto-fit with the reference padding.
+/// wheel zoom, clamped drag pan, and adaptive Y auto-fit.
 /// No WPF dependencies beyond ScottPlot's AxisLimits value type.
 /// </summary>
 public static class ChartViewport
@@ -18,6 +18,12 @@ public static class ChartViewport
 
     /// <summary>Y padding above the data band as a fraction of the spread.</summary>
     public const double UpperPaddingFraction = 0.12;
+
+    /// <summary>Minimum vertical span used by the adaptive FPS axis.</summary>
+    public const double MinimumFpsVerticalSpan = 30.0;
+
+    /// <summary>FPS axis limits are rounded outward to this step.</summary>
+    public const double FpsAxisStep = 5.0;
 
     /// <summary>Padding around a constant non-zero series as a fraction of its value.</summary>
     public const double ConstantSeriesPaddingFraction = 0.02;
@@ -73,24 +79,21 @@ public static class ChartViewport
     /// <summary>
     /// Adaptive Y fit shared by the interactive chart and the PNG report.
     /// Padding scales with the DATA SPREAD (8% below, 12% above), never with
-    /// a global absolute floor — tiny-unit metrics (e.g. Time in Present API,
-    /// 0.278..0.394 ms) and large-magnitude narrow bands (e.g. GPU clocks,
-    /// 2787..2842 MHz) keep tight, meaningful vertical ranges. FPS keeps its
-    /// intentional zero baseline. Constant series fall back to a small
-    /// relative padding around the value; an all-zero series gets a small
-    /// symmetric range.
+    /// a global absolute floor, so tiny-unit metrics and large-magnitude
+    /// narrow bands keep tight, meaningful vertical ranges.
+    ///
+    /// FPS uses a dedicated adaptive policy: it preserves at least a 30 FPS
+    /// vertical span, rounds outward to 5 FPS steps, and never goes below zero.
+    /// This makes small FPS differences readable without letting a 1-2 FPS
+    /// variation fill the entire chart height.
     /// </summary>
-    public static AxisLimits FitY(AxisLimits current, double minY, double maxY, bool fpsBaselineZero)
+    public static AxisLimits FitY(AxisLimits current, double minY, double maxY, bool fpsAdaptiveScale)
     {
         var spread = System.Math.Max(maxY - minY, 0.0);
 
-        if (fpsBaselineZero)
+        if (fpsAdaptiveScale)
         {
-            // Intentional FPS behavior: zero baseline with useful headroom.
-            var high = maxY + System.Math.Max(
-                System.Math.Max(spread * 0.16, System.Math.Abs(maxY) * 0.03),
-                1.0);
-            return new AxisLimits(current.Left, current.Right, 0.0, high);
+            return FitAdaptiveFpsY(current, minY, maxY, spread);
         }
 
         if (spread <= 1e-12)
@@ -112,16 +115,56 @@ public static class ChartViewport
             maxY + upperPadding);
     }
 
+    private static AxisLimits FitAdaptiveFpsY(
+        AxisLimits current,
+        double minY,
+        double maxY,
+        double spread)
+    {
+        var lower = minY - spread * LowerPaddingFraction;
+        var upper = maxY + spread * UpperPaddingFraction;
+
+        // Very narrow FPS bands get a minimum visual context so tiny changes
+        // remain visible without being exaggerated into full-height swings.
+        if (upper - lower < MinimumFpsVerticalSpan)
+        {
+            var center = (minY + maxY) / 2.0;
+            lower = center - MinimumFpsVerticalSpan / 2.0;
+            upper = center + MinimumFpsVerticalSpan / 2.0;
+        }
+
+        lower = System.Math.Max(0.0, lower);
+        lower = System.Math.Floor(lower / FpsAxisStep) * FpsAxisStep;
+        upper = System.Math.Ceiling(upper / FpsAxisStep) * FpsAxisStep;
+
+        // Clamping the lower bound to zero can shrink a low-FPS range below
+        // the minimum span. Restore the context on the upper side if needed.
+        if (upper - lower < MinimumFpsVerticalSpan)
+        {
+            upper = lower + MinimumFpsVerticalSpan;
+            upper = System.Math.Ceiling(upper / FpsAxisStep) * FpsAxisStep;
+        }
+
+        // Always leave at least one nice tick of headroom above the maximum
+        // if rounding happened to land exactly on the highest sample.
+        if (upper <= maxY + 1e-9)
+        {
+            upper += FpsAxisStep;
+        }
+
+        return new AxisLimits(current.Left, current.Right, lower, upper);
+    }
+
     /// <summary>
     /// Global Y fit across every plotted series inside the visible X range.
     /// Series without points in the range are ignored; null is returned when
-    /// nothing is visible. FPS metrics keep the zero baseline. Full-resolution
-    /// series only — never decimated rendering data.
+    /// nothing is visible. FPS metrics use the adaptive FPS scale. Full-
+    /// resolution series only, never decimated rendering data.
     /// </summary>
     public static AxisLimits? AutoZoomToSeries(
         AxisLimits current,
         IReadOnlyList<MetricSeries> seriesList,
-        bool fpsBaselineZero)
+        bool fpsAdaptiveScale)
     {
         double? minY = null;
         double? maxY = null;
@@ -145,7 +188,7 @@ public static class ChartViewport
             return null;
         }
 
-        return FitY(current, minY.Value, maxY.Value, fpsBaselineZero);
+        return FitY(current, minY.Value, maxY.Value, fpsAdaptiveScale);
     }
 
     /// <summary>
@@ -153,12 +196,11 @@ public static class ChartViewport
     /// — never from decimated rendering data and never from the current
     /// viewport. Establishes the initial fitted view after a session load and
     /// recovers the full range on Auto Zoom / Reset Zoom. X spans the union of
-    /// every plotted series; Y is fitted over the full arrays with the
-    /// reference headroom (FPS keeps the zero baseline).
+    /// every plotted series; Y is fitted over the full arrays.
     /// </summary>
     public static AxisLimits? FullSeriesLimits(
         IReadOnlyList<MetricSeries> seriesList,
-        bool fpsBaselineZero)
+        bool fpsAdaptiveScale)
     {
         var minX = double.PositiveInfinity;
         var maxX = double.NegativeInfinity;
@@ -186,7 +228,7 @@ public static class ChartViewport
             return null;
         }
 
-        return FitY(new AxisLimits(minX, maxX, 0, 1), minY.Value, maxY.Value, fpsBaselineZero);
+        return FitY(new AxisLimits(minX, maxX, 0, 1), minY.Value, maxY.Value, fpsAdaptiveScale);
     }
 
     /// <summary>

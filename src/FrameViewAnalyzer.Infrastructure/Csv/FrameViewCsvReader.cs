@@ -16,6 +16,10 @@ namespace FrameViewAnalyzer.Infrastructure.Csv;
 /// </summary>
 public sealed class FrameViewCsvReader : IFrameViewCsvReader
 {
+    private const int StreamBufferSize = 1 << 18;
+    private const int CaptureInfoSampleRows = 10;
+    private const int CaptureInfoTailBytes = 1 << 18;
+
     private static readonly CsvConfiguration Configuration = new(CultureInfo.InvariantCulture)
     {
         BadDataFound = null,
@@ -34,6 +38,13 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
     // Initialized in the static constructor AFTER the code-pages provider
     // is registered; field initializers would run before it and throw.
     private static readonly Encoding[] Encodings;
+
+    // Capture-folder, Library, and Multi-selection views repeatedly request
+    // the same lightweight metadata. Cache it by immutable file stamp so those
+    // views never rescan a long CSV unless the file actually changed.
+    private readonly object _captureInfoCacheGate = new();
+    private readonly Dictionary<string, CaptureInfoCacheEntry> _captureInfoCache =
+        new(StringComparer.OrdinalIgnoreCase);
 
     static FrameViewCsvReader()
     {
@@ -68,13 +79,13 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
                     FileMode.Open,
                     FileAccess.Read,
                     FileShare.Read,
-                    bufferSize: 1 << 16,
-                    FileOptions.SequentialScan);
+                    bufferSize: StreamBufferSize,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan);
                 using var text = new StreamReader(
                     stream,
                     encoding,
                     detectEncodingFromByteOrderMarks: true,
-                    bufferSize: 1 << 16);
+                    bufferSize: StreamBufferSize);
                 using var csv = new CsvReader(text, Configuration);
 
                 if (!await csv.ReadAsync().ConfigureAwait(false))
@@ -131,7 +142,38 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
         CancellationToken cancellationToken = default)
     {
         var fullPath = Path.GetFullPath(path);
+        var stamp = TryGetFileStamp(fullPath);
+        if (stamp is null)
+        {
+            return null;
+        }
 
+        lock (_captureInfoCacheGate)
+        {
+            if (_captureInfoCache.TryGetValue(fullPath, out var cached)
+                && cached.Length == stamp.Value.Length
+                && cached.LastWriteTicks == stamp.Value.LastWriteTicks)
+            {
+                return cached.Info;
+            }
+        }
+
+        var info = await ReadCaptureInfoCoreAsync(fullPath, cancellationToken).ConfigureAwait(false);
+        lock (_captureInfoCacheGate)
+        {
+            _captureInfoCache[fullPath] = new CaptureInfoCacheEntry(
+                stamp.Value.Length,
+                stamp.Value.LastWriteTicks,
+                info);
+        }
+
+        return info;
+    }
+
+    private static async Task<CaptureInfo?> ReadCaptureInfoCoreAsync(
+        string fullPath,
+        CancellationToken cancellationToken)
+    {
         foreach (var encoding in Encodings)
         {
             try
@@ -141,13 +183,13 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
                     FileMode.Open,
                     FileAccess.Read,
                     FileShare.Read,
-                    bufferSize: 1 << 16,
-                    FileOptions.SequentialScan);
+                    bufferSize: StreamBufferSize,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan);
                 using var text = new StreamReader(
                     stream,
                     encoding,
                     detectEncodingFromByteOrderMarks: true,
-                    bufferSize: 1 << 16);
+                    bufferSize: StreamBufferSize);
                 using var csv = new CsvReader(text, RawConfiguration);
 
                 if (!await csv.ReadAsync().ConfigureAwait(false))
@@ -173,32 +215,29 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
                 var gpuIndices = new[] { Array.IndexOf(headers, "GPU"), Array.IndexOf(headers, "GPU0") };
                 var cpuIndex = Array.IndexOf(headers, "CPU");
 
-                var sampleRows = new List<string[]>();
-                double? lastTime = null;
-
-                while (await csv.ReadAsync().ConfigureAwait(false))
+                var sampleRows = new List<string[]>(CaptureInfoSampleRows);
+                while (sampleRows.Count < CaptureInfoSampleRows
+                       && await csv.ReadAsync().ConfigureAwait(false))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var row = RowFields(csv);
-                    if (sampleRows.Count < 10)
-                    {
-                        sampleRows.Add(row);
-                    }
-
-                    if (timeIndex >= 0)
-                    {
-                        var rawTime = timeIndex < row.Length ? row[timeIndex] : string.Empty;
-                        if (!CsvValues.IsNa(rawTime) && CsvValues.TryParseNumber(rawTime, out var value))
-                        {
-                            lastTime = value;
-                        }
-                    }
+                    sampleRows.Add(RowFields(csv));
                 }
 
                 if (sampleRows.Count == 0)
                 {
                     return null;
                 }
+
+                // Duration used to require walking every row of every capture.
+                // Read the final time value from a small tail window instead,
+                // reducing a minutes-long benchmark to two short disk reads.
+                var lastTime = timeIndex >= 0
+                    ? await ReadLastTimeFromTailAsync(
+                        fullPath,
+                        encoding,
+                        timeIndex,
+                        cancellationToken).ConfigureAwait(false)
+                    : null;
 
                 var application = FirstNonEmpty(sampleRows, applicationIndex) ?? "--";
                 return new CaptureInfo(
@@ -217,6 +256,78 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
                 return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static async Task<double?> ReadLastTimeFromTailAsync(
+        string path,
+        Encoding encoding,
+        int timeIndex,
+        CancellationToken cancellationToken)
+    {
+        using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: StreamBufferSize,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        if (stream.Length == 0)
+        {
+            return null;
+        }
+
+        var start = Math.Max(0, stream.Length - CaptureInfoTailBytes);
+        stream.Seek(start, SeekOrigin.Begin);
+
+        // A tail seek may begin in the middle of a UTF-8 character. A cloned
+        // replacement-fallback decoder is used only for this tail window; the
+        // normal strict-decoder pass above still validates the actual file.
+        var tailEncoding = (Encoding)encoding.Clone();
+        tailEncoding.DecoderFallback = DecoderFallback.ReplacementFallback;
+        using var text = new StreamReader(
+            stream,
+            tailEncoding,
+            detectEncodingFromByteOrderMarks: start == 0,
+            bufferSize: StreamBufferSize);
+
+        if (start > 0)
+        {
+            _ = await text.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var lines = new List<string>();
+        string? line;
+        while ((line = await text.ReadLineAsync(cancellationToken).ConfigureAwait(false)) is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                lines.Add(line);
+            }
+        }
+
+        for (var index = lines.Count - 1; index >= 0; index--)
+        {
+            using var lineReader = new StringReader(lines[index]);
+            using var csv = new CsvReader(lineReader, RawConfiguration);
+            if (!csv.Read())
+            {
+                continue;
+            }
+
+            var fields = RowFields(csv);
+            if (timeIndex >= fields.Length)
+            {
+                continue;
+            }
+
+            var rawTime = fields[timeIndex];
+            if (!CsvValues.IsNa(rawTime) && CsvValues.TryParseNumber(rawTime, out var value))
+            {
+                return value;
             }
         }
 
@@ -257,6 +368,19 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
         return null;
     }
 
+    private static (long Length, long LastWriteTicks)? TryGetFileStamp(string path)
+    {
+        try
+        {
+            var file = new FileInfo(path);
+            return file.Exists ? (file.Length, file.LastWriteTimeUtc.Ticks) : null;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     private static CaptureData EmptyCapture(string fullPath, string fileName, IReadOnlyList<string> headers) =>
         new()
         {
@@ -295,4 +419,9 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
 
         return CsvKind.Unknown;
     }
+
+    private sealed record CaptureInfoCacheEntry(
+        long Length,
+        long LastWriteTicks,
+        CaptureInfo? Info);
 }

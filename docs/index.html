@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FrameView Analyzer — NVIDIA FrameView Benchmark Analysis Tool</title>
-  <meta name="description" content="FrameView Analyzer is a free, open-source Windows app for NVIDIA FrameView and NVIDIA App performance logs. Compare 2–8 benchmarks, inspect FPS and telemetry, filter loading screens, organize captures, and export professional PNG reports.">
+  <meta name="description" content="FrameView Analyzer is a free, open-source Windows app for NVIDIA FrameView and NVIDIA App performance logs. Compare 2–8 benchmarks, inspect FPS and telemetry, filter loading screens, organize captures, and export professional reports and portable analyzed data.">
   <meta name="keywords" content="FrameView Analyzer, NVIDIA FrameView, NVIDIA App performance log, benchmark analyzer, FPS benchmark, GPU benchmark, PC latency, frame time, benchmark comparison, Windows">
   <meta name="author" content="Strecker">
   <meta name="theme-color" content="#000000">
@@ -16,7 +16,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="FrameView Analyzer">
   <meta property="og:title" content="FrameView Analyzer — NVIDIA FrameView Benchmark Analysis Tool">
-  <meta property="og:description" content="Analyze NVIDIA FrameView and NVIDIA App performance logs, compare up to 8 benchmark runs, filter noisy capture regions, and export professional reports.">
+  <meta property="og:description" content="Analyze NVIDIA FrameView and NVIDIA App performance logs, compare up to 8 benchmark runs, inspect adaptive charts, and export or re-import portable analyzed data.">
   <meta property="og:url" content="https://streckermx.github.io/FrameView-Analyzer/">
   <meta property="og:image" content="https://streckermx.github.io/FrameView-Analyzer/screenshots/analysis-dark.png">
   <meta property="og:image:alt" content="FrameView Analyzer Pair benchmark comparison workspace">
@@ -29,7 +29,7 @@
     "name": "FrameView Analyzer",
     "applicationCategory": "UtilitiesApplication",
     "operatingSystem": "Windows 10, Windows 11",
-    "softwareVersion": "3.0.0",
+    "softwareVersion": "3.1.4",
     "isAccessibleForFree": true,
     "description": "Free and open-source Windows desktop application for analyzing and comparing NVIDIA FrameView captures and NVIDIA App performance logs.",
     "url": "https://streckermx.github.io/FrameView-Analyzer/",
@@ -219,14 +219,15 @@
     <header class="hero shell">
       <div class="eyebrow"><span class="dot"></span> Free · Open source · Windows x64</div>
       <h1>Benchmark data,<br><span>finally readable.</span></h1>
-      <p class="lead">FrameView Analyzer turns NVIDIA FrameView captures and NVIDIA App performance logs into an interactive benchmark workspace for serious comparisons, clean telemetry analysis, and presentation-ready reports.</p>
+      <p class="lead">FrameView Analyzer turns NVIDIA FrameView captures and NVIDIA App performance logs into an interactive benchmark workspace for serious comparisons, adaptive chart analysis, and presentation-ready or portable exports.</p>
       <div class="actions">
-        <a class="btn primary" href="https://github.com/StreckerMX/FrameView-Analyzer/releases/download/v3.0.0/FrameViewAnalyzer-v3.0.0-win-x64.zip">Download v3.0.0</a>
+        <a class="btn primary" href="https://github.com/StreckerMX/FrameView-Analyzer/releases/download/v3.1.4/FrameViewAnalyzer-v3.1.4-win-x64.zip">Download v3.1.4</a>
         <a class="btn secondary" href="https://github.com/StreckerMX/FrameView-Analyzer" rel="noopener">View source on GitHub</a>
       </div>
       <div class="pills" aria-label="Project highlights">
         <span class="pill">Pair + Multi comparison</span>
         <span class="pill">2–8 benchmark runs</span>
+        <span class="pill">Range-aware exports</span>
         <span class="pill">Local-only processing</span>
         <span class="pill">No telemetry</span>
         <span class="pill">MIT licensed</span>
@@ -248,9 +249,9 @@
           <article class="card"><div class="num">01</div><h3>Pair comparison</h3><p>Load a Base and Comparison run, inspect FPS, frame time, PC latency, GPU/CPU utilization and other available telemetry, and see direction-aware KPI deltas at a glance.</p></article>
           <article class="card"><div class="num">02</div><h3>Multi benchmark</h3><p>Compare 2–8 captures as equal peers with stable colors across charts, KPI rows, selectors, and exported reports. Ideal for graphics-setting and technology shootouts.</p></article>
           <article class="card"><div class="num">03</div><h3>Cleaner analysis ranges</h3><p>Detect GPU-active regions, trim capture edges, and exclude loading screens, transitions, and abnormal FPS regions so the benchmark reflects the gameplay you intended to measure.</p></article>
-          <article class="card"><div class="num">04</div><h3>Visible-range statistics</h3><p>Zoom and pan through a capture while statistics recalculate for the visible time range. FPS exposes Average, 1% Low, 0.1% Low, Max, Min, and Visible Time.</p></article>
+          <article class="card"><div class="num">04</div><h3>Adaptive visible-range analysis</h3><p>FPS scales adapt to the visible data without exaggerating tiny differences, and a manually selected time window stays active while you switch metrics to investigate the same event.</p></article>
           <article class="card"><div class="num">05</div><h3>Benchmark Library</h3><p>Keep captures organized with search, filters, metadata, tags, sorting, recent comparisons, and direct Base/Comparison or Multi selection without modifying the original CSV files.</p></article>
-          <article class="card"><div class="num">06</div><h3>Professional PNG reports</h3><p>Choose the benchmarks and metrics you want, add a report title, preserve benchmark metadata, and generate a clean black-background report ready for posts, videos, documentation, or review.</p></article>
+          <article class="card"><div class="num">06</div><h3>Reports + portable data</h3><p>Export the current visible range to professional PNG reports or analyzed CSV/JSON snapshots, then import those portable data files back into FrameView Analyzer later.</p></article>
         </div>
       </div>
     </section>
@@ -259,7 +260,7 @@
       <div class="shell">
         <div class="section-kicker">Real interface · Real output</div>
         <h2>What you see is what you benchmark.</h2>
-        <p class="section-copy">These screenshots are from FrameView Analyzer 3.0.0 using real benchmark captures. The website reuses the same canonical screenshots shown in the repository README.</p>
+        <p class="section-copy">These screenshots are from FrameView Analyzer using real benchmark captures. The website reuses the same canonical screenshots shown in the repository README.</p>
 
         <div class="gallery">
           <figure>
@@ -283,9 +284,9 @@
         <div class="section-kicker">Simple workflow</div>
         <h2>Capture. Compare. Publish.</h2>
         <div class="flow">
-          <article><b>1</b><h3>Capture</h3><p>Record a supported NVIDIA FrameView detailed log or NVIDIA App performance-overlay CSV.</p></article>
-          <article><b>2</b><h3>Analyze</h3><p>Open Pair or Multi, refine the analysis range, inspect telemetry, zoom into a region, and add benchmark metadata.</p></article>
-          <article><b>3</b><h3>Export</h3><p>Select the runs and metrics you need, then create a professional PNG report or export structured benchmark data.</p></article>
+          <article><b>1</b><h3>Capture</h3><p>Record a supported NVIDIA FrameView detailed log or NVIDIA App performance-overlay CSV, or reopen a portable analyzed-data export.</p></article>
+          <article><b>2</b><h3>Analyze</h3><p>Open Pair or Multi, refine the analysis range, inspect telemetry, keep a selected time window across metrics, and add benchmark metadata.</p></article>
+          <article><b>3</b><h3>Export</h3><p>Export the visible range as a professional PNG report or portable CSV/JSON analyzed-data snapshot that can be imported again later.</p></article>
         </div>
       </div>
     </section>
@@ -317,7 +318,7 @@
       <div class="shell">
         <div class="download-panel">
           <div>
-            <div class="section-kicker">FrameView Analyzer 3.0.0</div>
+            <div class="section-kicker">FrameView Analyzer 3.1.4</div>
             <h2>Ready for your next benchmark.</h2>
             <p>Self-contained Windows x64 build. No separate .NET runtime installation required.</p>
           </div>

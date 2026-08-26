@@ -120,7 +120,7 @@ public class ChartViewModelInteractionTests
 
         var averageTile = viewModel.KpiTiles[0];
         Assert.Equal("20.0 ms → 10.0 ms", averageTile.Value);
-        Assert.Equal("↑ 50.0%", averageTile.DeltaText);
+        Assert.Equal("↓ 50.0%", averageTile.DeltaText);
         Assert.Equal(ImprovementKind.Improvement, averageTile.Kind);
     }
 
