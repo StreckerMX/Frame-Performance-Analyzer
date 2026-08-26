@@ -1,7 +1,6 @@
 using FrameViewAnalyzer.Analytics.Bins;
 using FrameViewAnalyzer.Analytics.Filtering;
 using FrameViewAnalyzer.Analytics.Samples;
-using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.Core.Formatting;
 using FrameViewAnalyzer.Core.Metrics;
 using FrameViewAnalyzer.Core.Models;
@@ -31,7 +30,7 @@ public sealed class CaptureAnalysisService : ICaptureAnalysisService
     public SessionAnalysis Reanalyze(SessionAnalysis previous, AnalysisOptions options) =>
         Assemble(
             previous.Capture,
-            MetricCatalogBuilder.Build(previous.Capture),
+            previous.Catalog,
             previous.Samples,
             previous.Bins,
             previous.RowsByBin,
@@ -63,45 +62,21 @@ public sealed class CaptureAnalysisService : ICaptureAnalysisService
             options.TrimBufferSeconds,
             options.ExcludeTransitions,
             minimumSamplesPerBin);
-        var effectiveOptions = options with { GpuThreshold = threshold };
-
-        // A raw CSV may expose numeric-looking telemetry columns that contain
-        // no usable values after the active-window/filter rules are applied.
-        // Build one candidate snapshot and keep only metrics that can actually
-        // produce at least one analyzed point. This keeps the chart selector
-        // truthful and prevents selecting an empty metric from discarding the
-        // user's current time-window view.
-        var candidate = new SessionAnalysis
-        {
-            Capture = capture,
-            Catalog = catalog,
-            Samples = samples,
-            EffectiveOptions = effectiveOptions,
-            Bins = bins,
-            RowsByBin = rowsByBin,
-            Window = profile.Window,
-            ValidBins = profile.ValidBins,
-            Diagnostics = profile.Diagnostics,
-            Metadata = null,
-        };
-        var availableCatalog = catalog
-            .Where(metric => SeriesBuilder.Values(candidate, metric.Id).Length > 0)
-            .ToList();
 
         var metadata = ExtractMetadata(
             capture,
             samples,
             threshold,
             options.TrimBufferSeconds,
-            availableCatalog.Count,
+            catalog.Count,
             profile.ValidBins.Count * AnalysisConstants.FpsBinSeconds);
 
         return new SessionAnalysis
         {
             Capture = capture,
-            Catalog = availableCatalog,
+            Catalog = catalog,
             Samples = samples,
-            EffectiveOptions = effectiveOptions,
+            EffectiveOptions = options with { GpuThreshold = threshold },
             Bins = bins,
             RowsByBin = rowsByBin,
             Window = profile.Window,
