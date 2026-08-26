@@ -16,4 +16,5 @@ public sealed record SettingsDocument(
     int FormatVersion = 1,
     string? CaptureDirectory = null,
     string AppearanceMode = "dark",
-    WindowStateDocument? Window = null);
+    WindowStateDocument? Window = null,
+    IReadOnlyList<string>? LastPngReportMetricIds = null);
