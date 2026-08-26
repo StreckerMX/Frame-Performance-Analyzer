@@ -328,7 +328,7 @@ public static class PortableAnalysisFile
     /// <summary>
     /// CsvHelper writes fields sequentially, so every row must emit every
     /// column in header order. This sparse-row helper writes blank cells until
-    /// the requested column and tracks the current position through Context.
+    /// the requested column and tracks the current writer index.
     /// </summary>
     private static void WriteField(CsvWriter csv, string fieldName, object? value)
     {
@@ -338,7 +338,7 @@ public static class PortableAnalysisFile
             throw new InvalidOperationException($"Unknown portable CSV field '{fieldName}'.");
         }
 
-        var current = csv.Column;
+        var current = csv.Index;
         while (current < target)
         {
             csv.WriteField(string.Empty);
