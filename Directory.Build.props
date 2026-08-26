@@ -17,7 +17,8 @@
     <Authors>StreckerMX</Authors>
     <Copyright>Copyright © StreckerMX</Copyright>
 
-    <!-- Single source of truth for the product version:
+    <!-- Single source of truth for the product version.
+         Changing this file triggers the release workflow; manual workflow runs are also supported.
          Version/InformationalVersion = 3.1.4 (UI, startup log, and packaging
          read this); AssemblyVersion/FileVersion stay numeric for Windows. -->
     <VersionPrefix>3.1.4</VersionPrefix>
