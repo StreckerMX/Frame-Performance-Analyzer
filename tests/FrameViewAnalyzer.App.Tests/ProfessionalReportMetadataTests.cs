@@ -6,7 +6,7 @@ namespace FrameViewAnalyzer.App.Tests;
 public class ProfessionalReportMetadataTests
 {
     [Fact]
-    public void Custom_user_title_can_still_force_professional_layout()
+    public void Custom_user_title_keeps_professional_layout_when_explicitly_requested()
     {
         var header = new ReportPlotBuilder.ReportHeader(
             "BENCHMARK CRIMSON DESERT",
