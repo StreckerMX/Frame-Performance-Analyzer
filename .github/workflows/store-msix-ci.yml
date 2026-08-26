@@ -1,0 +1,42 @@
+name: Store MSIX validation
+
+on:
+  pull_request:
+    paths:
+      - "Directory.Build.props"
+      - "packaging/store/**"
+      - "scripts/build-store-msix.ps1"
+      - "src/FrameViewAnalyzer.App/**"
+      - ".github/workflows/store-msix-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build unsigned Store MSIX
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build validation MSIX
+        shell: pwsh
+        run: |
+          ./scripts/build-store-msix.ps1 `
+            -PackageIdentityName "FrameViewAnalyzer.StoreValidation" `
+            -Publisher "CN=FrameView Analyzer Store Validation" `
+            -PublisherDisplayName "StreckerMX"
+
+      - name: Show artifact sizes
+        shell: pwsh
+        run: |
+          Get-ChildItem artifacts/store -File | ForEach-Object {
+            "{0}  {1:N0} bytes" -f $_.Name, $_.Length
+          }
