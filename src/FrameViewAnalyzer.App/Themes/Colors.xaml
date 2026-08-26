@@ -6,7 +6,7 @@
       light mode is active. All views must reference these keys via
       DynamicResource so runtime switching works.
     -->
-    <SolidColorBrush x:Key="WindowBrush" Color="#050505" />
+    <SolidColorBrush x:Key="WindowBrush" Color="#000000" />
     <SolidColorBrush x:Key="CardBrush" Color="#0C0C0C" />
     <SolidColorBrush x:Key="PanelBrush" Color="#101010" />
     <SolidColorBrush x:Key="PanelAltBrush" Color="#181818" />
@@ -19,7 +19,7 @@
     <SolidColorBrush x:Key="AccentBrush" Color="#76B900" />
     <SolidColorBrush x:Key="AccentHoverBrush" Color="#8FD119" />
     <SolidColorBrush x:Key="AccentDimBrush" Color="#1B2E0C" />
-    <SolidColorBrush x:Key="ChartBackgroundBrush" Color="#060606" />
+    <SolidColorBrush x:Key="ChartBackgroundBrush" Color="#000000" />
     <SolidColorBrush x:Key="GridBrush" Color="#1F1F1F" />
     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#131313" />
     <SolidColorBrush x:Key="SuccessBrush" Color="#4CAF6D" />

@@ -34,12 +34,12 @@ public static class SeriesBuilder
         var metric = ResolveMetric(session, metricId);
         if (metric is null)
         {
-            return (new MetricSeries(CoreMetricCatalog.CoreById["fps"], [], []), []);
+            return (new MetricSeries(CoreMetricCatalog.CoreById["fps"], [], [], SourceSession: session), []);
         }
 
         if (session.Samples.Count == 0 || session.Window is null)
         {
-            return (new MetricSeries(metric, [], []), []);
+            return (new MetricSeries(metric, [], [], SourceSession: session), []);
         }
 
         var minimumSamplesPerBin = CaptureSourceDetector.IsNvidiaAppPerformanceLog(session.Capture)
@@ -128,7 +128,7 @@ public static class SeriesBuilder
         }
 
         var yArray = ys.ToArray();
-        return (new MetricSeries(metric, xs.ToArray(), yArray), yArray);
+        return (new MetricSeries(metric, xs.ToArray(), yArray, SourceSession: session), yArray);
     }
 
     private static MetricDefinition? ResolveMetric(SessionAnalysis session, string metricId)

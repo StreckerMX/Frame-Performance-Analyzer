@@ -40,11 +40,22 @@ public sealed class JsonSettingsStore : ISettingsStore
             var captureDirectory = string.IsNullOrWhiteSpace(payload.CaptureDirectory)
                 ? null
                 : payload.CaptureDirectory;
+            var reportMetrics = payload.LastPngReportMetricIds?
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Select(id => id.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (reportMetrics is { Length: 0 })
+            {
+                reportMetrics = null;
+            }
+
             return new SettingsDocument(
                 FormatVersion: 1,
                 CaptureDirectory: captureDirectory,
                 AppearanceMode: appearance,
-                Window: payload.Window);
+                Window: payload.Window,
+                LastPngReportMetricIds: reportMetrics);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -64,7 +75,8 @@ public sealed class JsonSettingsStore : ISettingsStore
             settings.FormatVersion,
             settings.CaptureDirectory,
             settings.AppearanceMode,
-            settings.Window);
+            settings.Window,
+            settings.LastPngReportMetricIds);
         var json = JsonSerializer.Serialize(payload, JsonOptions.Indented);
         var temporary = _path + ".tmp";
         File.WriteAllText(temporary, json + Environment.NewLine);
@@ -75,7 +87,8 @@ public sealed class JsonSettingsStore : ISettingsStore
         int FormatVersion,
         string? CaptureDirectory,
         string? AppearanceMode,
-        WindowStateDocument? Window);
+        WindowStateDocument? Window,
+        IReadOnlyList<string>? LastPngReportMetricIds);
 
     internal static class JsonOptions
     {

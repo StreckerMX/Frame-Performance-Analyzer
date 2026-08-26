@@ -61,6 +61,65 @@ public class ExportSessionOptionTests
     }
 
     [Fact]
+    public void Previous_export_metrics_are_restored_when_available()
+    {
+        var metrics = new[]
+        {
+            CoreMetricCatalog.CoreById["fps"],
+            CoreMetricCatalog.CoreById["frametime"],
+        };
+
+        var selected = ExportReportWindow.ResolveInitialMetricIds(
+            metrics,
+            ["frametime", "metric_that_is_not_available"]);
+
+        Assert.Equal(["frametime"], selected.OrderBy(id => id));
+    }
+
+    [Fact]
+    public void Metric_restoration_falls_back_to_fps_when_previous_metrics_are_unavailable()
+    {
+        var metrics = new[]
+        {
+            CoreMetricCatalog.CoreById["fps"],
+            CoreMetricCatalog.CoreById["frametime"],
+        };
+
+        var selected = ExportReportWindow.ResolveInitialMetricIds(
+            metrics,
+            ["metric_that_is_not_available"]);
+
+        Assert.Equal(["fps"], selected);
+    }
+
+    [Fact]
+    public void First_export_still_defaults_to_fps_when_no_preference_exists()
+    {
+        var metrics = new[]
+        {
+            CoreMetricCatalog.CoreById["fps"],
+            CoreMetricCatalog.CoreById["frametime"],
+        };
+
+        var selected = ExportReportWindow.ResolveInitialMetricIds(metrics, null);
+
+        Assert.Equal(["fps"], selected);
+    }
+
+    [Fact]
+    public void First_available_metric_is_used_when_fps_does_not_exist()
+    {
+        var metrics = new[]
+        {
+            CoreMetricCatalog.CoreById["frametime"],
+        };
+
+        var selected = ExportReportWindow.ResolveInitialMetricIds(metrics, null);
+
+        Assert.Equal(["frametime"], selected);
+    }
+
+    [Fact]
     public void Build_selection_returns_only_checked_sessions_metrics_and_pair_title()
     {
         var baseOption = new ExportSessionOption(SessionRole.Base, "Base run", Session());

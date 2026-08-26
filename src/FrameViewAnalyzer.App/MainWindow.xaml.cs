@@ -324,7 +324,8 @@ public partial class MainWindow : Window
             metrics = ComparisonService.MetricUnion(baseSession, _viewModel.ComparisonSession);
         }
 
-        var dialog = new ExportReportWindow(options, metrics) { Owner = this };
+        var previousMetricIds = _settings.Load().LastPngReportMetricIds;
+        var dialog = new ExportReportWindow(options, metrics, previousMetricIds) { Owner = this };
         WindowThemeBootstrap.Attach(dialog, _themes);
         dialog.ExportRequested += PerformPngExport;
         dialog.ShowDialog();
@@ -395,6 +396,7 @@ public partial class MainWindow : Window
                 var height = groups.Count * 520 + ReportPlotBuilder.MeasureHeaderHeight(header);
                 ReportPlotBuilder.SavePng(multiplot, style, header, path, 1600, height);
             });
+            PersistPngReportMetricSelection(selection.MetricIds);
             _dialogs.ShowInfo(
                 "Export",
                 $"Report saved with {selection.Sessions.Count} benchmark(s) and {groups.Count} chart(s) to:\n{path}");
@@ -402,6 +404,29 @@ public partial class MainWindow : Window
         catch (Exception error)
         {
             _dialogs.ShowError("Export", error.Message);
+        }
+    }
+
+    /// <summary>Remembers the metric checklist only after a PNG was written successfully.</summary>
+    private void PersistPngReportMetricSelection(IEnumerable<string> metricIds)
+    {
+        try
+        {
+            var settings = _settings.Load();
+            _settings.Save(settings with
+            {
+                LastPngReportMetricIds = metricIds
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Distinct(StringComparer.Ordinal)
+                    .Take(ExportReport.MaxReportMetrics)
+                    .ToArray(),
+            });
+        }
+        catch (Exception error) when (error is System.IO.IOException or UnauthorizedAccessException)
+        {
+            // A preference write must never turn a successfully generated PNG
+            // into an export failure. Keep the report and log the preference error.
+            AppLog.ErrorOperation("PNG report metric preference persistence", error);
         }
     }
 
@@ -491,7 +516,19 @@ public partial class MainWindow : Window
             lines.Add(option.HeaderLine);
         }
 
-        return new ReportPlotBuilder.ReportHeader(title, lines);
+        var manualMetadataByPath = selection.Sessions
+            .GroupBy(option => option.Session.Capture.Path, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => _viewModel.ManualMetadataFor(group.First().Session),
+                StringComparer.OrdinalIgnoreCase);
+
+        return new ReportPlotBuilder.ReportHeader(
+            title,
+            lines,
+            UseProfessionalLayout: true,
+            IsMultiReport: isMultiReport,
+            ManualMetadataByPath: manualMetadataByPath);
     }
 
     private async void ExportCsv_Click(object sender, RoutedEventArgs e)

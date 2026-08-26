@@ -28,7 +28,9 @@ public partial class MainWindow
 
         var window = new MultiBenchmarkSelectionWindow(
             _viewModel.Captures.ToList(),
-            _viewModel.MultiSelectedPaths)
+            _viewModel.MultiSelectedPaths,
+            _reader,
+            _viewModel.CaptureFolderPath)
         {
             Owner = this,
         };

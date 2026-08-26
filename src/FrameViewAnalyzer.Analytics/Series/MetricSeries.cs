@@ -11,7 +11,8 @@ public sealed record MetricSeries(
     string? Label = null,
     SessionRole Role = SessionRole.Base,
     int WorkspaceIndex = 0,
-    bool IsReference = false)
+    bool IsReference = false,
+    SessionAnalysis? SourceSession = null)
 {
     /// <summary>Legend/display label; falls back to the metric label.</summary>
     public string LabelOrDefault => Label ?? Metric.Label;

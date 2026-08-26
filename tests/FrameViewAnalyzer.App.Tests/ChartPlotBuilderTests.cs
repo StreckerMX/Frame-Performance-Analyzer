@@ -98,7 +98,7 @@ public class ChartPlotBuilderTests
         var style = ChartStyle.FromApplicationResources();
 
         Assert.NotNull(style);
-        Assert.Equal(ScottPlot.Color.FromHex("#060606"), style.Background);
+        Assert.Equal(ScottPlot.Color.FromHex("#000000"), style.Background);
     }
 
     [Fact]
