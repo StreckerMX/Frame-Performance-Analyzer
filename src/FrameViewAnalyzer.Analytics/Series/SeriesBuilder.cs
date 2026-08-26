@@ -7,6 +7,8 @@ namespace FrameViewAnalyzer.Analytics.Series;
 /// Builds per-bin metric series for a session. FrameView FPS points come from
 /// harmonic per-frame summaries. Sampled telemetry sources use their
 /// source-aware bin summaries. Other metrics average usable values per bin.
+/// Portable imports return the analyzed series embedded by FrameView Analyzer
+/// directly, so a round-trip never reinterprets already-processed data.
 /// </summary>
 public static class SeriesBuilder
 {
@@ -35,6 +37,14 @@ public static class SeriesBuilder
         if (metric is null)
         {
             return (new MetricSeries(CoreMetricCatalog.CoreById["fps"], [], [], SourceSession: session), []);
+        }
+
+        if (session.ImportedSeries is { } imported
+            && imported.TryGetValue(metricId, out var importedSeries))
+        {
+            var ys = importedSeries.Y;
+            var xs = includeXs ? importedSeries.X : [];
+            return (new MetricSeries(metric, xs, ys, SourceSession: session), ys);
         }
 
         if (session.Samples.Count == 0 || session.Window is null)
