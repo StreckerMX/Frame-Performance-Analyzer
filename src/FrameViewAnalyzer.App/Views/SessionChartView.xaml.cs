@@ -56,11 +56,124 @@ public partial class SessionChartView : UserControl
     public void ShowData(MetricDefinition metric, IReadOnlyList<MetricSeries> seriesList)
     {
         CancelSelection();
+
+        // A metric switch rebuilds the ScottPlot surface, but the user's time
+        // window is workspace state rather than metric state. Carry only the X
+        // window across metrics that belong to the same loaded workspace, then
+        // recompute Y for the newly selected metric inside that window.
+        var previousLimits = _metric is not null && _seriesList.Count > 0
+            ? ChartHost.Plot.Axes.GetLimits()
+            : (AxisLimits?)null;
+        var carryTimeWindow = previousLimits is not null
+            && CanCarryTimeWindow(_seriesList, seriesList);
+
         _metric = metric;
         _seriesList = seriesList;
         HideTooltip();
-        Render(fitToData: true);
+
+        var previousSuppression = _suppressViewChanged;
+        _suppressViewChanged = true;
+        try
+        {
+            Render(fitToData: true);
+            if (carryTimeWindow)
+            {
+                RestoreTimeWindow(previousLimits!.Value);
+            }
+        }
+        finally
+        {
+            _suppressViewChanged = previousSuppression;
+        }
+
         NotifyViewChanged();
+    }
+
+    /// <summary>
+    /// Returns true when the old and new plotted series represent the same
+    /// workspace. Metrics may be available for only a subset of sessions, so a
+    /// source-session subset still counts as the same workspace.
+    /// </summary>
+    private static bool CanCarryTimeWindow(
+        IReadOnlyList<MetricSeries> current,
+        IReadOnlyList<MetricSeries> next)
+    {
+        if (current.Count == 0 || next.Count == 0)
+        {
+            return false;
+        }
+
+        var currentSources = current
+            .Where(series => series.SourceSession is not null)
+            .Select(series => series.SourceSession!)
+            .ToList();
+        var nextSources = next
+            .Where(series => series.SourceSession is not null)
+            .Select(series => series.SourceSession!)
+            .ToList();
+
+        if (currentSources.Count > 0 || nextSources.Count > 0)
+        {
+            if (currentSources.Count == 0 || nextSources.Count == 0)
+            {
+                return false;
+            }
+
+            var smaller = currentSources.Count <= nextSources.Count ? currentSources : nextSources;
+            var larger = currentSources.Count <= nextSources.Count ? nextSources : currentSources;
+            return smaller.All(source =>
+                larger.Any(candidate => ReferenceEquals(source, candidate)));
+        }
+
+        // Test/standalone series may not carry SourceSession. In that case use
+        // the stable presentation identity instead of preserving blindly.
+        if (current.Count != next.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < current.Count; index++)
+        {
+            if (current[index].Role != next[index].Role
+                || current[index].WorkspaceIndex != next[index].WorkspaceIndex
+                || !string.Equals(current[index].Label, next[index].Label, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Restores only the previous horizontal window after a metric rebuild.
+    /// Vertical limits are recalculated from the new metric's visible values.
+    /// </summary>
+    private void RestoreTimeWindow(AxisLimits previousLimits)
+    {
+        if (_metric is null || _seriesList.Count == 0)
+        {
+            return;
+        }
+
+        var minimum = System.Math.Max(previousLimits.Left, _fullLimits.Left);
+        var maximum = System.Math.Min(previousLimits.Right, _fullLimits.Right);
+        if (maximum - minimum <= 1e-9)
+        {
+            return;
+        }
+
+        var visible = new AxisLimits(
+            minimum,
+            maximum,
+            _fullLimits.Bottom,
+            _fullLimits.Top);
+        var fitted = ChartViewport.AutoZoomToSeries(
+            visible,
+            _seriesList,
+            _metric.Id == "fps");
+        ChartHost.Plot.Axes.SetLimits(fitted ?? visible);
+        ChartHost.Refresh();
     }
 
     public void Clear()
