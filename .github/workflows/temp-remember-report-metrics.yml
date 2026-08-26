@@ -1,0 +1,71 @@
+name: Temporary remember report metrics
+
+on:
+  push:
+    branches:
+      - experiment/export-report-grid
+    paths:
+      - tools/.trigger-remember-report-metrics
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/export-report-grid
+          fetch-depth: 0
+
+      - name: Wire persisted metric selection into PNG export
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/FrameViewAnalyzer.App/MainWindow.xaml.cs")
+          text = path.read_text(encoding="utf-8-sig")
+
+          old_dialog = "        var dialog = new ExportReportWindow(options, metrics) { Owner = this };\n"
+          new_dialog = (
+              "        var previousMetricIds = _settings.Load().LastPngReportMetricIds;\n"
+              "        var dialog = new ExportReportWindow(options, metrics, previousMetricIds) { Owner = this };\n"
+          )
+          if text.count(old_dialog) != 1:
+              raise SystemExit(f"Expected one export-dialog construction, found {text.count(old_dialog)}")
+          text = text.replace(old_dialog, new_dialog, 1)
+
+          old_success = (
+              "                ReportPlotBuilder.SavePng(multiplot, style, header, path, 1600, height);\n"
+              "            });\n"
+              "            _dialogs.ShowInfo(\n"
+          )
+          new_success = (
+              "                ReportPlotBuilder.SavePng(multiplot, style, header, path, 1600, height);\n"
+              "            });\n"
+              "            PersistPngReportMetricSelection(selection.MetricIds);\n"
+              "            _dialogs.ShowInfo(\n"
+          )
+          if text.count(old_success) != 1:
+              raise SystemExit(f"Expected one PNG success block, found {text.count(old_success)}")
+          text = text.replace(old_success, new_success, 1)
+
+          marker = "    /// <summary>One report plot group per selected metric, with the selected sessions' series.</summary>\n"
+          helper = '''    /// <summary>Remembers the metric checklist only after a PNG was written successfully.</summary>\n    private void PersistPngReportMetricSelection(IEnumerable<string> metricIds)\n    {\n        try\n        {\n            var settings = _settings.Load();\n            _settings.Save(settings with\n            {\n                LastPngReportMetricIds = metricIds\n                    .Where(id => !string.IsNullOrWhiteSpace(id))\n                    .Distinct(StringComparer.Ordinal)\n                    .Take(ExportReport.MaxReportMetrics)\n                    .ToArray(),\n            });\n        }\n        catch (Exception error) when (error is IOException or UnauthorizedAccessException)\n        {\n            // A preference write must never turn a successfully generated PNG\n            // into an export failure. Keep the report and log the preference error.\n            AppLog.ErrorOperation("PNG report metric preference persistence", error);\n        }\n    }\n\n'''
+          if text.count(marker) != 1:
+              raise SystemExit(f"Expected one report-group marker, found {text.count(marker)}")
+          text = text.replace(marker, helper + marker, 1)
+
+          path.write_text(text, encoding="utf-8-sig")
+
+      - name: Commit patch and remove temporary workflow
+        shell: bash
+        run: |
+          rm -f tools/.trigger-remember-report-metrics
+          rm -f .github/workflows/temp-remember-report-metrics.yml
+          git config user.name "Strecker"
+          git config user.email "101173645+StreckerMX@users.noreply.github.com"
+          git add src/FrameViewAnalyzer.App/MainWindow.xaml.cs tools/.trigger-remember-report-metrics .github/workflows/temp-remember-report-metrics.yml
+          git commit -m "feat: remember last PNG report metrics"
+          git push origin HEAD:experiment/export-report-grid
