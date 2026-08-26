@@ -29,6 +29,19 @@ public class SettingsStoreTests
     }
 
     [Fact]
+    public void Png_report_metric_selection_roundtrips_and_is_cleaned()
+    {
+        var path = TempSettingsPath();
+        var store = new JsonSettingsStore(path);
+        store.Save(new SettingsDocument(
+            LastPngReportMetricIds: ["fps", "frametime", "fps", " gpu0_util "]));
+
+        var loaded = store.Load();
+
+        Assert.Equal(["fps", "frametime", "gpu0_util"], loaded.LastPngReportMetricIds);
+    }
+
+    [Fact]
     public void Missing_file_returns_defaults()
     {
         var path = TempSettingsPath();
@@ -39,6 +52,7 @@ public class SettingsStoreTests
         Assert.Null(loaded.CaptureDirectory);
         Assert.Equal("dark", loaded.AppearanceMode);
         Assert.Null(loaded.Window);
+        Assert.Null(loaded.LastPngReportMetricIds);
     }
 
     [Fact]
