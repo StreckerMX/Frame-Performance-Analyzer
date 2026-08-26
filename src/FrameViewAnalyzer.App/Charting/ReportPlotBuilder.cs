@@ -74,7 +74,6 @@ public static class ReportPlotBuilder
 
     private const int ReportPadding = 26;
     private const int ReportTitleHeight = 44;
-    private const int ReportContextHeight = 26;
     private const int ReportSectionLabelHeight = 22;
     private const int ReportSectionGap = 18;
     private const int ReportConfigHeight = 76;
@@ -688,7 +687,6 @@ public static class ReportPlotBuilder
 
         var height = ReportPadding
             + ReportTitleHeight
-            + ReportContextHeight
             + ReportSectionGap
             + ReportSectionLabelHeight
             + ReportConfigHeight;
@@ -734,9 +732,7 @@ public static class ReportPlotBuilder
 
         using var titleFont = CreateProfessionalTitleFont();
         using var typeFont = CreateProfessionalTypeFont();
-        using var contextFont = CreateProfessionalContextFont();
         using var titlePaint = new SKPaint { Color = ToSkColor(style.Foreground) };
-        using var mutedPaint = new SKPaint { Color = ToSkColor(style.Muted) };
         using var accentPaint = new SKPaint { Color = ToSkColor(style.SeriesA) };
 
         var y = ReportPadding;
@@ -756,17 +752,6 @@ public static class ReportPlotBuilder
             accentPaint);
 
         y += ReportTitleHeight;
-        var contextText = context.CommonContext.Length > 0
-            ? context.CommonContext
-            : $"{context.Runs.Count} benchmark run(s)  ·  {context.MetricCount} selected metric(s)";
-        canvas.DrawText(
-            Truncate(contextText, 128),
-            ReportPadding,
-            y - contextFont.Metrics.Ascent,
-            SKTextAlign.Left,
-            contextFont,
-            mutedPaint);
-        y += ReportContextHeight;
 
         y += ReportSectionGap;
         DrawSectionLabel(canvas, "TEST CONFIGURATION", style, y);
