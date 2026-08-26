@@ -10,13 +10,15 @@
   <meta name="theme-color" content="#000000">
   <meta name="robots" content="index,follow,max-image-preview:large">
   <link rel="canonical" href="https://streckermx.github.io/FrameView-Analyzer/">
+  <link rel="icon" type="image/png" href="assets/frameview-analyzer.png">
+  <link rel="apple-touch-icon" href="assets/frameview-analyzer.png">
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="FrameView Analyzer">
   <meta property="og:title" content="FrameView Analyzer — NVIDIA FrameView Benchmark Analysis Tool">
   <meta property="og:description" content="Analyze NVIDIA FrameView and NVIDIA App performance logs, compare up to 8 benchmark runs, filter noisy capture regions, and export professional reports.">
   <meta property="og:url" content="https://streckermx.github.io/FrameView-Analyzer/">
-  <meta property="og:image" content="https://streckermx.github.io/FrameView-Analyzer/site-assets/pair-comparison.webp">
+  <meta property="og:image" content="https://streckermx.github.io/FrameView-Analyzer/screenshots/analysis-dark.webp">
   <meta property="og:image:alt" content="FrameView Analyzer Pair benchmark comparison workspace">
   <meta name="twitter:card" content="summary_large_image">
 
@@ -34,6 +36,7 @@
     "downloadUrl": "https://github.com/StreckerMX/FrameView-Analyzer/releases/latest",
     "codeRepository": "https://github.com/StreckerMX/FrameView-Analyzer",
     "license": "https://github.com/StreckerMX/FrameView-Analyzer/blob/main/LICENSE",
+    "image": "https://streckermx.github.io/FrameView-Analyzer/screenshots/analysis-dark.webp",
     "author": {"@type": "Person", "name": "Strecker"}
   }
   </script>
@@ -90,8 +93,9 @@
       width: 38px; height: 38px; border-radius: 9px;
       border: 1px solid #3a3a3a; background: #111;
       display: grid; place-items: center; box-shadow: inset 0 0 0 1px #080808;
+      overflow: hidden;
     }
-    .mark svg { width: 27px; height: 27px; }
+    .mark img { width: 100%; height: 100%; object-fit: contain; }
     .nav-links { display: flex; align-items: center; gap: 24px; color: #c4c4c4; font-size: 14px; }
     .nav-links a { text-decoration: none; }
     .nav-links a:hover { color: white; }
@@ -198,7 +202,7 @@
     <nav class="shell" aria-label="Main navigation">
       <a class="brand" href="#top" aria-label="FrameView Analyzer home">
         <span class="mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" fill="none"><path d="M6 25V7h10" stroke="#bfc5c8" stroke-width="2.2" stroke-linecap="round"/><path d="M8 23l5-6 4 3 7-10" stroke="#8dde00" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 10h4v4" stroke="#8dde00" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <img src="assets/frameview-analyzer.png" alt="">
         </span>
         <span>FrameView Analyzer</span>
       </a>
@@ -229,7 +233,7 @@
       </div>
       <div class="hero-shot-wrap">
         <div class="shot">
-          <img src="site-assets/pair-comparison.webp" width="1542" height="1056" alt="FrameView Analyzer comparing two Crimson Desert benchmark runs with FPS calculated over time" fetchpriority="high">
+          <img src="screenshots/analysis-dark.webp" width="1542" height="1056" alt="FrameView Analyzer comparing two Crimson Desert benchmark runs with FPS calculated over time" fetchpriority="high">
         </div>
       </div>
     </header>
@@ -255,19 +259,19 @@
       <div class="shell">
         <div class="section-kicker">Real interface · Real output</div>
         <h2>What you see is what you benchmark.</h2>
-        <p class="section-copy">These screenshots are from FrameView Analyzer 3.0.0 using real benchmark captures.</p>
+        <p class="section-copy">These screenshots are from FrameView Analyzer 3.0.0 using real benchmark captures. The website reuses the same canonical screenshots shown in the repository README.</p>
 
         <div class="gallery">
           <figure>
-            <img src="site-assets/multi-benchmark.webp" width="1542" height="1056" loading="lazy" alt="FrameView Analyzer Multi workspace comparing six benchmarks at once">
+            <img src="screenshots/multi-workspace.webp" width="1542" height="1056" loading="lazy" alt="FrameView Analyzer Multi workspace comparing six benchmarks at once">
             <figcaption><strong>Multi benchmark workspace</strong><span>Six runs compared as equal peers with stable color identity.</span></figcaption>
           </figure>
           <figure>
-            <img src="site-assets/benchmark-library.webp" width="966" height="673" loading="lazy" alt="FrameView Analyzer Benchmark Library with saved benchmark metadata and comparison controls">
+            <img src="screenshots/benchmark-library.webp" width="966" height="673" loading="lazy" alt="FrameView Analyzer Benchmark Library with saved benchmark metadata and comparison controls">
             <figcaption><strong>Benchmark Library</strong><span>Organize, filter, tag, and reopen benchmark captures.</span></figcaption>
           </figure>
           <figure class="tall">
-            <img src="site-assets/professional-png-report.webp" width="1560" height="2048" loading="lazy" alt="Professional benchmark comparison PNG report exported by FrameView Analyzer">
+            <img src="screenshots/export-report.webp" width="1600" height="2100" loading="lazy" alt="Professional benchmark comparison PNG report exported by FrameView Analyzer">
             <figcaption><strong>Professional PNG report</strong><span>Structured test configuration, methodology, benchmark runs, and performance telemetry.</span></figcaption>
           </figure>
         </div>
