@@ -24,6 +24,15 @@ public static class ReportPlotBuilder
     /// <summary>Compact benchmark context shown above the plots.</summary>
     public sealed record ReportHeader(string Title, IReadOnlyList<string> Lines);
 
+    /// <summary>Number of columns used when more than one metric is exported.</summary>
+    public const int GridColumns = 2;
+
+    /// <summary>Target height of each report row in the adaptive grid.</summary>
+    public const int GridRowHeight = 520;
+
+    /// <summary>Whitespace between adjacent report cells.</summary>
+    public const int GridGap = 20;
+
     /// <summary>
     /// Builds exactly one subplot per report metric. The compact context
     /// header is NOT a plot — it is drawn as text above the plots by
@@ -103,12 +112,12 @@ public static class ReportPlotBuilder
     }
 
     /// <summary>
-    /// Renders the PNG. The metric panels are composed manually — one direct
-    /// <c>Plot.Render</c> per panel into its own bitmap, stacked vertically
-    /// full-width below the reserved header band. <c>Multiplot.Render</c> is
-    /// deliberately NOT used: it re-autoscales subplot axes at render time,
-    /// which overwrote the fitted FPS limits and clipped valid data.
-    /// The compact text header is drawn ON TOP afterwards.
+    /// Renders the PNG. One metric keeps the familiar full-width presentation;
+    /// multiple metrics use a compact two-column grid. When the metric count is
+    /// odd, the final metric spans the complete row instead of leaving a blank
+    /// cell. The requested height is retained only for header-only reports;
+    /// chart reports use <see cref="RecommendedHeight"/> so selecting more
+    /// metrics does not create an excessively tall image.
     /// </summary>
     public static void SavePng(
         Multiplot multiplot,
@@ -118,11 +127,17 @@ public static class ReportPlotBuilder
         int width,
         int height)
     {
-        using var bitmap = new SKBitmap(width, height);
-        using var canvas = new SKCanvas(bitmap);
         var headerHeight = header is null ? 0 : MeasureHeaderHeight(header);
+        var panelCount = multiplot.Subplots.Count;
+        var renderHeight = panelCount == 0
+            ? System.Math.Max(height, headerHeight)
+            : RecommendedHeight(panelCount, headerHeight);
 
-        RenderPanels(canvas, multiplot, width, height, headerHeight);
+        using var bitmap = new SKBitmap(width, renderHeight);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(ToSkColor(style.Background));
+
+        RenderPanels(canvas, multiplot, width, renderHeight, headerHeight);
         if (header is not null)
         {
             DrawHeader(canvas, header, style, width, headerHeight);
@@ -135,9 +150,74 @@ public static class ReportPlotBuilder
     }
 
     /// <summary>
-    /// Renders every metric panel full-width and stacked vertically below the
-    /// header. Each panel is rendered into its own bitmap first so per-plot
-    /// canvas clears stay confined to that panel.
+    /// Returns the compact export height for the current panel count. One
+    /// metric occupies one full-width row; two or more metrics use two columns.
+    /// </summary>
+    public static int RecommendedHeight(int panelCount, int headerHeight)
+    {
+        if (panelCount <= 0)
+        {
+            return System.Math.Max(headerHeight, 1);
+        }
+
+        var columns = panelCount == 1 ? 1 : GridColumns;
+        var rows = (panelCount + columns - 1) / columns;
+        return headerHeight
+            + rows * GridRowHeight
+            + System.Math.Max(0, rows - 1) * GridGap;
+    }
+
+    /// <summary>
+    /// Pure report geometry for the adaptive metric grid. Two or more metrics
+    /// use two columns; a final unpaired metric spans the full report width.
+    /// </summary>
+    public static IReadOnlyList<PixelRect> ReportPanelRects(
+        int width,
+        int height,
+        int headerHeight,
+        int panelCount)
+    {
+        if (panelCount <= 0)
+        {
+            return [];
+        }
+
+        var columns = panelCount == 1 ? 1 : GridColumns;
+        var rows = (panelCount + columns - 1) / columns;
+        var horizontalGap = columns > 1 ? GridGap : 0;
+        var totalHorizontalGap = (columns - 1) * horizontalGap;
+        var columnWidth = (width - totalHorizontalGap) / columns;
+
+        var totalVerticalGap = System.Math.Max(0, rows - 1) * GridGap;
+        var contentHeight = System.Math.Max(rows, height - headerHeight - totalVerticalGap);
+        var rowHeight = contentHeight / rows;
+
+        var rects = new List<PixelRect>(panelCount);
+        for (var i = 0; i < panelCount; i++)
+        {
+            var row = i / columns;
+            var column = i % columns;
+            var finalUnpaired = columns == GridColumns
+                && panelCount % GridColumns == 1
+                && i == panelCount - 1;
+
+            var left = finalUnpaired ? 0 : column * (columnWidth + horizontalGap);
+            var right = finalUnpaired
+                ? width
+                : column == columns - 1 ? width : left + columnWidth;
+            var top = headerHeight + row * (rowHeight + GridGap);
+            var bottom = row == rows - 1 ? height : top + rowHeight;
+
+            rects.Add(new PixelRect(left, right, bottom, top));
+        }
+
+        return rects;
+    }
+
+    /// <summary>
+    /// Renders every metric panel into its own bitmap and places it in the
+    /// adaptive report grid. Per-plot canvas clears therefore remain confined
+    /// to their own cell and cannot overwrite the header or neighboring plots.
     /// </summary>
     public static void RenderPanels(
         SKCanvas canvas,
@@ -152,25 +232,26 @@ public static class ReportPlotBuilder
             return;
         }
 
-        var panelHeight = (height - headerHeight) / count;
+        var rects = ReportPanelRects(width, height, headerHeight, count);
         for (var i = 0; i < count; i++)
         {
-            var panelTop = headerHeight + i * panelHeight;
-            var panelBottom = i == count - 1 ? height : panelTop + panelHeight;
-            var currentHeight = panelBottom - panelTop;
+            var rect = rects[i];
+            var currentWidth = System.Math.Max(1, (int)(rect.Right - rect.Left));
+            var currentHeight = System.Math.Max(1, (int)(rect.Bottom - rect.Top));
 
-            using var panelBitmap = new SKBitmap(width, currentHeight);
+            using var panelBitmap = new SKBitmap(currentWidth, currentHeight);
             using var panelCanvas = new SKCanvas(panelBitmap);
             multiplot.Subplots.GetPlot(i).Render(
                 panelCanvas,
-                new PixelRect(0, width, currentHeight, 0));
-            canvas.DrawBitmap(panelBitmap, 0, panelTop);
+                new PixelRect(0, currentWidth, currentHeight, 0));
+            canvas.DrawBitmap(panelBitmap, rect.Left, rect.Top);
         }
     }
 
     /// <summary>
     /// Pure report geometry: the plot region starts below the header and spans
-    /// the FULL content width. Extracted for direct layout tests.
+    /// the full content width. Individual metrics may divide this region into
+    /// two columns when multiple plots are exported.
     /// </summary>
     public static PixelRect ReportContentRect(int width, int height, int headerHeight) =>
         new(0, width, height, headerHeight);
