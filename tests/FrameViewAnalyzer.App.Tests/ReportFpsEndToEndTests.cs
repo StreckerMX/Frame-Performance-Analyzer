@@ -11,7 +11,8 @@ namespace FrameViewAnalyzer.App.Tests;
 /// <summary>
 /// End-to-end FPS report reproduction: builds a session through the real
 /// export pipeline (SeriesBuilder + ReportPlotBuilder) and renders the
-/// multiplot, then verifies the FPS panel limits still contain the peak.
+/// multiplot, then verifies the adaptive FPS panel limits still contain every
+/// full-resolution value.
 /// </summary>
 public class ReportFpsEndToEndTests
 {
@@ -43,12 +44,16 @@ public class ReportFpsEndToEndTests
         ReportPlotBuilder.RenderPanels(canvas, multiplot, 800, 600, 0);
 
         var limits = multiplot.Subplots.GetPlot(0).Axes.GetLimits();
-
-        Assert.Equal(0, limits.Bottom, precision: 6);
-        Assert.True(limits.Top > 142.6, $"FPS top clipped after render: {limits.Top}");
-
+        var baseMin = baseSeries.Y.Min();
+        var comparisonMin = comparisonSeries.Y.Min();
         var baseMax = baseSeries.Y.Max();
         var comparisonMax = comparisonSeries.Y.Max();
+        var globalMin = System.Math.Min(baseMin, comparisonMin);
+
+        Assert.True(limits.Bottom > 0, "Adaptive FPS reports should not force a zero baseline.");
+        Assert.True(limits.Bottom <= globalMin, "Bottom must contain the full-resolution minimum.");
+        Assert.True(limits.Top > 142.6, $"FPS top clipped after render: {limits.Top}");
+        Assert.True(limits.VerticalSpan >= ChartViewport.MinimumFpsVerticalSpan);
         Assert.True(baseMax >= 140, $"Synthetic base peak lost: {baseMax}");
         Assert.True(comparisonMax >= 108, $"Synthetic comparison peak lost: {comparisonMax}");
         Assert.True(limits.Top > baseMax, "Top must contain the full-resolution base maximum.");
