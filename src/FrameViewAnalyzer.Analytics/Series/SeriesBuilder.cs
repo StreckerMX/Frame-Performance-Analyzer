@@ -42,9 +42,9 @@ public static class SeriesBuilder
         if (session.ImportedSeries is { } imported
             && imported.TryGetValue(metricId, out var importedSeries))
         {
-            var ys = importedSeries.Y;
-            var xs = includeXs ? importedSeries.X : [];
-            return (new MetricSeries(metric, xs, ys, SourceSession: session), ys);
+            var importedYs = importedSeries.Y;
+            var importedXs = includeXs ? importedSeries.X : [];
+            return (new MetricSeries(metric, importedXs, importedYs, SourceSession: session), importedYs);
         }
 
         if (session.Samples.Count == 0 || session.Window is null)
