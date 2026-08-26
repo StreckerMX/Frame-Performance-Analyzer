@@ -602,6 +602,12 @@ public partial class ChartViewModel : ObservableObject
         return points;
     }
 
+    /// <summary>
+    /// Metrics shown in the chart selector must produce at least one analyzed
+    /// point in the current workspace. Raw logs can contain numeric telemetry
+    /// columns whose usable values all disappear after filtering; those remain
+    /// part of the session catalog/details, but are not useful chart choices.
+    /// </summary>
     private static IReadOnlyList<MetricDefinition> MetricUnion(IEnumerable<SessionAnalysis> sessions)
     {
         var result = new List<MetricDefinition>();
@@ -610,10 +616,14 @@ public partial class ChartViewModel : ObservableObject
         {
             foreach (var metric in session.Catalog)
             {
-                if (seen.Add(metric.Id))
+                if (seen.Contains(metric.Id)
+                    || SeriesBuilder.Values(session, metric.Id).Length == 0)
                 {
-                    result.Add(metric);
+                    continue;
                 }
+
+                seen.Add(metric.Id);
+                result.Add(metric);
             }
         }
 
