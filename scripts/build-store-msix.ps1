@@ -8,24 +8,19 @@
     generates the required MSIX visual assets, injects the Partner Center package
     identity into the manifest template, and packs the result with MakeAppx.exe.
 
+    By default the real Partner Center identity is loaded from
+    packaging/store/StoreIdentity.json. The identity arguments remain optional
+    overrides so CI or local validation can deliberately use another identity.
+
     The produced MSIX is intentionally NOT signed. Microsoft Store signs MSIX/AppX
     packages after certification. For local sideload testing, sign the package
     separately with a trusted or self-signed test certificate.
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
-    [ValidateNotNullOrEmpty()]
     [string] $PackageIdentityName,
-
-    [Parameter(Mandatory = $true)]
-    [ValidateNotNullOrEmpty()]
     [string] $Publisher,
-
-    [Parameter(Mandatory = $true)]
-    [ValidateNotNullOrEmpty()]
     [string] $PublisherDisplayName,
-
     [string] $PackageVersion
 )
 
@@ -118,12 +113,32 @@ Set-Location $repoRoot
 
 $appProject = Join-Path $repoRoot 'src/FrameViewAnalyzer.App/FrameViewAnalyzer.App.csproj'
 $manifestTemplate = Join-Path $repoRoot 'packaging/store/AppxManifest.xml.template'
+$identityPath = Join-Path $repoRoot 'packaging/store/StoreIdentity.json'
 $sourceLogo = Join-Path $repoRoot 'src/FrameViewAnalyzer.App/assets/frameview-analyzer.png'
 $artifactsDir = Join-Path $repoRoot 'artifacts/store'
 $workDir = Join-Path $artifactsDir 'work'
 $publishDir = Join-Path $workDir 'publish'
 $packageRoot = Join-Path $workDir 'package'
 $assetsDir = Join-Path $packageRoot 'Assets'
+
+if (-not (Test-Path $identityPath)) {
+    throw "Store identity file is missing: $identityPath"
+}
+
+$storeIdentity = Get-Content $identityPath -Raw | ConvertFrom-Json
+if (-not $PackageIdentityName) { $PackageIdentityName = [string]$storeIdentity.PackageIdentityName }
+if (-not $Publisher) { $Publisher = [string]$storeIdentity.Publisher }
+if (-not $PublisherDisplayName) { $PublisherDisplayName = [string]$storeIdentity.PublisherDisplayName }
+
+if ([string]::IsNullOrWhiteSpace($PackageIdentityName)) {
+    throw 'PackageIdentityName is required and was not found in StoreIdentity.json.'
+}
+if ([string]::IsNullOrWhiteSpace($Publisher)) {
+    throw 'Publisher is required and was not found in StoreIdentity.json.'
+}
+if ([string]::IsNullOrWhiteSpace($PublisherDisplayName)) {
+    throw 'PublisherDisplayName is required and was not found in StoreIdentity.json.'
+}
 
 $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
 $makeAppx = Resolve-MakeAppx
@@ -150,6 +165,10 @@ if ($PackageVersion -notmatch '^\d+\.\d+\.\d+\.0$') {
 Write-Host "==> FrameView Analyzer Store package $PackageVersion"
 Write-Host "    Identity : $PackageIdentityName"
 Write-Host "    Publisher: $Publisher"
+Write-Host "    Display  : $PublisherDisplayName"
+if ($storeIdentity.StoreId) {
+    Write-Host "    Store ID : $($storeIdentity.StoreId)"
+}
 
 if (Test-Path $workDir) {
     Remove-Item $workDir -Recurse -Force
