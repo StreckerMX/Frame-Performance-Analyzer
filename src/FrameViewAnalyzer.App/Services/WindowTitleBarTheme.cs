@@ -21,7 +21,7 @@ public static class WindowTitleBarTheme
     private const int DWMWA_TEXT_COLOR = 36;
 
     // COLORREF (0x00BBGGRR) values matching Colors.xaml / LightTheme.xaml.
-    private const int DarkCaptionColor = 0x00050505;   // RGB #050505 — WindowBrush (dark)
+    private const int DarkCaptionColor = 0x00000000;   // RGB #000000 — WindowBrush (dark)
     private const int DarkTextColor = 0x00FFFFFF;      // RGB #FFFFFF — TextBrush (dark)
     private const int LightCaptionColor = 0x00F4F1EE;  // RGB #EEF1F4 — WindowBrush (light)
     private const int LightTextColor = 0x00221B14;     // RGB #141B22 — TextBrush (light)
