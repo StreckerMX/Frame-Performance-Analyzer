@@ -18,18 +18,18 @@ FrameView Analyzer turns NVIDIA performance CSV captures into an interactive ben
 ### Pair comparison
 
 <p align="center">
-  <img src="docs/screenshots/analysis-dark.webp" alt="FrameView Analyzer Pair comparison in dark theme" width="100%">
+  <img src="docs/screenshots/analysis-dark.png" alt="FrameView Analyzer Pair comparison in dark theme" width="100%">
 </p>
 
 <table>
   <tr>
     <td width="50%" align="center">
       <strong>Light theme</strong><br><br>
-      <img src="docs/screenshots/analysis-light.webp" alt="FrameView Analyzer Pair comparison in light theme">
+      <img src="docs/screenshots/analysis-light.png" alt="FrameView Analyzer Pair comparison in light theme">
     </td>
     <td width="50%" align="center">
       <strong>Multi benchmark workspace</strong><br><br>
-      <img src="docs/screenshots/multi-workspace.webp" alt="FrameView Analyzer Multi benchmark workspace">
+      <img src="docs/screenshots/multi-workspace.png" alt="FrameView Analyzer Multi benchmark workspace">
     </td>
   </tr>
 </table>
@@ -40,11 +40,11 @@ FrameView Analyzer turns NVIDIA performance CSV captures into an interactive ben
   <tr>
     <td width="50%" align="center">
       <strong>Benchmark Library</strong><br><br>
-      <img src="docs/screenshots/benchmark-library.webp" alt="FrameView Analyzer Benchmark Library with multi-selection">
+      <img src="docs/screenshots/benchmark-library.png" alt="FrameView Analyzer Benchmark Library with multi-selection">
     </td>
     <td width="50%" align="center">
       <strong>PNG report selection</strong><br><br>
-      <img src="docs/screenshots/export-dialog.webp" alt="FrameView Analyzer PNG report export dialog">
+      <img src="docs/screenshots/export-dialog.png" alt="FrameView Analyzer PNG report export dialog">
     </td>
   </tr>
 </table>
@@ -53,7 +53,7 @@ FrameView Analyzer turns NVIDIA performance CSV captures into an interactive ben
 <summary><strong>Exported multi-benchmark report</strong></summary>
 <br>
 <p align="center">
-  <img src="docs/screenshots/export-report.webp" alt="FrameView Analyzer exported multi-benchmark PNG report" width="55%">
+  <img src="docs/screenshots/export-report.png" alt="FrameView Analyzer exported multi-benchmark PNG report" width="55%">
 </p>
 </details>
 
@@ -63,7 +63,7 @@ Download the latest stable build from **[GitHub Releases](https://github.com/Str
 
 For the current stable release:
 
-1. Download `FrameViewAnalyzer-v2.2.0-win-x64.zip`.
+1. Download `FrameViewAnalyzer-v3.0.0-win-x64.zip`.
 2. Extract the archive.
 3. Run `FrameViewAnalyzer.exe`.
 
@@ -77,7 +77,7 @@ FrameView Analyzer is applying for the SignPath Foundation Open Source Code Sign
 
 The current application has no telemetry and makes no network calls during normal operation. Signing scope, project roles, privacy guarantees, build provenance, and verification details are documented in the **[Code signing policy](CODE_SIGNING_POLICY.md)**.
 
-## Highlights in 2.2.0
+## Highlights in 3.0.0
 
 - **Pair and Multi workspaces.** Keep the fast Base vs. Comparison workflow or switch to Multi to compare **2–8 captures as equal peers**.
 - **Stable Multi color identity.** Every benchmark keeps the same color across charts, KPI rows, the export selector, and exported PNG reports.
@@ -178,7 +178,7 @@ More technical documentation is available in [`docs/`](docs/), including archite
 
 ## Verification
 
-Version **2.2.0** is covered by the Windows/.NET 10 automated test suite and Release build, plus manual validation of Pair, Multi, Multi Analysis Range, Library multi-selection, FrameView/NVIDIA App metrics, and PNG report selection/export behavior.
+Version **3.0.0** is covered by the Windows/.NET 10 automated test suite and Release build, plus manual validation of Pair, Multi, Multi Analysis Range, Library multi-selection, FrameView/NVIDIA App metrics, and PNG report selection/export behavior.
 
 Each GitHub release also includes a `.sha256` file for verifying the downloadable ZIP.
 
