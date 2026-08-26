@@ -22,7 +22,7 @@ public sealed record ChartStyle(
     /// </summary>
     public static ChartStyle FromApplicationResources()
     {
-        var background = BrushColor("ChartBackgroundBrush", "#060606");
+        var background = BrushColor("ChartBackgroundBrush", "#000000");
         var foreground = BrushColor("TextBrush", "#FFFFFF");
         var muted = BrushColor("MutedBrush", "#8C8C8C");
         var grid = BrushColor("GridBrush", "#1E1E1E");
