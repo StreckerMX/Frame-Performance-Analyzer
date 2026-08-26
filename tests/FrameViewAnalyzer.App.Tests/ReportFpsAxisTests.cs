@@ -6,10 +6,9 @@ using FrameViewAnalyzer.Core.Metrics;
 namespace FrameViewAnalyzer.App.Tests;
 
 /// <summary>
-/// Regression coverage for the FPS report axis limits: the final ScottPlot
-/// limits of a built report panel must contain every full-resolution FPS
-/// value from every included session — Base-only, Comparison-only, and the
-/// Base + Comparison union.
+/// Regression coverage for adaptive FPS report axis limits: the final
+/// ScottPlot limits of a built report panel must contain every full-resolution
+/// FPS value from every included session without forcing a zero baseline.
 /// </summary>
 public class ReportFpsAxisTests
 {
@@ -24,7 +23,7 @@ public class ReportFpsAxisTests
             role);
 
     [Fact]
-    public void Base_and_comparison_fps_panel_contains_both_maxima()
+    public void Base_and_comparison_fps_panel_contains_the_full_union()
     {
         var group = new ReportPlotBuilder.ReportGroup(
             Fps,
@@ -36,12 +35,14 @@ public class ReportFpsAxisTests
 
         var limits = multiplot.Subplots.GetPlot(0).Axes.GetLimits();
 
-        Assert.Equal(0, limits.Bottom, precision: 6);
-        Assert.True(limits.Top > 143, $"FPS top clipped: {limits.Top}");
+        Assert.True(limits.Bottom > 0, "Adaptive FPS reports should not force a zero baseline.");
+        Assert.True(limits.Bottom <= 71, $"FPS minimum clipped: {limits.Bottom}");
+        Assert.True(limits.Top > 143, $"FPS maximum clipped: {limits.Top}");
+        Assert.True(limits.VerticalSpan >= ChartViewport.MinimumFpsVerticalSpan);
     }
 
     [Fact]
-    public void Base_only_fps_panel_contains_the_base_maximum()
+    public void Base_only_fps_panel_contains_the_full_series()
     {
         var group = new ReportPlotBuilder.ReportGroup(
             Fps,
@@ -50,12 +51,14 @@ public class ReportFpsAxisTests
 
         var limits = multiplot.Subplots.GetPlot(0).Axes.GetLimits();
 
-        Assert.Equal(0, limits.Bottom, precision: 6);
-        Assert.True(limits.Top > 143, $"FPS top clipped: {limits.Top}");
+        Assert.True(limits.Bottom > 0, "Adaptive FPS reports should not force a zero baseline.");
+        Assert.True(limits.Bottom <= 72, $"FPS minimum clipped: {limits.Bottom}");
+        Assert.True(limits.Top > 143, $"FPS maximum clipped: {limits.Top}");
+        Assert.True(limits.VerticalSpan >= ChartViewport.MinimumFpsVerticalSpan);
     }
 
     [Fact]
-    public void Comparison_only_fps_panel_contains_the_comparison_maximum()
+    public void Comparison_only_fps_panel_contains_the_full_series()
     {
         var group = new ReportPlotBuilder.ReportGroup(
             Fps,
@@ -64,8 +67,10 @@ public class ReportFpsAxisTests
 
         var limits = multiplot.Subplots.GetPlot(0).Axes.GetLimits();
 
-        Assert.Equal(0, limits.Bottom, precision: 6);
-        Assert.True(limits.Top > 111, $"FPS top clipped: {limits.Top}");
+        Assert.True(limits.Bottom > 0, "Adaptive FPS reports should not force a zero baseline.");
+        Assert.True(limits.Bottom <= 71, $"FPS minimum clipped: {limits.Bottom}");
+        Assert.True(limits.Top > 111, $"FPS maximum clipped: {limits.Top}");
+        Assert.True(limits.VerticalSpan >= ChartViewport.MinimumFpsVerticalSpan);
     }
 
     [Fact]
