@@ -64,18 +64,20 @@ public class ChartViewportTests
     }
 
     [Fact]
-    public void FitY_uses_zero_baseline_for_fps()
+    public void FitY_uses_adaptive_scale_for_fps()
     {
-        var fitted = ChartViewport.FitY(new AxisLimits(0, 10, 0, 100), minY: 60, maxY: 90, fpsBaselineZero: true);
+        var fitted = ChartViewport.FitY(new AxisLimits(0, 10, 0, 100), minY: 60, maxY: 90, fpsAdaptiveScale: true);
 
-        Assert.Equal(0, fitted.Bottom, precision: 9);
+        Assert.True(fitted.Bottom > 0);
+        Assert.True(fitted.Bottom <= 60);
         Assert.True(fitted.Top > 90);
+        Assert.True(fitted.VerticalSpan >= ChartViewport.MinimumFpsVerticalSpan);
     }
 
     [Fact]
     public void FitY_pads_non_fps_metrics_above_and_below()
     {
-        var fitted = ChartViewport.FitY(new AxisLimits(0, 10, 0, 100), minY: 60, maxY: 90, fpsBaselineZero: false);
+        var fitted = ChartViewport.FitY(new AxisLimits(0, 10, 0, 100), minY: 60, maxY: 90, fpsAdaptiveScale: false);
 
         Assert.True(fitted.Bottom < 60);
         Assert.True(fitted.Top > 90);
