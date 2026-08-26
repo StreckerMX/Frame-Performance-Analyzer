@@ -422,7 +422,7 @@ public partial class MainWindow : Window
                     .ToArray(),
             });
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        catch (Exception error) when (error is System.IO.IOException or UnauthorizedAccessException)
         {
             // A preference write must never turn a successfully generated PNG
             // into an export failure. Keep the report and log the preference error.
