@@ -12,9 +12,9 @@ using SkiaSharp;
 namespace FrameViewAnalyzer.App.Charting;
 
 /// <summary>
-/// Renders benchmark PNG reports. The chart assembly remains headless and the
-/// export renderer can enrich real application exports with the source session
-/// context carried by each MetricSeries.
+/// Builds the chart plots used by PNG exports and composes normal benchmark
+/// exports as a structured report: shared test context, benchmark runs,
+/// methodology, performance timeline, secondary telemetry, and footer.
 /// </summary>
 public static class ReportPlotBuilder
 {
@@ -34,51 +34,62 @@ public static class ReportPlotBuilder
         ScottPlot.Color Color,
         SessionAnalysis? Session);
 
+    private sealed record ReportField(string Label, string Value);
+
+    private sealed record MethodologyContext(
+        IReadOnlyList<ReportField> Fields,
+        bool GpuFilterVaries,
+        bool EdgeTrimVaries,
+        bool TransitionPolicyVaries);
+
     private sealed record ProfessionalReportContext(
         string MainTitle,
         string ReportType,
         string CommonContext,
+        IReadOnlyList<ReportField> SharedConfiguration,
         IReadOnlyList<ReportRunContext> Runs,
-        string Methodology,
+        MethodologyContext Methodology,
         int MetricCount);
 
     private static readonly ConditionalWeakTable<Multiplot, ReportBuildContext> BuildContexts = new();
 
-    /// <summary>Number of columns used for secondary metrics.</summary>
+    /// <summary>Number of columns used for secondary metric charts.</summary>
     public const int GridColumns = 2;
 
     /// <summary>Height reserved for the principal full-width FPS chart.</summary>
     public const int PrimaryRowHeight = 560;
 
-    /// <summary>Target height of each secondary report row.</summary>
+    /// <summary>Target height of each secondary chart row.</summary>
     public const int GridRowHeight = 400;
 
-    /// <summary>Whitespace between adjacent report cells.</summary>
+    /// <summary>Whitespace between adjacent chart cells.</summary>
     public const int GridGap = 20;
 
-    private const int ProfessionalFooterHeight = 42;
-    private const int ProfessionalHeaderPadding = 24;
-    private const int ProfessionalTitleHeight = 40;
-    private const int ProfessionalContextHeight = 24;
-    private const int ProfessionalRunCardHeight = 104;
-    private const int ProfessionalRunCardGap = 12;
-    private const int ProfessionalMethodHeight = 42;
-    private const int ProfessionalHeaderGap = 18;
-    private const int ProfessionalMaxRunColumns = 4;
+    /// <summary>Explicit separation between a legacy header and its first chart.</summary>
+    public const int HeaderSeparationGap = 12;
 
-    // Legacy header geometry is retained for direct renderer tests and callers
-    // which provide arbitrary titles rather than the normal benchmark-report
-    // title. Real BENCHMARK COMPARISON exports use the professional layout.
     private const int LegacyHeaderPadding = 16;
     private const int LegacyHeaderTitleGap = 12;
     private const int LegacyHeaderBottomMargin = 4;
 
-    /// <summary>Explicit separation between the header and first chart.</summary>
-    public const int HeaderSeparationGap = 12;
+    private const int ReportPadding = 26;
+    private const int ReportTitleHeight = 44;
+    private const int ReportContextHeight = 26;
+    private const int ReportSectionLabelHeight = 22;
+    private const int ReportSectionGap = 18;
+    private const int ReportConfigHeight = 76;
+    private const int ReportRunCardHeight = 132;
+    private const int ReportRunCardGap = 14;
+    private const int ReportMethodHeight = 92;
+    private const int ReportHeaderBottomGap = 18;
+    private const int ReportBodySectionHeight = 38;
+    private const int ReportBodySectionGap = 16;
+    private const int ReportFooterHeight = 54;
 
     /// <summary>
-    /// Builds exactly one subplot per metric. FPS is promoted to the first plot
-    /// whenever selected, making it the principal full-width chart in exports.
+    /// Builds exactly one subplot per metric. FPS is promoted to plot zero
+    /// whenever it is selected so the professional report can make it the
+    /// principal performance timeline.
     /// </summary>
     public static Multiplot Build(
         IReadOnlyList<ReportGroup> groups,
@@ -130,9 +141,9 @@ public static class ReportPlotBuilder
                 signal.LegendText = series.LabelOrDefault;
             }
 
-            // Keep a correctly themed legend on the Plot itself for direct
-            // Build() consumers. SavePng hides it when the professional report
-            // header can act as the benchmark key instead.
+            // Direct Build() consumers still get a correctly themed legend.
+            // Professional PNG composition hides these copies and uses the
+            // benchmark-run cards as the report key instead.
             plot.ShowLegend();
             plot.Legend.BackgroundColor = style.Background.WithAlpha(0.92);
             plot.Legend.FontColor = style.Foreground;
@@ -154,10 +165,9 @@ public static class ReportPlotBuilder
     }
 
     /// <summary>
-    /// Saves a PNG. Normal Pair/Multi report titles use the structured report
-    /// layout: shared title/context, benchmark cards, methodology, FPS-first
-    /// chart hierarchy, and a restrained footer. Arbitrary titles retain the
-    /// compact legacy header so renderer regression tests remain stable.
+    /// Saves a PNG. Standard Pair/Multi benchmark titles use the professional
+    /// report compositor. Arbitrary titles retain the compact legacy renderer
+    /// used by low-level regression tests and free-form callers.
     /// </summary>
     public static void SavePng(
         Multiplot multiplot,
@@ -168,33 +178,14 @@ public static class ReportPlotBuilder
         int height)
     {
         BuildContexts.TryGetValue(multiplot, out var buildContext);
-        var panelCount = multiplot.Subplots.Count;
-        var hasPrimaryFps = HasPrimaryFps(buildContext);
         var professional = header is not null && IsBenchmarkReportTitle(header.Title);
-
         if (professional)
         {
-            SaveProfessionalPng(
-                multiplot,
-                style,
-                header!,
-                buildContext,
-                path,
-                width,
-                panelCount,
-                hasPrimaryFps);
+            SaveProfessionalPng(multiplot, style, header!, buildContext, path, width);
             return;
         }
 
-        SaveLegacyPng(
-            multiplot,
-            style,
-            header,
-            path,
-            width,
-            height,
-            panelCount,
-            hasPrimaryFps);
+        SaveLegacyPng(multiplot, style, header, path, width, height, buildContext);
     }
 
     private static void SaveProfessionalPng(
@@ -203,22 +194,20 @@ public static class ReportPlotBuilder
         ReportHeader header,
         ReportBuildContext? buildContext,
         string path,
-        int width,
-        int panelCount,
-        bool hasPrimaryFps)
+        int width)
     {
         var context = BuildProfessionalContext(header, buildContext, style);
-        var headerHeight = MeasureProfessionalHeaderHeight(context, width);
-        var bodyBottom = panelCount == 0
-            ? headerHeight
-            : RecommendedHeight(panelCount, headerHeight, hasPrimaryFps);
-        var renderHeight = bodyBottom + ProfessionalFooterHeight;
+        var headerHeight = MeasureProfessionalHeaderHeight(context);
+        var bodyLayout = BuildProfessionalBodyLayout(
+            width,
+            headerHeight,
+            multiplot.Subplots.Count,
+            HasPrimaryFps(buildContext));
+        var renderHeight = bodyLayout.Bottom + ReportFooterHeight;
 
-        // Benchmark cards are the report legend, so chart-local copies are
-        // redundant and consume valuable plotting area.
         if (context.Runs.Count > 0)
         {
-            for (var i = 0; i < panelCount; i++)
+            for (var i = 0; i < multiplot.Subplots.Count; i++)
             {
                 multiplot.Subplots.GetPlot(i).HideLegend();
             }
@@ -228,13 +217,10 @@ public static class ReportPlotBuilder
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(ToSkColor(style.Background));
 
-        if (panelCount > 0)
-        {
-            RenderPanels(canvas, multiplot, width, bodyBottom, headerHeight, hasPrimaryFps);
-        }
-
         DrawProfessionalHeader(canvas, context, style, width, headerHeight);
-        DrawProfessionalFooter(canvas, context, style, width, bodyBottom, renderHeight);
+        DrawProfessionalBodyLabels(canvas, style, width, bodyLayout);
+        RenderPanels(canvas, multiplot, bodyLayout.PanelRects);
+        DrawProfessionalFooter(canvas, context, style, width, bodyLayout.Bottom, renderHeight);
 
         SaveBitmap(bitmap, path);
     }
@@ -246,13 +232,13 @@ public static class ReportPlotBuilder
         string path,
         int width,
         int requestedHeight,
-        int panelCount,
-        bool hasPrimaryFps)
+        ReportBuildContext? buildContext)
     {
         var headerHeight = header is null ? 0 : MeasureHeaderHeight(header);
+        var panelCount = multiplot.Subplots.Count;
         var renderHeight = panelCount == 0
             ? System.Math.Max(requestedHeight, headerHeight)
-            : RecommendedHeight(panelCount, headerHeight, hasPrimaryFps);
+            : RecommendedHeight(panelCount, headerHeight, HasPrimaryFps(buildContext));
 
         using var bitmap = new SKBitmap(width, renderHeight);
         using var canvas = new SKCanvas(bitmap);
@@ -260,7 +246,13 @@ public static class ReportPlotBuilder
 
         if (panelCount > 0)
         {
-            RenderPanels(canvas, multiplot, width, renderHeight, headerHeight, hasPrimaryFps);
+            RenderPanels(
+                canvas,
+                multiplot,
+                width,
+                renderHeight,
+                headerHeight,
+                HasPrimaryFps(buildContext));
         }
 
         if (header is not null)
@@ -280,8 +272,7 @@ public static class ReportPlotBuilder
     }
 
     /// <summary>
-    /// Returns the compact export height. A lone chart remains large. If FPS
-    /// is primary it gets its own taller row before the secondary grid.
+    /// Legacy/adaptive chart height used outside the professional compositor.
     /// </summary>
     public static int RecommendedHeight(
         int panelCount,
@@ -316,8 +307,8 @@ public static class ReportPlotBuilder
     }
 
     /// <summary>
-    /// Pure report geometry. FPS can occupy the complete first row and
-    /// secondary metrics use two columns; an unpaired final metric spans wide.
+    /// Legacy/adaptive panel geometry. FPS may occupy the first full-width row
+    /// and secondary metrics use two columns.
     /// </summary>
     public static IReadOnlyList<PixelRect> ReportPanelRects(
         int width,
@@ -382,12 +373,11 @@ public static class ReportPlotBuilder
                 : column == GridColumns - 1 ? width : left + columnWidth;
             var top = gridTop + row * (rowHeight + GridGap);
             var bottom = row == rows - 1 ? height : top + rowHeight;
-
             rects.Add(new PixelRect(left, right, bottom, top));
         }
     }
 
-    /// <summary>Renders each metric into its own isolated bitmap cell.</summary>
+    /// <summary>Renders legacy/adaptive panels into isolated bitmap cells.</summary>
     public static void RenderPanels(
         SKCanvas canvas,
         Multiplot multiplot,
@@ -396,13 +386,21 @@ public static class ReportPlotBuilder
         int headerHeight,
         bool hasPrimaryFps = false)
     {
-        var count = multiplot.Subplots.Count;
-        if (count == 0)
-        {
-            return;
-        }
+        var rects = ReportPanelRects(
+            width,
+            height,
+            headerHeight,
+            multiplot.Subplots.Count,
+            hasPrimaryFps);
+        RenderPanels(canvas, multiplot, rects);
+    }
 
-        var rects = ReportPanelRects(width, height, headerHeight, count, hasPrimaryFps);
+    private static void RenderPanels(
+        SKCanvas canvas,
+        Multiplot multiplot,
+        IReadOnlyList<PixelRect> rects)
+    {
+        var count = System.Math.Min(multiplot.Subplots.Count, rects.Count);
         for (var i = 0; i < count; i++)
         {
             var rect = rects[i];
@@ -418,7 +416,7 @@ public static class ReportPlotBuilder
         }
     }
 
-    /// <summary>Full plot content rectangle below a caller-provided header.</summary>
+    /// <summary>Full legacy content rectangle below the caller-provided header.</summary>
     public static PixelRect ReportContentRect(int width, int height, int headerHeight) =>
         new(0, width, height, headerHeight);
 
@@ -454,13 +452,25 @@ public static class ReportPlotBuilder
         var lineHeight = LineHeight(lineFont);
         var titleTop = LegacyHeaderPadding;
         var titleBaseline = titleTop - titleFont.Metrics.Ascent;
-        canvas.DrawText(header.Title, LegacyHeaderPadding, titleBaseline, SKTextAlign.Left, titleFont, titlePaint);
+        canvas.DrawText(
+            header.Title,
+            LegacyHeaderPadding,
+            titleBaseline,
+            SKTextAlign.Left,
+            titleFont,
+            titlePaint);
 
         var linesTop = titleTop + titleHeight + LegacyHeaderTitleGap;
         for (var i = 0; i < header.Lines.Count; i++)
         {
             var baseline = linesTop + i * lineHeight - lineFont.Metrics.Ascent;
-            canvas.DrawText(header.Lines[i], LegacyHeaderPadding, baseline, SKTextAlign.Left, lineFont, linePaint);
+            canvas.DrawText(
+                header.Lines[i],
+                LegacyHeaderPadding,
+                baseline,
+                SKTextAlign.Left,
+                lineFont,
+                linePaint);
         }
     }
 
@@ -484,7 +494,7 @@ public static class ReportPlotBuilder
         var commonApplication = CommonSessionValue(
             sessions,
             session => session.Metadata?.Application,
-            value => DisplayText.CleanGameName(value));
+            DisplayText.CleanGameName);
         var commonResolution = CommonSessionValue(sessions, session => session.Metadata?.Resolution);
         var commonGpu = CommonSessionValue(
             sessions,
@@ -508,14 +518,32 @@ public static class ReportPlotBuilder
             }
         }
 
-        var methodology = BuildMethodology(sessions);
+        var config = new List<ReportField>();
+        AddConfig(config, "APPLICATION", commonApplication);
+        AddConfig(config, "RESOLUTION", commonResolution);
+        AddConfig(config, "GPU", commonGpu);
+        AddConfig(config, "CPU", commonCpu);
+        if (config.Count == 0)
+        {
+            config.Add(new ReportField("SHARED TEST CONTEXT", "Varies by benchmark"));
+        }
+
         return new ProfessionalReportContext(
             mainTitle,
             reportType,
             string.Join("  ·  ", commonParts),
+            config,
             runs,
-            methodology,
+            BuildMethodology(sessions),
             buildContext?.Groups.Count ?? 0);
+    }
+
+    private static void AddConfig(List<ReportField> fields, string label, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            fields.Add(new ReportField(label, value!));
+        }
     }
 
     private static IReadOnlyList<ReportRunContext> BuildRunContexts(
@@ -544,12 +572,29 @@ public static class ReportPlotBuilder
                 : series.Role == SessionRole.Base ? "BASE" : "COMPARISON";
             runs.Add(new ReportRunContext(
                 role,
-                series.LabelOrDefault,
+                ReportRunDisplayLabel(series.LabelOrDefault),
                 SeriesColor(group, series, style),
                 series.SourceSession));
         }
 
         return runs;
+    }
+
+    /// <summary>
+    /// Removes Pair picker role prefixes because the report card already has a
+    /// dedicated BASE/COMPARISON eyebrow.
+    /// </summary>
+    internal static string ReportRunDisplayLabel(string label)
+    {
+        foreach (var prefix in new[] { "Base — ", "Comparison — ", "Base - ", "Comparison - " })
+        {
+            if (label.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return label[prefix.Length..].Trim();
+            }
+        }
+
+        return label.Trim();
     }
 
     private static string? CommonSessionValue(
@@ -586,68 +631,96 @@ public static class ReportPlotBuilder
             : null;
     }
 
-    private static string BuildMethodology(IReadOnlyList<SessionAnalysis> sessions)
+    private static MethodologyContext BuildMethodology(IReadOnlyList<SessionAnalysis> sessions)
     {
         if (sessions.Count == 0)
         {
-            return "FrameView Analyzer report · charts use the analysis state active at export time";
+            return new MethodologyContext(
+                [new ReportField("ANALYSIS", "Current FrameView Analyzer session state")],
+                false,
+                false,
+                false);
         }
 
-        var first = sessions[0].EffectiveOptions;
-        var common = sessions.All(session => session.EffectiveOptions == first);
-        if (!common)
-        {
-            return "Analysis settings vary by benchmark · each run uses its saved GPU filter, edge trim, and transition rules";
-        }
+        var gpuValues = sessions.Select(session => GpuFilterText(session.EffectiveOptions)).ToList();
+        var trimValues = sessions.Select(session => EdgeTrimText(session.EffectiveOptions)).ToList();
+        var transitionValues = sessions.Select(session => TransitionPolicyText(session.EffectiveOptions)).ToList();
 
-        var gpu = first.AutoGpuThreshold
-            ? $"Automatic GPU activity ≥ {first.GpuThreshold:F0}%"
-            : $"Manual GPU activity ≥ {first.GpuThreshold:F0}%";
-        var trim = first.TrimBufferSeconds > 0
-            ? $"edge trim {first.TrimBufferSeconds:F1} s"
-            : "no edge trim";
-        var transitions = first.ExcludeTransitions
-            ? "loading/transition exclusion on"
-            : "loads/transitions included";
-        return $"{gpu}  ·  {trim}  ·  {transitions}";
+        var gpuVaries = !AllEqual(gpuValues);
+        var trimVaries = !AllEqual(trimValues);
+        var transitionsVary = !AllEqual(transitionValues);
+
+        return new MethodologyContext(
+        [
+            new ReportField("GPU ACTIVITY FILTER", gpuVaries ? "Per benchmark" : gpuValues[0]),
+            new ReportField("EDGE TRIM", trimVaries ? "Per benchmark" : trimValues[0]),
+            new ReportField("LOADS / TRANSITIONS", transitionsVary ? "Per benchmark" : transitionValues[0]),
+            new ReportField("CHART AGGREGATION", "1 analyzed value per second"),
+        ],
+        gpuVaries,
+        trimVaries,
+        transitionsVary);
     }
 
-    private static int MeasureProfessionalHeaderHeight(ProfessionalReportContext context, int width)
+    private static bool AllEqual(IReadOnlyList<string> values) =>
+        values.Count <= 1
+        || values.Skip(1).All(value => string.Equals(value, values[0], StringComparison.Ordinal));
+
+    private static string GpuFilterText(AnalysisOptions options) =>
+        options.AutoGpuThreshold
+            ? $"Automatic · ≥ {options.GpuThreshold:F0}% average GPU utilization"
+            : $"Manual · ≥ {options.GpuThreshold:F0}% average GPU utilization";
+
+    private static string EdgeTrimText(AnalysisOptions options) =>
+        options.TrimBufferSeconds > 0
+            ? $"{options.TrimBufferSeconds:F1} s from each detected edge"
+            : "None";
+
+    private static string TransitionPolicyText(AnalysisOptions options) =>
+        options.ExcludeTransitions ? "Excluded" : "Included";
+
+    private static int MeasureProfessionalHeaderHeight(ProfessionalReportContext context)
     {
-        _ = width;
-        var columns = ProfessionalRunColumns(context.Runs.Count);
-        var rows = context.Runs.Count == 0
+        var columns = ReportRunColumns(context.Runs.Count);
+        var runRows = context.Runs.Count == 0
             ? 0
             : (context.Runs.Count + columns - 1) / columns;
 
-        var height = ProfessionalHeaderPadding
-            + ProfessionalTitleHeight
-            + ProfessionalContextHeight;
-        if (rows > 0)
+        var height = ReportPadding
+            + ReportTitleHeight
+            + ReportContextHeight
+            + ReportSectionGap
+            + ReportSectionLabelHeight
+            + ReportConfigHeight;
+
+        if (runRows > 0)
         {
-            height += ProfessionalHeaderGap
-                + rows * ProfessionalRunCardHeight
-                + System.Math.Max(0, rows - 1) * ProfessionalRunCardGap;
+            height += ReportSectionGap
+                + ReportSectionLabelHeight
+                + runRows * ReportRunCardHeight
+                + System.Math.Max(0, runRows - 1) * ReportRunCardGap;
         }
 
-        height += ProfessionalHeaderGap + ProfessionalMethodHeight + HeaderSeparationGap;
+        height += ReportSectionGap
+            + ReportSectionLabelHeight
+            + ReportMethodHeight
+            + ReportHeaderBottomGap;
         return height;
     }
 
-    private static int ProfessionalRunColumns(int runCount)
+    /// <summary>
+    /// Adaptive benchmark-card policy: 2→2, 3→3, 4→2×2, 5→3+2,
+    /// 6→3×2, and 7–8→4×2.
+    /// </summary>
+    internal static int ReportRunColumns(int runCount) => runCount switch
     {
-        if (runCount <= 1)
-        {
-            return 1;
-        }
-
-        if (runCount == 2)
-        {
-            return 2;
-        }
-
-        return System.Math.Min(ProfessionalMaxRunColumns, runCount);
-    }
+        <= 1 => 1,
+        2 => 2,
+        3 => 3,
+        4 => 2,
+        5 or 6 => 3,
+        _ => 4,
+    };
 
     private static void DrawProfessionalHeader(
         SKCanvas canvas,
@@ -666,67 +739,124 @@ public static class ReportPlotBuilder
         using var mutedPaint = new SKPaint { Color = ToSkColor(style.Muted) };
         using var accentPaint = new SKPaint { Color = ToSkColor(style.SeriesA) };
 
-        var x = ProfessionalHeaderPadding;
-        var y = ProfessionalHeaderPadding;
-        var titleBaseline = y - titleFont.Metrics.Ascent;
+        var y = ReportPadding;
         canvas.DrawText(
-            Truncate(context.MainTitle, 62),
-            x,
-            titleBaseline,
+            Truncate(context.MainTitle, 64),
+            ReportPadding,
+            y - titleFont.Metrics.Ascent,
             SKTextAlign.Left,
             titleFont,
             titlePaint);
-
-        // Report type acts as a quiet eyebrow on the right, giving the title
-        // area hierarchy without repeating the old wall of metadata text.
-        var typeBaseline = y - typeFont.Metrics.Ascent + 5;
         canvas.DrawText(
             context.ReportType,
-            width - ProfessionalHeaderPadding,
-            typeBaseline,
+            width - ReportPadding,
+            y - typeFont.Metrics.Ascent + 5,
             SKTextAlign.Right,
             typeFont,
             accentPaint);
 
-        y += ProfessionalTitleHeight;
+        y += ReportTitleHeight;
         var contextText = context.CommonContext.Length > 0
             ? context.CommonContext
             : $"{context.Runs.Count} benchmark run(s)  ·  {context.MetricCount} selected metric(s)";
-        var contextBaseline = y - contextFont.Metrics.Ascent;
         canvas.DrawText(
-            Truncate(contextText, 120),
-            x,
-            contextBaseline,
+            Truncate(contextText, 128),
+            ReportPadding,
+            y - contextFont.Metrics.Ascent,
             SKTextAlign.Left,
             contextFont,
             mutedPaint);
-        y += ProfessionalContextHeight;
+        y += ReportContextHeight;
+
+        y += ReportSectionGap;
+        DrawSectionLabel(canvas, "TEST CONFIGURATION", style, y);
+        y += ReportSectionLabelHeight;
+        DrawConfigurationPanel(canvas, context.SharedConfiguration, style, width, y);
+        y += ReportConfigHeight;
 
         if (context.Runs.Count > 0)
         {
-            y += ProfessionalHeaderGap;
+            y += ReportSectionGap;
+            DrawSectionLabel(canvas, "BENCHMARK RUNS", style, y);
+            y += ReportSectionLabelHeight;
             DrawRunCards(canvas, context, style, width, y);
-            var columns = ProfessionalRunColumns(context.Runs.Count);
+            var columns = ReportRunColumns(context.Runs.Count);
             var rows = (context.Runs.Count + columns - 1) / columns;
-            y += rows * ProfessionalRunCardHeight
-                + System.Math.Max(0, rows - 1) * ProfessionalRunCardGap;
+            y += rows * ReportRunCardHeight
+                + System.Math.Max(0, rows - 1) * ReportRunCardGap;
         }
 
-        y += ProfessionalHeaderGap;
-        DrawMethodology(canvas, context, style, width, y);
+        y += ReportSectionGap;
+        DrawSectionLabel(canvas, "ANALYSIS METHODOLOGY", style, y);
+        y += ReportSectionLabelHeight;
+        DrawMethodologyPanel(canvas, context.Methodology, style, width, y);
 
         using var dividerPaint = new SKPaint
         {
-            Color = ToSkColor(style.Grid.WithAlpha(0.9)),
+            Color = ToSkColor(style.Grid.WithAlpha(0.85)),
             StrokeWidth = 1,
             IsAntialias = true,
         };
         canvas.DrawLine(
-            ProfessionalHeaderPadding,
-            headerHeight - HeaderSeparationGap / 2f,
-            width - ProfessionalHeaderPadding,
-            headerHeight - HeaderSeparationGap / 2f,
+            ReportPadding,
+            headerHeight - 4,
+            width - ReportPadding,
+            headerHeight - 4,
             dividerPaint);
+    }
+
+    private static void DrawSectionLabel(
+        SKCanvas canvas,
+        string text,
+        ChartStyle style,
+        int top)
+    {
+        using var font = CreateSectionLabelFont();
+        using var paint = new SKPaint { Color = ToSkColor(style.SeriesA) };
+        canvas.DrawText(
+            text,
+            ReportPadding,
+            top + 2 - font.Metrics.Ascent,
+            SKTextAlign.Left,
+            font,
+            paint);
+    }
+
+    private static void DrawConfigurationPanel(
+        SKCanvas canvas,
+        IReadOnlyList<ReportField> fields,
+        ChartStyle style,
+        int width,
+        int top)
+    {
+        DrawPanelBackground(canvas, style, ReportPadding, top, width - ReportPadding, top + ReportConfigHeight);
+
+        using var labelFont = CreateFieldLabelFont();
+        using var valueFont = CreateFieldValueFont();
+        using var labelPaint = new SKPaint { Color = ToSkColor(style.Muted) };
+        using var valuePaint = new SKPaint { Color = ToSkColor(style.Foreground) };
+
+        var count = System.Math.Max(1, fields.Count);
+        var innerWidth = width - ReportPadding * 2 - 28;
+        var cellWidth = innerWidth / (float)count;
+        for (var i = 0; i < fields.Count; i++)
+        {
+            var left = ReportPadding + 14 + i * cellWidth;
+            canvas.DrawText(
+                fields[i].Label,
+                left,
+                top + 13 - labelFont.Metrics.Ascent,
+                SKTextAlign.Left,
+                labelFont,
+                labelPaint);
+            canvas.DrawText(
+                Truncate(fields[i].Value, System.Math.Max(12, (int)(cellWidth / 8))),
+                left,
+                top + 39 - valueFont.Metrics.Ascent,
+                SKTextAlign.Left,
+                valueFont,
+                valuePaint);
+        }
     }
 
     private static void DrawRunCards(
@@ -736,12 +866,10 @@ public static class ReportPlotBuilder
         int width,
         int top)
     {
-        var columns = ProfessionalRunColumns(context.Runs.Count);
-        var rows = (context.Runs.Count + columns - 1) / columns;
-        _ = rows;
+        var columns = ReportRunColumns(context.Runs.Count);
         var availableWidth = width
-            - ProfessionalHeaderPadding * 2
-            - (columns - 1) * ProfessionalRunCardGap;
+            - ReportPadding * 2
+            - (columns - 1) * ReportRunCardGap;
         var cardWidth = availableWidth / (float)columns;
 
         var sessions = context.Runs
@@ -769,28 +897,14 @@ public static class ReportPlotBuilder
         using var rolePaint = new SKPaint { Color = ToSkColor(style.Muted) };
         using var namePaint = new SKPaint { Color = ToSkColor(style.Foreground) };
         using var detailPaint = new SKPaint { Color = ToSkColor(style.Muted) };
-        using var fillPaint = new SKPaint { Color = ToSkColor(style.Grid.WithAlpha(0.08)) };
-        using var borderPaint = new SKPaint
-        {
-            Color = ToSkColor(style.Grid.WithAlpha(0.8)),
-            Style = SKPaintStyle.Stroke,
-            StrokeWidth = 1,
-            IsAntialias = true,
-        };
 
         for (var i = 0; i < context.Runs.Count; i++)
         {
             var row = i / columns;
             var column = i % columns;
-            var left = ProfessionalHeaderPadding + column * (cardWidth + ProfessionalRunCardGap);
-            var cardTop = top + row * (ProfessionalRunCardHeight + ProfessionalRunCardGap);
-            var rect = new SKRect(
-                left,
-                cardTop,
-                left + cardWidth,
-                cardTop + ProfessionalRunCardHeight);
-            canvas.DrawRoundRect(rect, 7, 7, fillPaint);
-            canvas.DrawRoundRect(rect, 7, 7, borderPaint);
+            var left = ReportPadding + column * (cardWidth + ReportRunCardGap);
+            var cardTop = top + row * (ReportRunCardHeight + ReportRunCardGap);
+            DrawPanelBackground(canvas, style, left, cardTop, left + cardWidth, cardTop + ReportRunCardHeight);
 
             using var accent = new SKPaint
             {
@@ -800,20 +914,17 @@ public static class ReportPlotBuilder
             };
             canvas.DrawLine(left + 1, cardTop + 2, left + cardWidth - 1, cardTop + 2, accent);
 
-            var roleBaseline = cardTop + 13 - roleFont.Metrics.Ascent;
             canvas.DrawText(
                 context.Runs[i].Role,
-                left + 12,
-                roleBaseline,
+                left + 13,
+                cardTop + 14 - roleFont.Metrics.Ascent,
                 SKTextAlign.Left,
                 roleFont,
                 rolePaint);
-
-            var nameBaseline = cardTop + 34 - nameFont.Metrics.Ascent;
             canvas.DrawText(
-                Truncate(context.Runs[i].Label, System.Math.Max(18, (int)(cardWidth / 9))),
-                left + 12,
-                nameBaseline,
+                Truncate(context.Runs[i].Label, System.Math.Max(22, (int)(cardWidth / 8.2))),
+                left + 13,
+                cardTop + 38 - nameFont.Metrics.Ascent,
                 SKTextAlign.Left,
                 nameFont,
                 namePaint);
@@ -825,29 +936,45 @@ public static class ReportPlotBuilder
                 commonResolution,
                 commonGpu,
                 commonCpu);
-            var dataLine = RunDataLine(session);
+            var dataLines = RunDataLines(session);
+            var analysisLine = RunAnalysisLine(session, context.Methodology);
 
+            var cursor = cardTop + 66;
             if (contextLine.Length > 0)
             {
-                var contextBaseline = cardTop + 59 - detailFont.Metrics.Ascent;
-                canvas.DrawText(
-                    Truncate(contextLine, System.Math.Max(22, (int)(cardWidth / 7))),
-                    left + 12,
-                    contextBaseline,
-                    SKTextAlign.Left,
-                    detailFont,
-                    detailPaint);
+                DrawDetailLine(canvas, contextLine, left, cardWidth, cursor, detailFont, detailPaint);
+                cursor += 19;
             }
 
-            var dataBaseline = cardTop + 80 - detailFont.Metrics.Ascent;
-            canvas.DrawText(
-                Truncate(dataLine, System.Math.Max(22, (int)(cardWidth / 7))),
-                left + 12,
-                dataBaseline,
-                SKTextAlign.Left,
-                detailFont,
-                detailPaint);
+            foreach (var line in dataLines)
+            {
+                DrawDetailLine(canvas, line, left, cardWidth, cursor, detailFont, detailPaint);
+                cursor += 19;
+            }
+
+            if (analysisLine.Length > 0 && cursor <= cardTop + ReportRunCardHeight - 12)
+            {
+                DrawDetailLine(canvas, analysisLine, left, cardWidth, cursor, detailFont, detailPaint);
+            }
         }
+    }
+
+    private static void DrawDetailLine(
+        SKCanvas canvas,
+        string text,
+        float left,
+        float cardWidth,
+        float top,
+        SKFont font,
+        SKPaint paint)
+    {
+        canvas.DrawText(
+            Truncate(text, System.Math.Max(24, (int)(cardWidth / 7.1))),
+            left + 13,
+            top - font.Metrics.Ascent,
+            SKTextAlign.Left,
+            font,
+            paint);
     }
 
     private static string RunContextLine(
@@ -863,22 +990,22 @@ public static class ReportPlotBuilder
         }
 
         var parts = new List<string>();
-        if (commonApplication is null && !string.IsNullOrWhiteSpace(metadata.Application) && metadata.Application != "--")
+        if (commonApplication is null && IsUseful(metadata.Application))
         {
             parts.Add(DisplayText.CleanGameName(metadata.Application));
         }
 
-        if (commonResolution is null && !string.IsNullOrWhiteSpace(metadata.Resolution) && metadata.Resolution != "--")
+        if (commonResolution is null && IsUseful(metadata.Resolution))
         {
             parts.Add(metadata.Resolution);
         }
 
-        if (commonGpu is null && !string.IsNullOrWhiteSpace(metadata.Gpu) && metadata.Gpu != "--")
+        if (commonGpu is null && IsUseful(metadata.Gpu))
         {
             parts.Add(DisplayText.CompactHardware(metadata.Gpu));
         }
 
-        if (commonCpu is null && !string.IsNullOrWhiteSpace(metadata.Cpu) && metadata.Cpu != "--")
+        if (commonCpu is null && IsUseful(metadata.Cpu))
         {
             parts.Add(DisplayText.CompactHardware(metadata.Cpu));
         }
@@ -886,81 +1013,241 @@ public static class ReportPlotBuilder
         return string.Join("  ·  ", parts);
     }
 
-    private static string RunDataLine(SessionAnalysis? session)
+    private static bool IsUseful(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && value != "--";
+
+    private static IReadOnlyList<string> RunDataLines(SessionAnalysis? session)
     {
         if (session is null)
         {
-            return "Benchmark data";
+            return ["Benchmark data"];
         }
 
         var diagnostics = session.Diagnostics;
         var total = diagnostics.TotalBins;
         var valid = diagnostics.VisibleBins;
         var percent = total > 0 ? valid * 100.0 / total : 0.0;
-        var parts = new List<string>();
-        if (total > 0)
+
+        var first = total > 0
+            ? $"{valid:N0} / {total:N0} s analyzed  ·  {percent:F1}% valid"
+            : "Analyzed range unavailable";
+
+        if (session.Metadata is not { } metadata)
         {
-            parts.Add($"{valid:N0}/{total:N0} s valid ({percent:F1}%)");
+            return [first];
         }
 
-        if (session.Metadata is { } metadata)
+        var secondParts = new List<string>();
+        if (metadata.FrameCount > 0)
         {
-            if (metadata.FrameCount > 0)
-            {
-                parts.Add($"{metadata.FrameCount:N0} frames");
-            }
-
-            if (metadata.MetricCount > 0)
-            {
-                parts.Add($"{metadata.MetricCount:N0} telemetry metrics");
-            }
+            secondParts.Add($"{metadata.FrameCount:N0} recorded frames");
         }
 
-        return parts.Count > 0 ? string.Join("  ·  ", parts) : "Benchmark data";
+        if (metadata.MetricCount > 0)
+        {
+            secondParts.Add($"{metadata.MetricCount:N0} telemetry metrics");
+        }
+
+        return secondParts.Count > 0
+            ? [first, string.Join("  ·  ", secondParts)]
+            : [first];
     }
 
-    private static void DrawMethodology(
+    private static string RunAnalysisLine(
+        SessionAnalysis? session,
+        MethodologyContext methodology)
+    {
+        if (session is null
+            || (!methodology.GpuFilterVaries
+                && !methodology.EdgeTrimVaries
+                && !methodology.TransitionPolicyVaries))
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>();
+        var options = session.EffectiveOptions;
+        if (methodology.GpuFilterVaries)
+        {
+            parts.Add(options.AutoGpuThreshold
+                ? $"Auto GPU ≥ {options.GpuThreshold:F0}%"
+                : $"GPU ≥ {options.GpuThreshold:F0}%");
+        }
+
+        if (methodology.EdgeTrimVaries)
+        {
+            parts.Add(options.TrimBufferSeconds > 0
+                ? $"Trim {options.TrimBufferSeconds:F1} s"
+                : "No trim");
+        }
+
+        if (methodology.TransitionPolicyVaries)
+        {
+            parts.Add(options.ExcludeTransitions ? "Loads excluded" : "Loads included");
+        }
+
+        return string.Join("  ·  ", parts);
+    }
+
+    private static void DrawMethodologyPanel(
         SKCanvas canvas,
-        ProfessionalReportContext context,
+        MethodologyContext methodology,
         ChartStyle style,
         int width,
         int top)
     {
-        using var labelFont = CreateMethodLabelFont();
-        using var textFont = CreateMethodTextFont();
-        using var labelPaint = new SKPaint { Color = ToSkColor(style.SeriesA) };
-        using var textPaint = new SKPaint { Color = ToSkColor(style.Muted) };
-        using var linePaint = new SKPaint
+        DrawPanelBackground(canvas, style, ReportPadding, top, width - ReportPadding, top + ReportMethodHeight);
+
+        using var labelFont = CreateFieldLabelFont();
+        using var valueFont = CreateMethodValueFont();
+        using var labelPaint = new SKPaint { Color = ToSkColor(style.Muted) };
+        using var valuePaint = new SKPaint { Color = ToSkColor(style.Foreground) };
+
+        var columns = methodology.Fields.Count <= 2 ? methodology.Fields.Count : 2;
+        columns = System.Math.Max(1, columns);
+        var rows = (methodology.Fields.Count + columns - 1) / columns;
+        var innerWidth = width - ReportPadding * 2 - 28;
+        var cellWidth = innerWidth / (float)columns;
+        var rowHeight = (ReportMethodHeight - 16) / (float)System.Math.Max(1, rows);
+
+        for (var i = 0; i < methodology.Fields.Count; i++)
         {
-            Color = ToSkColor(style.Grid.WithAlpha(0.75)),
+            var row = i / columns;
+            var column = i % columns;
+            var left = ReportPadding + 14 + column * cellWidth;
+            var cellTop = top + 8 + row * rowHeight;
+            canvas.DrawText(
+                methodology.Fields[i].Label,
+                left,
+                cellTop + 1 - labelFont.Metrics.Ascent,
+                SKTextAlign.Left,
+                labelFont,
+                labelPaint);
+            canvas.DrawText(
+                Truncate(methodology.Fields[i].Value, System.Math.Max(24, (int)(cellWidth / 7.4))),
+                left,
+                cellTop + 20 - valueFont.Metrics.Ascent,
+                SKTextAlign.Left,
+                valueFont,
+                valuePaint);
+        }
+    }
+
+    private static void DrawPanelBackground(
+        SKCanvas canvas,
+        ChartStyle style,
+        float left,
+        float top,
+        float right,
+        float bottom)
+    {
+        using var fillPaint = new SKPaint { Color = ToSkColor(style.Grid.WithAlpha(0.08)) };
+        using var borderPaint = new SKPaint
+        {
+            Color = ToSkColor(style.Grid.WithAlpha(0.8)),
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 1,
+            IsAntialias = true,
+        };
+        var rect = new SKRect(left, top, right, bottom);
+        canvas.DrawRoundRect(rect, 7, 7, fillPaint);
+        canvas.DrawRoundRect(rect, 7, 7, borderPaint);
+    }
+
+    private sealed record ProfessionalBodyLayout(
+        int PerformanceLabelTop,
+        int SecondaryLabelTop,
+        IReadOnlyList<PixelRect> PanelRects,
+        int Bottom);
+
+    private static ProfessionalBodyLayout BuildProfessionalBodyLayout(
+        int width,
+        int headerHeight,
+        int panelCount,
+        bool hasPrimaryFps)
+    {
+        if (panelCount <= 0)
+        {
+            return new ProfessionalBodyLayout(headerHeight, -1, [], headerHeight);
+        }
+
+        var rects = new List<PixelRect>(panelCount);
+        var y = headerHeight;
+        var performanceLabelTop = y;
+        y += ReportBodySectionHeight;
+
+        if (hasPrimaryFps)
+        {
+            rects.Add(new PixelRect(0, width, y + PrimaryRowHeight, y));
+            y += PrimaryRowHeight;
+
+            var secondaryCount = panelCount - 1;
+            if (secondaryCount == 0)
+            {
+                return new ProfessionalBodyLayout(performanceLabelTop, -1, rects, y);
+            }
+
+            y += ReportBodySectionGap;
+            var secondaryLabelTop = y;
+            y += ReportBodySectionHeight;
+            var rows = (secondaryCount + GridColumns - 1) / GridColumns;
+            var gridBottom = y
+                + rows * GridRowHeight
+                + System.Math.Max(0, rows - 1) * GridGap;
+            AddGridRects(rects, width, gridBottom, y, secondaryCount, rows);
+            return new ProfessionalBodyLayout(performanceLabelTop, secondaryLabelTop, rects, gridBottom);
+        }
+
+        var plainRows = (panelCount + GridColumns - 1) / GridColumns;
+        var plainBottom = y
+            + plainRows * GridRowHeight
+            + System.Math.Max(0, plainRows - 1) * GridGap;
+        AddGridRects(rects, width, plainBottom, y, panelCount, plainRows);
+        return new ProfessionalBodyLayout(performanceLabelTop, -1, rects, plainBottom);
+    }
+
+    private static void DrawProfessionalBodyLabels(
+        SKCanvas canvas,
+        ChartStyle style,
+        int width,
+        ProfessionalBodyLayout layout)
+    {
+        DrawBodySectionLabel(canvas, style, width, layout.PerformanceLabelTop, "PERFORMANCE TIMELINE");
+        if (layout.SecondaryLabelTop >= 0)
+        {
+            DrawBodySectionLabel(canvas, style, width, layout.SecondaryLabelTop, "SECONDARY TELEMETRY");
+        }
+    }
+
+    private static void DrawBodySectionLabel(
+        SKCanvas canvas,
+        ChartStyle style,
+        int width,
+        int top,
+        string label)
+    {
+        using var font = CreateBodySectionFont();
+        using var paint = new SKPaint { Color = ToSkColor(style.SeriesA) };
+        using var divider = new SKPaint
+        {
+            Color = ToSkColor(style.Grid.WithAlpha(0.7)),
             StrokeWidth = 1,
             IsAntialias = true,
         };
 
-        var baseline = top + 6 - labelFont.Metrics.Ascent;
         canvas.DrawText(
-            "ANALYSIS METHOD",
-            ProfessionalHeaderPadding,
-            baseline,
+            label,
+            ReportPadding,
+            top + 8 - font.Metrics.Ascent,
             SKTextAlign.Left,
-            labelFont,
-            labelPaint);
-
-        var textBaseline = top + 6 - textFont.Metrics.Ascent;
-        canvas.DrawText(
-            Truncate(context.Methodology, 150),
-            ProfessionalHeaderPadding + 145,
-            textBaseline,
-            SKTextAlign.Left,
-            textFont,
-            textPaint);
-
+            font,
+            paint);
         canvas.DrawLine(
-            ProfessionalHeaderPadding,
-            top + ProfessionalMethodHeight - 5,
-            width - ProfessionalHeaderPadding,
-            top + ProfessionalMethodHeight - 5,
-            linePaint);
+            ReportPadding,
+            top + ReportBodySectionHeight - 6,
+            width - ReportPadding,
+            top + ReportBodySectionHeight - 6,
+            divider);
     }
 
     private static void DrawProfessionalFooter(
@@ -981,22 +1268,22 @@ public static class ReportPlotBuilder
         };
 
         canvas.DrawLine(
-            ProfessionalHeaderPadding,
-            top + 8,
-            width - ProfessionalHeaderPadding,
-            top + 8,
+            ReportPadding,
+            top + 12,
+            width - ReportPadding,
+            top + 12,
             divider);
-        var baseline = top + 20 - font.Metrics.Ascent;
+        var baseline = top + 28 - font.Metrics.Ascent;
         canvas.DrawText(
             $"FrameView Analyzer  ·  {context.Runs.Count} benchmark(s)  ·  {context.MetricCount} chart(s)",
-            ProfessionalHeaderPadding,
+            ReportPadding,
             baseline,
             SKTextAlign.Left,
             font,
             paint);
         canvas.DrawText(
             $"Generated {DateTime.Now:yyyy-MM-dd HH:mm}",
-            width - ProfessionalHeaderPadding,
+            width - ReportPadding,
             baseline,
             SKTextAlign.Right,
             font,
@@ -1035,63 +1322,84 @@ public static class ReportPlotBuilder
 
     private static SKFont CreateProfessionalTitleFont() => new()
     {
-        Size = 30,
+        Size = 31,
         Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold),
         Edging = SKFontEdging.Antialias,
     };
 
     private static SKFont CreateProfessionalTypeFont() => new()
     {
-        Size = 12,
+        Size = 11,
         Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold),
         Edging = SKFontEdging.Antialias,
     };
 
     private static SKFont CreateProfessionalContextFont() => new()
     {
-        Size = 15,
+        Size = 14,
         Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Normal),
+        Edging = SKFontEdging.Antialias,
+    };
+
+    private static SKFont CreateSectionLabelFont() => new()
+    {
+        Size = 10,
+        Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold),
+        Edging = SKFontEdging.Antialias,
+    };
+
+    private static SKFont CreateFieldLabelFont() => new()
+    {
+        Size = 9,
+        Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold),
+        Edging = SKFontEdging.Antialias,
+    };
+
+    private static SKFont CreateFieldValueFont() => new()
+    {
+        Size = 14,
+        Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold),
         Edging = SKFontEdging.Antialias,
     };
 
     private static SKFont CreateRunRoleFont() => new()
     {
-        Size = 10,
+        Size = 9,
         Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold),
         Edging = SKFontEdging.Antialias,
     };
 
     private static SKFont CreateRunNameFont() => new()
     {
-        Size = 16,
+        Size = 15,
         Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold),
         Edging = SKFontEdging.Antialias,
     };
 
     private static SKFont CreateRunDetailFont() => new()
     {
+        Size = 10,
+        Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Normal),
+        Edging = SKFontEdging.Antialias,
+    };
+
+    private static SKFont CreateMethodValueFont() => new()
+    {
         Size = 11,
         Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Normal),
         Edging = SKFontEdging.Antialias,
     };
 
-    private static SKFont CreateMethodLabelFont() => new()
+    private static SKFont CreateBodySectionFont() => new()
     {
         Size = 10,
         Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold),
         Edging = SKFontEdging.Antialias,
     };
 
-    private static SKFont CreateMethodTextFont() => new()
-    {
-        Size = 12,
-        Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Normal),
-        Edging = SKFontEdging.Antialias,
-    };
-
     private static SKFont CreateFooterFont() => new()
     {
-        Size = 10,
+        Size = 11,
         Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Normal),
         Edging = SKFontEdging.Antialias,
     };
