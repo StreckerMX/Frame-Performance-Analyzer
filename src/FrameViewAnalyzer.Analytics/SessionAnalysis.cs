@@ -1,6 +1,7 @@
 using FrameViewAnalyzer.Analytics.Bins;
 using FrameViewAnalyzer.Analytics.Filtering;
 using FrameViewAnalyzer.Analytics.Samples;
+using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.Core.Metrics;
 using FrameViewAnalyzer.Core.Models;
 
@@ -34,4 +35,18 @@ public sealed class SessionAnalysis
     public required IReadOnlySet<int> ValidBins { get; init; }
     public required FilterDiagnostics Diagnostics { get; init; }
     public SessionMetadata? Metadata { get; init; }
+
+    /// <summary>
+    /// Optional analyzed time series restored from a portable FrameView Analyzer
+    /// export. Imported snapshots deliberately bypass raw-CSV reconstruction so
+    /// their plotted/statistical values remain byte-for-value equivalent to the
+    /// exported analyzed data.
+    /// </summary>
+    public IReadOnlyDictionary<string, ImportedSeriesData>? ImportedSeries { get; init; }
+
+    /// <summary>Manual benchmark context embedded in a portable export.</summary>
+    public ManualMetadata? ImportedManualMetadata { get; init; }
+
+    /// <summary>True when this session came from a portable analyzed-data export.</summary>
+    public bool IsPortableImport => ImportedSeries is { Count: > 0 };
 }
