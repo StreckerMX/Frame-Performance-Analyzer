@@ -531,7 +531,7 @@
                                     TickFrequency="0.5"
                                     Style="{StaticResource DarkSliderStyle}" />
                             <CheckBox Margin="0,10,0,0"
-                                      Content="Exclude loading screens / FPS cullers"
+                                      Content="Exclude loading screens / FPS outliers"
                                       IsChecked="{Binding AnalysisRange.ExcludeTransitionsEnabled}"
                                       IsEnabled="{Binding AnalysisRange.IsEnabled}"
                                       Style="{StaticResource DarkCheckBoxStyle}" />
@@ -579,7 +579,7 @@
                           Style="{StaticResource DarkComboBoxStyle}" />
                 <ToggleButton Grid.Column="1"
                               Margin="10,0,0,0"
-                              Content="Data points"
+                              Content="Frame points"
                               IsChecked="{Binding Chart.MarkersVisible}"
                               Style="{StaticResource ToggleButtonStyle}" />
                 <ToggleButton Grid.Column="2"
