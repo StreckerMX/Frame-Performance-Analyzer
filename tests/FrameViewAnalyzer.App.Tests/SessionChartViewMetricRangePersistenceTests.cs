@@ -38,7 +38,7 @@ public class SessionChartViewMetricRangePersistenceTests
             var frameTime = CoreMetricCatalog.CoreById["frametime"];
 
             view.ShowData(fps, [Series(fps, "Base", [120, 118, 100, 98, 110, 112])]);
-            view.ApplyInteractions(wheelZoomEnabled: true, panEnabled: false, markersVisible: false);
+            view.ApplyInteractions(wheelZoomEnabled: true, panEnabled: false, framePointsEnabled: false);
             view.BeginRangeSelection(2.0);
             view.UpdateRangeSelection(4.0);
             view.EndRangeSelection(6.0);
