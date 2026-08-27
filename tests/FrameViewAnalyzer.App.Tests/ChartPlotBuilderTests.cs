@@ -72,7 +72,7 @@ public class ChartPlotBuilderTests
     }
 
     [Fact]
-    public void Major_and_minor_grid_lines_are_enabled_on_both_axes()
+    public void Grid_uses_only_major_lines_that_match_labeled_ticks()
     {
         var plot = new Plot();
         ChartPlotBuilder.Build(
@@ -84,11 +84,8 @@ public class ChartPlotBuilderTests
 
         Assert.True(plot.Grid.XAxisStyle.MajorLineStyle.Width > 0);
         Assert.True(plot.Grid.YAxisStyle.MajorLineStyle.Width > 0);
-        Assert.True(plot.Grid.XAxisStyle.MinorLineStyle.Width > 0);
-        Assert.True(plot.Grid.YAxisStyle.MinorLineStyle.Width > 0);
-        Assert.True(
-            plot.Grid.XAxisStyle.MinorLineStyle.Width
-            < plot.Grid.XAxisStyle.MajorLineStyle.Width);
+        Assert.Equal(0f, plot.Grid.XAxisStyle.MinorLineStyle.Width);
+        Assert.Equal(0f, plot.Grid.YAxisStyle.MinorLineStyle.Width);
     }
 
     [Fact]
