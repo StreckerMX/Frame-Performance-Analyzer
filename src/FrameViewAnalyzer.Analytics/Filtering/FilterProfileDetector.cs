@@ -6,12 +6,19 @@ namespace FrameViewAnalyzer.Analytics.Filtering;
 
 /// <summary>
 /// Detects the analyzable segment of a capture: GPU-utilization filtering,
-/// abnormal-FPS (transition) culling, sustained-run grouping, and edge
-/// trimming. FrameView keeps exact Python-reference behavior; sampled
-/// telemetry sources can lower the per-bin sample requirement explicitly.
+/// abnormal-FPS culling, smart transition-edge cleanup, sustained-run grouping,
+/// and user-controlled outer-edge trimming. FrameView keeps the established
+/// one-second analysis model while avoiding fixed extra cuts around every load.
 /// </summary>
 public static class FilterProfileDetector
 {
+    private const int TransitionProbeDepth = 2;
+    private const int TransitionBaselineBins = 3;
+    private const double TransitionFpsRatio = 1.25;
+    private const double TransitionFpsDelta = 30.0;
+    private const double TransitionGpuRatio = 0.85;
+    private const double TransitionGpuDelta = 10.0;
+
     public static double ClampGpuThreshold(double value) => Math.Max(0.0, Math.Min(100.0, value));
 
     public static double NormalizeTrimBuffer(double value)
@@ -78,7 +85,7 @@ public static class FilterProfileDetector
     }
 
     /// <summary>
-    /// Robust upper fence for bin FPS, used to cull transition frames:
+    /// Robust upper fence for bin FPS, used to cull obvious transition frames:
     /// min(5000, max(q3 + 3·IQR, median·1.75, median + 30)) over bins with
     /// enough usable samples and sufficient GPU utilization.
     /// </summary>
@@ -111,8 +118,6 @@ public static class FilterProfileDetector
         }
 
         var iqr = Math.Max(0.0, q3.Value - q1.Value);
-        // A far-outlier fence removes transition frames without clipping
-        // normal scene-to-scene variation in a benchmark.
         var robustLimit = Math.Max(
             q3.Value + 3.0 * iqr,
             Math.Max(median.Value * 1.75, median.Value + 30.0));
@@ -131,56 +136,96 @@ public static class FilterProfileDetector
             return new FilterProfile(null, new HashSet<int>(), new FilterDiagnostics());
         }
 
+        minimumSamplesPerBin = Math.Max(1, minimumSamplesPerBin);
         var hasGpuData = summaries.Any(summary => summary.GpuUtil.HasValue);
         var fpsUpperBound = excludeTransitions
             ? ComputeFpsUpperBound(summaries, threshold, minimumSamplesPerBin)
             : null;
 
-        var gpuCandidates = new List<int>();
-        var transitionIndices = new HashSet<int>();
+        var belowGpuIndices = new HashSet<int>();
+        var fpsOutlierIndices = new HashSet<int>();
+        var candidates = new List<int>(summaries.Count);
+
         foreach (var summary in summaries)
         {
+            if (!excludeTransitions)
+            {
+                candidates.Add(summary.Index);
+                continue;
+            }
+
             var gpuOk = !hasGpuData
                 || (summary.GpuUtil.HasValue && summary.GpuUtil >= threshold);
             if (!gpuOk)
             {
+                belowGpuIndices.Add(summary.Index);
                 continue;
             }
 
-            gpuCandidates.Add(summary.Index);
             if (fpsUpperBound.HasValue
                 && summary.Fps.HasValue
+                && summary.FrameCount >= minimumSamplesPerBin
                 && summary.Fps > fpsUpperBound)
             {
-                transitionIndices.Add(summary.Index);
+                fpsOutlierIndices.Add(summary.Index);
+                continue;
             }
+
+            candidates.Add(summary.Index);
         }
 
-        if (gpuCandidates.Count == 0)
+        if (candidates.Count == 0)
         {
-            // No bin meets the GPU filter: there is no active segment to
-            // analyze. Returning the whole capture would silently distort
-            // every statistic.
             return new FilterProfile(
                 null,
                 new HashSet<int>(),
                 new FilterDiagnostics(
                     TotalBins: summaries.Count,
-                    BelowGpuBins: hasGpuData ? summaries.Count : 0,
+                    BelowGpuBins: excludeTransitions && hasGpuData ? summaries.Count : 0,
                     FpsUpperBound: fpsUpperBound));
         }
 
-        var validCandidates = gpuCandidates
-            .Where(index => !transitionIndices.Contains(index))
+        var candidateRuns = ConsecutiveRuns(candidates);
+        var sustained = candidateRuns
+            .Where(run => run.Count >= AnalysisConstants.MinActiveRunSeconds)
             .ToList();
-        var runs = ConsecutiveRuns(validCandidates);
-        var sustained = runs.Where(run => run.Count >= AnalysisConstants.MinActiveRunSeconds).ToList();
-        var chosenRuns = sustained.Count > 0 ? sustained : runs;
-        // Multi-scene benchmarks intentionally contain gaps for loading.
-        // Keep the envelope of every sustained scene and exclude only
-        // invalid bins.
-        var first = chosenRuns[0][0];
-        var last = chosenRuns[^1][^1];
+        var chosenRuns = sustained.Count > 0 ? sustained : candidateRuns;
+
+        // Loading screens can leave one or two high-FPS/low-GPU seconds on the
+        // gameplay side of a gap. Probe only the immediate internal edges and
+        // compare them to their local scene baseline. This avoids arbitrary
+        // fixed trimming around every transition while removing the distinctive
+        // pre/post-load spike pattern seen in real FrameView captures.
+        var transitionEdgeIndices = excludeTransitions
+            ? FindTransitionEdgeSpikes(summaries, chosenRuns)
+            : new HashSet<int>();
+        if (transitionEdgeIndices.Count > 0)
+        {
+            candidates = candidates
+                .Where(index => !transitionEdgeIndices.Contains(index))
+                .ToList();
+        }
+
+        if (candidates.Count == 0)
+        {
+            return new FilterProfile(
+                null,
+                new HashSet<int>(),
+                new FilterDiagnostics(
+                    TotalBins: summaries.Count,
+                    BelowGpuBins: belowGpuIndices.Count,
+                    FpsOutlierBins: fpsOutlierIndices.Count,
+                    TransitionEdgeBins: transitionEdgeIndices.Count,
+                    FpsUpperBound: fpsUpperBound));
+        }
+
+        var survivingRuns = ConsecutiveRuns(candidates);
+        var survivingSustained = survivingRuns
+            .Where(run => run.Count >= AnalysisConstants.MinActiveRunSeconds)
+            .ToList();
+        var windowRuns = survivingSustained.Count > 0 ? survivingSustained : survivingRuns;
+        var first = windowRuns[0][0];
+        var last = windowRuns[^1][^1];
 
         var trim = NormalizeTrimBuffer(trimBufferSeconds);
         var start = first * AnalysisConstants.FpsBinSeconds;
@@ -191,16 +236,22 @@ public static class FilterProfileDetector
             end -= trim;
         }
 
-        var visible = new HashSet<int>(validCandidates.Where(index =>
+        var visible = new HashSet<int>(candidates.Where(index =>
             start <= index * AnalysisConstants.FpsBinSeconds
             && index * AnalysisConstants.FpsBinSeconds < end));
 
         var inWindow = summaries
             .Where(summary => start <= summary.Start && summary.Start < end)
             .ToList();
-        var belowGpu = inWindow.Count(summary =>
-            hasGpuData && (!summary.GpuUtil.HasValue || summary.GpuUtil < threshold));
-        var outliers = inWindow.Count(summary => transitionIndices.Contains(summary.Index));
+        var belowGpu = excludeTransitions
+            ? inWindow.Count(summary => belowGpuIndices.Contains(summary.Index))
+            : 0;
+        var outliers = excludeTransitions
+            ? inWindow.Count(summary => fpsOutlierIndices.Contains(summary.Index))
+            : 0;
+        var transitionEdges = excludeTransitions
+            ? inWindow.Count(summary => transitionEdgeIndices.Contains(summary.Index))
+            : 0;
         var edgeTrimmed = summaries.Count(summary =>
             summary.Start < start || summary.Start >= end);
 
@@ -209,6 +260,7 @@ public static class FilterProfileDetector
             VisibleBins: visible.Count,
             BelowGpuBins: belowGpu,
             FpsOutlierBins: outliers,
+            TransitionEdgeBins: transitionEdges,
             EdgeTrimmedBins: edgeTrimmed,
             FpsUpperBound: fpsUpperBound);
 
@@ -223,6 +275,141 @@ public static class FilterProfileDetector
     {
         var summaries = BinBuilder.BuildSummaries(samples);
         return Detect(summaries, threshold, trimBufferSeconds, excludeTransitions: true).Window;
+    }
+
+    private static HashSet<int> FindTransitionEdgeSpikes(
+        IReadOnlyList<BinSummary> summaries,
+        IReadOnlyList<List<int>> runs)
+    {
+        var byIndex = summaries.ToDictionary(summary => summary.Index);
+        var excluded = new HashSet<int>();
+
+        for (var runIndex = 0; runIndex < runs.Count; runIndex++)
+        {
+            var run = runs[runIndex];
+            if (run.Count < TransitionBaselineBins + 1)
+            {
+                continue;
+            }
+
+            // The first and final outer capture edges are already controlled by
+            // Trim. Smart stabilization is reserved for internal loading gaps.
+            if (runIndex > 0)
+            {
+                ProbeStart(run, byIndex, excluded);
+            }
+
+            if (runIndex < runs.Count - 1)
+            {
+                ProbeEnd(run, byIndex, excluded);
+            }
+        }
+
+        return excluded;
+    }
+
+    private static void ProbeStart(
+        IReadOnlyList<int> run,
+        IReadOnlyDictionary<int, BinSummary> byIndex,
+        ISet<int> excluded)
+    {
+        for (var depth = 0; depth < TransitionProbeDepth; depth++)
+        {
+            var candidatePosition = depth;
+            var baselineStart = candidatePosition + 1;
+            var baselineEnd = Math.Min(run.Count, baselineStart + TransitionBaselineBins);
+            if (baselineEnd - baselineStart < 2)
+            {
+                break;
+            }
+
+            var candidate = byIndex[run[candidatePosition]];
+            var baseline = new List<BinSummary>(baselineEnd - baselineStart);
+            for (var i = baselineStart; i < baselineEnd; i++)
+            {
+                baseline.Add(byIndex[run[i]]);
+            }
+
+            if (!IsTransitionEdgeSpike(candidate, baseline))
+            {
+                break;
+            }
+
+            excluded.Add(candidate.Index);
+        }
+    }
+
+    private static void ProbeEnd(
+        IReadOnlyList<int> run,
+        IReadOnlyDictionary<int, BinSummary> byIndex,
+        ISet<int> excluded)
+    {
+        for (var depth = 0; depth < TransitionProbeDepth; depth++)
+        {
+            var candidatePosition = run.Count - 1 - depth;
+            var baselineEnd = candidatePosition;
+            var baselineStart = Math.Max(0, baselineEnd - TransitionBaselineBins);
+            if (baselineEnd - baselineStart < 2)
+            {
+                break;
+            }
+
+            var candidate = byIndex[run[candidatePosition]];
+            var baseline = new List<BinSummary>(baselineEnd - baselineStart);
+            for (var i = baselineStart; i < baselineEnd; i++)
+            {
+                baseline.Add(byIndex[run[i]]);
+            }
+
+            if (!IsTransitionEdgeSpike(candidate, baseline))
+            {
+                break;
+            }
+
+            excluded.Add(candidate.Index);
+        }
+    }
+
+    private static bool IsTransitionEdgeSpike(
+        BinSummary candidate,
+        IReadOnlyList<BinSummary> baseline)
+    {
+        if (candidate.Fps is null || candidate.GpuUtil is null)
+        {
+            return false;
+        }
+
+        var fpsValues = baseline
+            .Where(summary => summary.Fps.HasValue)
+            .Select(summary => summary.Fps!.Value)
+            .OrderBy(value => value)
+            .ToList();
+        var gpuValues = baseline
+            .Where(summary => summary.GpuUtil.HasValue)
+            .Select(summary => summary.GpuUtil!.Value)
+            .OrderBy(value => value)
+            .ToList();
+        if (fpsValues.Count < 2 || gpuValues.Count < 2)
+        {
+            return false;
+        }
+
+        var medianFps = FrameViewAnalyzer.Core.Math.Statistics.Percentile(fpsValues, 0.50);
+        var medianGpu = FrameViewAnalyzer.Core.Math.Statistics.Percentile(gpuValues, 0.50);
+        if (medianFps is null || medianGpu is null)
+        {
+            return false;
+        }
+
+        var fpsFloor = Math.Max(
+            medianFps.Value * TransitionFpsRatio,
+            medianFps.Value + TransitionFpsDelta);
+        var gpuCeiling = Math.Min(
+            medianGpu.Value * TransitionGpuRatio,
+            medianGpu.Value - TransitionGpuDelta);
+
+        return candidate.Fps.Value >= fpsFloor
+            && candidate.GpuUtil.Value <= gpuCeiling;
     }
 
     private static List<List<int>> ConsecutiveRuns(List<int> indices)
