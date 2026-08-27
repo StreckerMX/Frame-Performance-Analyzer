@@ -55,6 +55,23 @@ public class AnalyticsEngineTests
     }
 
     [Fact]
+    public void Auto_threshold_uses_clear_gpu_valley_between_loading_and_gameplay_states()
+    {
+        var samples = SamplesWithUtils(
+        [
+            20, 22, 24, 26,
+            78, 79, 80, 81, 82, 79, 80, 81,
+            78, 79, 80, 81, 82, 80, 79, 81,
+        ]);
+
+        var threshold = _service.ComputeAutoGpuThreshold(samples);
+
+        // P90 fallback would be ~44%. A clearly separated low-utilization
+        // cluster permits the adaptive detector to use the valley instead.
+        Assert.InRange(threshold, 50.0, 54.0);
+    }
+
+    [Fact]
     public void Non_finite_timestamps_are_skipped()
     {
         var capture = TestCapture.CaptureWith(
