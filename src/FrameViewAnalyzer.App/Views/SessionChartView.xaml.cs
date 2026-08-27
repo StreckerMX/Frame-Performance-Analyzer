@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.App.Charting;
+using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Core.Charting;
 using FrameViewAnalyzer.Core.Formatting;
 using FrameViewAnalyzer.Core.Metrics;
@@ -14,18 +15,19 @@ namespace FrameViewAnalyzer.App.Views;
 /// <summary>
 /// ScottPlot host with the reference interaction model. ScottPlot's native
 /// input processor is disabled; wheel zoom (cursor-anchored), drag pan, and
-/// the hover tooltip are implemented here with pure viewport math so every
-/// behavior matches the Python reference. Base and comparison series are
-/// plotted together with a legend.
+/// the hover tooltip are implemented here with pure viewport math. Optional
+/// frame-level points are rendered as a lazy overlay and re-decimated for the
+/// visible viewport so normal chart interaction stays lightweight.
 /// </summary>
 public partial class SessionChartView : UserControl
 {
     private MetricDefinition? _metric;
     private IReadOnlyList<MetricSeries> _seriesList = [];
+    private IReadOnlyList<MetricSeries> _framePointSeriesList = [];
+    private readonly List<Scatter> _framePointPlots = [];
     private AxisLimits _fullLimits;
     private bool _wheelZoomEnabled = true;
     private bool _panEnabled = true;
-    private bool _markersVisible;
     private Point? _panAnchor;
     private AxisLimits _panStartLimits;
     private double? _selectStartX;
@@ -69,6 +71,10 @@ public partial class SessionChartView : UserControl
 
         _metric = metric;
         _seriesList = seriesList;
+        // Frame points are metric/workspace-specific. MainWindow will lazily
+        // repopulate this overlay if the user's Frame points toggle is enabled.
+        _framePointSeriesList = [];
+        _framePointPlots.Clear();
         HideTooltip();
 
         var previousSuppression = _suppressViewChanged;
@@ -87,6 +93,25 @@ public partial class SessionChartView : UserControl
         }
 
         NotifyViewChanged();
+    }
+
+    /// <summary>
+    /// Replaces the optional frame-level overlay. The expensive series build is
+    /// performed by the caller off the UI thread; this method only renders the
+    /// visible, adaptively-decimated subset.
+    /// </summary>
+    public void SetFramePoints(IReadOnlyList<MetricSeries> seriesList)
+    {
+        _framePointSeriesList = seriesList;
+        RebuildFramePointPlots();
+        ChartHost.Refresh();
+    }
+
+    public void ClearFramePoints()
+    {
+        _framePointSeriesList = [];
+        RemoveFramePointPlots();
+        ChartHost.Refresh();
     }
 
     /// <summary>
@@ -173,6 +198,7 @@ public partial class SessionChartView : UserControl
             _seriesList,
             _metric.Id == "fps");
         ChartHost.Plot.Axes.SetLimits(fitted ?? visible);
+        RebuildFramePointPlots();
         ChartHost.Refresh();
     }
 
@@ -181,6 +207,8 @@ public partial class SessionChartView : UserControl
         CancelSelection();
         _metric = null;
         _seriesList = [];
+        _framePointSeriesList = [];
+        _framePointPlots.Clear();
         _crosshair = null;
         HideTooltip();
         ChartHost.Plot.Clear();
@@ -196,7 +224,7 @@ public partial class SessionChartView : UserControl
         ChartHost.Plot.DataBackground.Color = style.Background;
     }
 
-    public void ApplyInteractions(bool wheelZoomEnabled, bool panEnabled, bool markersVisible)
+    public void ApplyInteractions(bool wheelZoomEnabled, bool panEnabled, bool framePointsEnabled)
     {
         var panToggled = _panEnabled != panEnabled;
         _wheelZoomEnabled = wheelZoomEnabled;
@@ -208,11 +236,9 @@ public partial class SessionChartView : UserControl
             CancelSelection();
         }
 
-        var reRender = _markersVisible != markersVisible;
-        _markersVisible = markersVisible;
-        if (reRender)
+        if (!framePointsEnabled && _framePointSeriesList.Count > 0)
         {
-            Render();
+            ClearFramePoints();
         }
     }
 
@@ -235,6 +261,7 @@ public partial class SessionChartView : UserControl
 
         _suppressViewChanged = true;
         ChartHost.Plot.Axes.SetLimits(_fullLimits);
+        RebuildFramePointPlots();
         ChartHost.Refresh();
         _suppressViewChanged = false;
         NotifyViewChanged();
@@ -259,6 +286,7 @@ public partial class SessionChartView : UserControl
         _fullLimits = fitted.Value;
         _suppressViewChanged = true;
         ChartHost.Plot.Axes.SetLimits(fitted.Value);
+        RebuildFramePointPlots();
         ChartHost.Refresh();
         _suppressViewChanged = false;
         NotifyViewChanged();
@@ -304,6 +332,7 @@ public partial class SessionChartView : UserControl
 
         _suppressViewChanged = true;
         ChartHost.Plot.Axes.SetLimits(next ?? new AxisLimits(minimum, maximum, current.Bottom, current.Top));
+        RebuildFramePointPlots();
         ChartHost.Refresh();
         _suppressViewChanged = false;
         NotifyViewChanged();
@@ -323,7 +352,8 @@ public partial class SessionChartView : UserControl
         // this is a data change that must establish a fresh canonical fit.
         var previousLimits = ChartHost.Plot.Axes.GetLimits();
         ChartPlotBuilder.Build(
-            ChartHost.Plot, _metric, _seriesList, style, budget, _markersVisible);
+            ChartHost.Plot, _metric, _seriesList, style, budget, showMarkers: false);
+        _framePointPlots.Clear();
 
         if (fitToData)
         {
@@ -339,6 +369,8 @@ public partial class SessionChartView : UserControl
             ChartHost.Plot.Axes.SetLimits(previousLimits);
         }
 
+        AddFramePointPlots();
+
         _crosshair = ChartHost.Plot.Add.Crosshair(0, 0);
         _crosshair.IsVisible = false;
         _crosshair.LinePattern = LinePattern.Dotted;
@@ -351,6 +383,134 @@ public partial class SessionChartView : UserControl
         _crosshair.MarkerSize = 6;
 
         ChartHost.Refresh();
+    }
+
+    private void RebuildFramePointPlots()
+    {
+        RemoveFramePointPlots();
+        AddFramePointPlots();
+    }
+
+    private void RemoveFramePointPlots()
+    {
+        foreach (var plot in _framePointPlots)
+        {
+            ChartHost.Plot.Remove(plot);
+        }
+
+        _framePointPlots.Clear();
+    }
+
+    private void AddFramePointPlots()
+    {
+        if (_framePointSeriesList.Count == 0 || _metric is null)
+        {
+            return;
+        }
+
+        var limits = ChartHost.Plot.Axes.GetLimits();
+        var style = ChartStyle.FromApplicationResources();
+        var budget = System.Math.Max(300, (int)(ActualWidth > 10 ? ActualWidth : 800) * 2);
+        var isMultiWorkspace = _framePointSeriesList.Count > 1
+            && _framePointSeriesList.All(series =>
+                !series.IsReference && series.Role == SessionRole.Comparison);
+
+        foreach (var series in _framePointSeriesList)
+        {
+            var (visibleX, visibleY) = VisibleSlice(
+                series.X,
+                series.Y,
+                limits.Left,
+                limits.Right);
+            if (visibleX.Length == 0)
+            {
+                continue;
+            }
+
+            var (renderX, renderY) = Decimation.Select(visibleX, visibleY, budget);
+            var color = ChartPlotBuilder.SeriesColor(
+                style,
+                series.WorkspaceIndex,
+                _framePointSeriesList.Count,
+                series.Role,
+                isMultiWorkspace).WithAlpha(0.55);
+            var scatter = ChartHost.Plot.Add.Scatter(renderX, renderY);
+            scatter.LineWidth = 0;
+            scatter.MarkerSize = 2.6f;
+            scatter.MarkerColor = color;
+            scatter.Color = color;
+            _framePointPlots.Add(scatter);
+        }
+    }
+
+    internal static (double[] X, double[] Y) VisibleSlice(
+        IReadOnlyList<double> xs,
+        IReadOnlyList<double> ys,
+        double minimum,
+        double maximum)
+    {
+        if (xs.Count == 0 || ys.Count == 0 || xs.Count != ys.Count)
+        {
+            return ([], []);
+        }
+
+        var left = LowerBound(xs, minimum);
+        var right = UpperBound(xs, maximum);
+        if (left >= right)
+        {
+            return ([], []);
+        }
+
+        var count = right - left;
+        var resultX = new double[count];
+        var resultY = new double[count];
+        for (var index = 0; index < count; index++)
+        {
+            resultX[index] = xs[left + index];
+            resultY[index] = ys[left + index];
+        }
+
+        return (resultX, resultY);
+    }
+
+    private static int LowerBound(IReadOnlyList<double> values, double target)
+    {
+        var low = 0;
+        var high = values.Count;
+        while (low < high)
+        {
+            var middle = low + (high - low) / 2;
+            if (values[middle] < target)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+
+        return low;
+    }
+
+    private static int UpperBound(IReadOnlyList<double> values, double target)
+    {
+        var low = 0;
+        var high = values.Count;
+        while (low < high)
+        {
+            var middle = low + (high - low) / 2;
+            if (values[middle] <= target)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+
+        return low;
     }
 
     private void OnMouseWheel(object sender, MouseWheelEventArgs e)
@@ -368,6 +528,7 @@ public partial class SessionChartView : UserControl
         var next = ChartViewport.ZoomAt(current, coordinates.X, scale, _fullLimits);
 
         ChartHost.Plot.Axes.SetLimits(next);
+        RebuildFramePointPlots();
         ChartHost.Refresh();
         e.Handled = true;
     }
@@ -405,6 +566,8 @@ public partial class SessionChartView : UserControl
                 ChartHost.ReleaseMouseCapture();
             }
 
+            RebuildFramePointPlots();
+            ChartHost.Refresh();
             return;
         }
 
@@ -567,7 +730,7 @@ public partial class SessionChartView : UserControl
             return;
         }
 
-        var lines = new List<string> { $"Time: {anchor.Value.X:F1} s" };
+        var lines = new List<string> { $"Analyzed time: {anchor.Value.X:F1} s" };
         foreach (var hit in hits)
         {
             var valueText = _metric.Id == "fps"
