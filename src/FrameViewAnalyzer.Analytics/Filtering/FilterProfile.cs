@@ -9,6 +9,7 @@ public sealed record FilterDiagnostics(
     int VisibleBins = 0,
     int BelowGpuBins = 0,
     int FpsOutlierBins = 0,
+    int TransitionEdgeBins = 0,
     int EdgeTrimmedBins = 0,
     double? FpsUpperBound = null);
 
