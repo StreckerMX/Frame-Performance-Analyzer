@@ -53,10 +53,14 @@ public static class ChartPlotBuilder
 
         plot.FigureBackground.Color = style.Background;
         plot.DataBackground.Color = style.Background;
+
+        // ScottPlot's major grid lines are generated from the same major ticks
+        // that receive numeric axis labels. Keep only those lines so every
+        // visible number on X/Y has one matching grid line and there are no
+        // unlabeled minor-grid stripes between them.
         plot.Grid.MajorLineColor = style.Grid.WithAlpha(0.55);
         plot.Grid.MajorLineWidth = 0.6f;
-        plot.Grid.MinorLineColor = style.Grid.WithAlpha(0.22);
-        plot.Grid.MinorLineWidth = 0.35f;
+        plot.Grid.MinorLineWidth = 0f;
         plot.Axes.Color(style.Muted);
 
         var unitLabel = string.IsNullOrEmpty(metric.Unit)
