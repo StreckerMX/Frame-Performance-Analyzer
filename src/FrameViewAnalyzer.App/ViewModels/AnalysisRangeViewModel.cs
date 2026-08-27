@@ -20,6 +20,9 @@ public partial class AnalysisRangeViewModel : ObservableObject
     public const double MinTrimSeconds = 0.0;
     public const double MaxTrimSeconds = 10.0;
 
+    private const string AutomaticHelpText =
+        "automatic threshold uses 55% of the per-second GPU P90 as a fallback and may raise it when a clearly separated low-utilization loading state is detected";
+
     /// <summary>Debounce for continuously-changing controls (sliders).</summary>
     public static readonly TimeSpan ChangeDebounce = TimeSpan.FromMilliseconds(400);
 
@@ -43,8 +46,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
     private bool _excludeTransitionsEnabled = true;
 
     [ObservableProperty]
-    private string _filterHelpText =
-        "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)";
+    private string _filterHelpText = AutomaticHelpText;
 
     [ObservableProperty]
     private string _analysisSummaryText = "Load a capture to configure the analysis range.";
@@ -98,6 +100,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
     partial void OnAutoGpuThresholdEnabledChanged(bool value)
     {
         OnPropertyChanged(nameof(ManualGpuThresholdEnabled));
+        UpdateFilterHelpText();
         Schedule();
     }
 
@@ -149,8 +152,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
             IsEnabled = session is not null;
             if (session is null)
             {
-                FilterHelpText =
-                    "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)";
+                FilterHelpText = AutomaticHelpText;
                 return;
             }
 
@@ -173,8 +175,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
     {
         if (baseSession is null)
         {
-            FilterHelpText =
-                "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)";
+            FilterHelpText = AutomaticHelpText;
             AnalysisSummaryText = "Load a capture to configure the analysis range.";
             return;
         }
@@ -210,8 +211,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
     {
         if (sessions.Count == 0)
         {
-            FilterHelpText =
-                "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)";
+            FilterHelpText = AutomaticHelpText;
             AnalysisSummaryText = "Select two or more benchmarks to configure the Multi analysis range.";
             return;
         }
@@ -271,7 +271,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
         }
 
         FilterHelpText = AutoGpuThresholdEnabled
-            ? "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)"
+            ? AutomaticHelpText
             : $"at least {GpuThreshold:F0}% GPU utilization will be required";
     }
 
