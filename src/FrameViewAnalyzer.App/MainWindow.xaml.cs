@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -36,6 +37,7 @@ public partial class MainWindow : Window
     private readonly IFrameViewCsvReader _reader;
     private readonly ICaptureAnalysisService _analysis;
     private readonly BusyState _busy;
+    private int _framePointGeneration;
 
     public MainWindow(
         MainWindowViewModel viewModel,
@@ -130,14 +132,31 @@ public partial class MainWindow : Window
             {
                 ChartView.ShowData(_viewModel.Chart.SelectedMetric, _viewModel.Chart.SeriesList);
                 SyncInteractions();
+                if (_viewModel.Chart.MarkersVisible)
+                {
+                    _ = RefreshFramePointsAsync();
+                }
             }
             else
             {
+                Interlocked.Increment(ref _framePointGeneration);
                 ChartView.Clear();
             }
         }
-        else if (e.PropertyName == nameof(ChartViewModel.MarkersVisible)
-                 || e.PropertyName == nameof(ChartViewModel.WheelZoomEnabled)
+        else if (e.PropertyName == nameof(ChartViewModel.MarkersVisible))
+        {
+            SyncInteractions();
+            if (_viewModel.Chart.MarkersVisible)
+            {
+                _ = RefreshFramePointsAsync();
+            }
+            else
+            {
+                Interlocked.Increment(ref _framePointGeneration);
+                ChartView.ClearFramePoints();
+            }
+        }
+        else if (e.PropertyName == nameof(ChartViewModel.WheelZoomEnabled)
                  || e.PropertyName == nameof(ChartViewModel.PanEnabled))
         {
             SyncInteractions();
@@ -148,6 +167,82 @@ public partial class MainWindow : Window
         _viewModel.Chart.WheelZoomEnabled,
         _viewModel.Chart.PanEnabled,
         _viewModel.Chart.MarkersVisible);
+
+    /// <summary>
+    /// Prepares frame-level detail only after the user enables Frame points.
+    /// The builder is cached per immutable session + metric, so normal loading
+    /// performs no extra work and repeated requests are effectively instant.
+    /// A generation guard prevents stale work from replacing a newer metric or
+    /// workspace selection.
+    /// </summary>
+    private async Task RefreshFramePointsAsync()
+    {
+        var generation = Interlocked.Increment(ref _framePointGeneration);
+        var chart = _viewModel.Chart;
+        var metric = chart.SelectedMetric;
+        if (!chart.MarkersVisible || !chart.HasData || metric is null)
+        {
+            ChartView.ClearFramePoints();
+            return;
+        }
+
+        var sourceSeries = chart.SeriesList
+            .Where(series => series.SourceSession is not null)
+            .ToList();
+        if (sourceSeries.Count == 0)
+        {
+            ChartView.ClearFramePoints();
+            return;
+        }
+
+        try
+        {
+            var metricId = metric.Id;
+            var frameSeries = await _busy.RunOnThreadPoolAsync(
+                "Preparing frame points",
+                () =>
+                {
+                    var result = new List<MetricSeries>(sourceSeries.Count);
+                    foreach (var source in sourceSeries)
+                    {
+                        var session = source.SourceSession!;
+                        var built = FramePointSeriesBuilder.Build(session, metricId);
+                        if (built.Y.Length == 0)
+                        {
+                            continue;
+                        }
+
+                        result.Add(built with
+                        {
+                            Label = source.Label,
+                            Role = source.Role,
+                            WorkspaceIndex = source.WorkspaceIndex,
+                            IsReference = source.IsReference,
+                        });
+                    }
+
+                    return (IReadOnlyList<MetricSeries>)result;
+                });
+
+            if (generation != Volatile.Read(ref _framePointGeneration)
+                || !chart.MarkersVisible
+                || chart.SelectedMetric?.Id != metricId)
+            {
+                return;
+            }
+
+            ChartView.SetFramePoints(frameSeries);
+        }
+        catch (Exception error)
+        {
+            if (generation == Volatile.Read(ref _framePointGeneration))
+            {
+                ChartView.ClearFramePoints();
+                AppLog.ErrorOperation("Frame point preparation", error);
+                _viewModel.StatusText = "FRAME POINTS UNAVAILABLE";
+            }
+        }
+    }
 
     private void ResetZoom_Click(object sender, RoutedEventArgs e) => ChartView.ResetZoom();
 
