@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Filtering;
 using FrameViewAnalyzer.Core.Formatting;
+using FrameViewAnalyzer.Core.Models;
 
 namespace FrameViewAnalyzer.App.ViewModels;
 
