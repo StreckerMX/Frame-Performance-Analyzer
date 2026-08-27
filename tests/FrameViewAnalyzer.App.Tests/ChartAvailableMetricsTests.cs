@@ -46,7 +46,7 @@ public class ChartAvailableMetricsTests
                 GpuThreshold: 10,
                 TrimBufferSeconds: 0,
                 AutoGpuThreshold: false,
-                ExcludeTransitions: false));
+                ExcludeTransitions: true));
 
         Assert.Contains(filtered.Catalog, metric => metric.Label == "GhostSensor");
 
@@ -64,7 +64,7 @@ public class ChartAvailableMetricsTests
                 GpuThreshold: 0,
                 TrimBufferSeconds: 0,
                 AutoGpuThreshold: false,
-                ExcludeTransitions: false));
+                ExcludeTransitions: true));
         viewModel.SetSessions(reanalyzed, null);
 
         Assert.Contains(viewModel.Metrics, metric => metric.Label == "GhostSensor");
