@@ -18,10 +18,18 @@ public class ChartPlotBuilderTests
         SessionRole role = SessionRole.Base) =>
         new(Fps, xs, ys, label, role);
 
+    private static MetricSeries Series(
+        MetricDefinition metric,
+        double[] xs,
+        double[] ys,
+        string? label = null,
+        SessionRole role = SessionRole.Base) =>
+        new(metric, xs, ys, label, role);
+
     private static readonly ChartStyle Style = ChartStyle.FromApplicationResources();
 
     [Fact]
-    public void Gap_free_fps_series_renders_as_signal_xy()
+    public void Fps_series_renders_as_signal_xy_on_the_analyzed_timeline()
     {
         var plot = new Plot();
         var xs = Enumerable.Range(0, 20).Select(i => (double)i).ToArray();
@@ -32,10 +40,11 @@ public class ChartPlotBuilderTests
         Assert.Contains(plot.PlottableList, plottable => plottable is SignalXY);
         Assert.DoesNotContain(plot.PlottableList, plottable => plottable is Scatter);
         Assert.Contains(plot.PlottableList, plottable => plottable is HorizontalLine);
+        Assert.Equal("Analyzed time (s)", plot.Axes.Bottom.Label.Text);
     }
 
     [Fact]
-    public void Gap_broken_series_renders_as_scatter()
+    public void Legacy_time_gaps_are_not_shaded_or_line_broken()
     {
         var plot = new Plot();
         var xs = new double[] { 0, 1, 2, 10, 11, 12 };
@@ -43,22 +52,43 @@ public class ChartPlotBuilderTests
 
         ChartPlotBuilder.Build(plot, Fps, [Series(xs, ys)], Style, pointBudget: 200);
 
-        Assert.Contains(plot.PlottableList, plottable => plottable is Scatter);
-        Assert.DoesNotContain(plot.PlottableList, plottable => plottable is SignalXY);
+        Assert.Contains(plot.PlottableList, plottable => plottable is SignalXY);
+        Assert.DoesNotContain(plot.PlottableList, plottable => plottable is Scatter);
+        Assert.DoesNotContain(plot.PlottableList, plottable => plottable is HorizontalSpan);
     }
 
     [Fact]
-    public void Kind_selection_prefers_signal_xy_only_for_uniform_fps()
+    public void Kind_selection_uses_signal_xy_for_fps_and_scatter_for_other_metrics()
     {
         Assert.Equal(
             ChartPlotBuilder.PlotKind.SignalXY,
             ChartPlotBuilder.ChooseKind(Fps, [0.0, 1.0, 2.0, 3.0]));
         Assert.Equal(
-            ChartPlotBuilder.PlotKind.Scatter,
+            ChartPlotBuilder.PlotKind.SignalXY,
             ChartPlotBuilder.ChooseKind(Fps, [0.0, 1.0, 10.0, 11.0]));
         Assert.Equal(
             ChartPlotBuilder.PlotKind.Scatter,
             ChartPlotBuilder.ChooseKind(CoreMetricCatalog.CoreById["frametime"], [0.0, 1.0, 2.0]));
+    }
+
+    [Fact]
+    public void Major_and_minor_grid_lines_are_enabled_on_both_axes()
+    {
+        var plot = new Plot();
+        ChartPlotBuilder.Build(
+            plot,
+            Fps,
+            [Series([0.0, 1.0, 2.0], [100.0, 101.0, 102.0])],
+            Style,
+            pointBudget: 200);
+
+        Assert.True(plot.Grid.XAxisStyle.MajorLineStyle.Width > 0);
+        Assert.True(plot.Grid.YAxisStyle.MajorLineStyle.Width > 0);
+        Assert.True(plot.Grid.XAxisStyle.MinorLineStyle.Width > 0);
+        Assert.True(plot.Grid.YAxisStyle.MinorLineStyle.Width > 0);
+        Assert.True(
+            plot.Grid.XAxisStyle.MinorLineStyle.Width
+            < plot.Grid.XAxisStyle.MajorLineStyle.Width);
     }
 
     [Fact]
@@ -79,13 +109,14 @@ public class ChartPlotBuilderTests
     }
 
     [Fact]
-    public void Decimation_respects_the_point_budget()
+    public void Decimation_respects_the_point_budget_for_scatter_metrics()
     {
         var plot = new Plot();
+        var metric = CoreMetricCatalog.CoreById["frametime"];
         var xs = Enumerable.Range(0, 10_000).Select(i => (double)i / 10.0).ToArray();
-        var ys = Enumerable.Range(0, 10_000).Select(i => 50 + 30 * System.Math.Sin(i / 100.0)).ToArray();
+        var ys = Enumerable.Range(0, 10_000).Select(i => 10 + 3 * System.Math.Sin(i / 100.0)).ToArray();
 
-        ChartPlotBuilder.Build(plot, Fps, [Series(xs, ys)], Style, pointBudget: 100);
+        ChartPlotBuilder.Build(plot, metric, [Series(metric, xs, ys)], Style, pointBudget: 100);
 
         var scatter = plot.PlottableList.OfType<Scatter>().Single();
         var pointCount = scatter.Data.GetScatterPoints().Count;
