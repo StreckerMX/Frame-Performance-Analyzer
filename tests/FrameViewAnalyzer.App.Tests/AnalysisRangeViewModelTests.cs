@@ -42,18 +42,20 @@ public class AnalysisRangeViewModelTests
     }
 
     [Fact]
-    public void Manual_slider_is_only_enabled_when_auto_mode_is_off()
+    public void Manual_slider_requires_exclusion_enabled_and_auto_mode_off()
     {
         var viewModel = new AnalysisRangeViewModel();
 
         Assert.False(viewModel.ManualGpuThresholdEnabled);
 
-        // The helper session is analyzed with auto mode off, so attaching it
-        // enables the manual slider.
-        viewModel.Attach(Session(), null);
+        viewModel.Attach(Session(excludeTransitions: true), null);
         Assert.True(viewModel.ManualGpuThresholdEnabled);
 
         viewModel.AutoGpuThresholdEnabled = true;
+        Assert.False(viewModel.ManualGpuThresholdEnabled);
+
+        viewModel.AutoGpuThresholdEnabled = false;
+        viewModel.ExcludeTransitionsEnabled = false;
         Assert.False(viewModel.ManualGpuThresholdEnabled);
     }
 
@@ -73,6 +75,7 @@ public class AnalysisRangeViewModelTests
         Assert.Equal(25.0, viewModel.GpuThreshold);
         Assert.Equal(2.0, viewModel.TrimBufferSeconds);
         Assert.False(viewModel.ExcludeTransitionsEnabled);
+        Assert.False(viewModel.FilteringControlsEnabled);
     }
 
     [Fact]
@@ -83,6 +86,7 @@ public class AnalysisRangeViewModelTests
         viewModel.Attach(null, null);
 
         Assert.False(viewModel.IsEnabled);
+        Assert.False(viewModel.FilteringControlsEnabled);
         Assert.False(viewModel.ManualGpuThresholdEnabled);
     }
 
@@ -109,7 +113,7 @@ public class AnalysisRangeViewModelTests
     public void Rapid_changes_within_one_interval_fire_once_with_the_last_values()
     {
         var viewModel = new AnalysisRangeViewModel();
-        viewModel.Attach(Session(), null);
+        viewModel.Attach(Session(excludeTransitions: true), null);
 
         var events = new List<AnalysisOptions>();
         viewModel.OptionsChanged += (_, options) => events.Add(options);
@@ -120,8 +124,6 @@ public class AnalysisRangeViewModelTests
         viewModel.TrimBufferSeconds = 3.0;
         viewModel.GpuThreshold = 42.0;
 
-        // Pump the dispatcher until the debounce tick fires; a generous
-        // timeout timer only guards against a pathological hang.
         var frame = new DispatcherFrame();
         viewModel.OptionsChanged += (_, _) => frame.Continue = false;
         var timeout = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
@@ -139,20 +141,33 @@ public class AnalysisRangeViewModelTests
     }
 
     [Fact]
-    public void Diagnostics_reflect_transition_and_threshold_exclusions()
+    public void Diagnostics_explain_when_the_exclusion_pipeline_is_disabled()
     {
         var viewModel = new AnalysisRangeViewModel();
-        var session = Session();
+        var session = Session(excludeTransitions: false);
 
         viewModel.Attach(session, null);
 
-        Assert.Contains("analyzed", viewModel.AnalysisSummaryText);
-        Assert.Contains(
-            viewModel.AutoGpuThresholdEnabled ? "90th percentile" : "GPU utilization",
-            viewModel.FilterHelpText);
+        Assert.Contains("recorded frames", viewModel.AnalysisSummaryText);
+        Assert.Contains("analyzed frames", viewModel.AnalysisSummaryText);
+        Assert.Contains("chart samples", viewModel.AnalysisSummaryText);
+        Assert.Contains("exclusion disabled", viewModel.AnalysisSummaryText);
+        Assert.Contains("exclusion is disabled", viewModel.FilterHelpText);
     }
 
-    private static SessionAnalysis Session()
+    [Fact]
+    public void Diagnostics_explain_the_active_gpu_filter()
+    {
+        var viewModel = new AnalysisRangeViewModel();
+        var session = Session(excludeTransitions: true);
+
+        viewModel.Attach(session, null);
+
+        Assert.Contains("GPU utilization", viewModel.FilterHelpText);
+        Assert.True(viewModel.FilteringControlsEnabled);
+    }
+
+    private static SessionAnalysis Session(bool excludeTransitions = false)
     {
         var capture = CaptureWith(
             ["TimeInSeconds", "MsBetweenPresents", "GPU0Util(%)"],
@@ -172,7 +187,7 @@ public class AnalysisRangeViewModelTests
                 GpuThreshold: 25,
                 TrimBufferSeconds: 2,
                 AutoGpuThreshold: false,
-                ExcludeTransitions: false));
+                ExcludeTransitions: excludeTransitions));
     }
 
     private static CaptureData CaptureWith(string[] headers, string[][] rows)
