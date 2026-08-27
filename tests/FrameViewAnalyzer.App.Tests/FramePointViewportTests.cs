@@ -31,4 +31,11 @@ public class FramePointViewportTests
         Assert.Empty(visibleX);
         Assert.Empty(visibleY);
     }
+
+    [Fact]
+    public void Frame_markers_appear_only_when_viewport_density_is_low_enough()
+    {
+        Assert.Equal(0f, SessionChartView.FrameMarkerSize(5_000, 1_000));
+        Assert.True(SessionChartView.FrameMarkerSize(800, 1_000) > 0);
+    }
 }
