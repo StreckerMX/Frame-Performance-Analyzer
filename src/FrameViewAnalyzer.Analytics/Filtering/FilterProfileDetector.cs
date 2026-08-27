@@ -39,11 +39,11 @@ public static class FilterProfileDetector
     /// <summary>
     /// Automatic GPU threshold. The established 55% of the per-second GPU P90
     /// remains the conservative baseline. When the utilization distribution
-    /// contains a clearly separated low-utilization state (typical of menus or
-    /// loading screens), a histogram split can raise the threshold to the
-    /// valley between low and gameplay states. The adaptive result is capped
-    /// relative to P90 so it cannot chase benchmark FPS or aggressively trim
-    /// ordinary lower-GPU gameplay.
+    /// contains a clearly separated low-utilization state that is not already
+    /// fully rejected by that baseline, a histogram split can raise the
+    /// threshold to the valley between low and gameplay states. The adaptive
+    /// result is capped relative to P90 so it cannot chase benchmark FPS or
+    /// aggressively trim ordinary lower-GPU gameplay.
     /// </summary>
     public static double ComputeAutoGpuThreshold(ParsedSamples samples)
     {
@@ -201,6 +201,14 @@ public static class FilterProfileDetector
         }
 
         if (lowMax < 0 || highMin < 0 || highMin - lowMax < AutoGpuMinimumClusterGap)
+        {
+            return null;
+        }
+
+        // If the fallback already sits above the entire low-utilization state,
+        // it already performs the intended separation. Raising it further would
+        // only change a number without excluding any additional load state.
+        if (lowMax < baseline)
         {
             return null;
         }
