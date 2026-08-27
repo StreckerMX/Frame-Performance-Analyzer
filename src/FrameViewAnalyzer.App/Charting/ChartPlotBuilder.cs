@@ -1,40 +1,24 @@
 using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.Core;
-using FrameViewAnalyzer.Core.Charting;
 using FrameViewAnalyzer.Core.Metrics;
 using ScottPlot;
 
 namespace FrameViewAnalyzer.App.Charting;
 
 /// <summary>
-/// Maps analytics series onto a ScottPlot plot: decimation, gap breaks,
-/// per-metric plot kinds, average lines, and theme styling. Pure plot
-/// assembly — no WPF types beyond ScottPlot, so it is headless-testable.
+/// Maps analytics series onto a ScottPlot plot: visualization-only decimation,
+/// per-metric plot kinds, average lines, and theme styling. Pure plot assembly
+/// with no WPF types beyond ScottPlot, so it is headless-testable.
 /// </summary>
 public static class ChartPlotBuilder
 {
     /// <summary>
     /// Per-metric plot kind: FPS series are uniformly one-second spaced, so
-    /// gap-free FPS data renders as SignalXY (constant-time rendering);
-    /// everything else, or any gap-broken series, renders as Scatter.
+    /// they render as SignalXY (constant-time rendering). Other metrics render
+    /// as Scatter because individual bins can be absent for that metric.
     /// </summary>
-    public static PlotKind ChooseKind(MetricDefinition metric, IReadOnlyList<double> xs)
-    {
-        if (metric.Id != "fps")
-        {
-            return PlotKind.Scatter;
-        }
-
-        for (var i = 1; i < xs.Count; i++)
-        {
-            if (xs[i] - xs[i - 1] > SeriesGeometry.DefaultMinimumGapSeconds)
-            {
-                return PlotKind.Scatter;
-            }
-        }
-
-        return PlotKind.SignalXY;
-    }
+    public static PlotKind ChooseKind(MetricDefinition metric, IReadOnlyList<double> xs) =>
+        metric.Id == "fps" ? PlotKind.SignalXY : PlotKind.Scatter;
 
     /// <summary>
     /// Pair mode preserves the theme's Base/Comparison colors. Multi mode uses
@@ -70,18 +54,17 @@ public static class ChartPlotBuilder
         plot.DataBackground.Color = style.Background;
         plot.Grid.MajorLineColor = style.Grid.WithAlpha(0.55);
         plot.Grid.MajorLineWidth = 0.6f;
+        plot.Grid.MinorLineColor = style.Grid.WithAlpha(0.22);
+        plot.Grid.MinorLineWidth = 0.35f;
         plot.Axes.Color(style.Muted);
 
         var unitLabel = string.IsNullOrEmpty(metric.Unit)
             ? metric.Label
             : $"{metric.Label} ({metric.Unit})";
-        plot.Axes.Bottom.Label.Text = "Capture time (s)";
+        plot.Axes.Bottom.Label.Text = "Analyzed time (s)";
         plot.Axes.Bottom.Label.ForeColor = style.Muted;
         plot.Axes.Left.Label.Text = unitLabel;
         plot.Axes.Left.Label.ForeColor = style.Muted;
-
-        // Shaded omitted-load bands render underneath the series lines.
-        GapOverlay.Apply(plot, seriesList, style);
 
         var showLegend = seriesList.Count > 1;
         var isMultiWorkspace = seriesList.Count > 1
@@ -100,17 +83,12 @@ public static class ChartPlotBuilder
                 ? 1.9f
                 : series.Role == SessionRole.Base ? 2.15f : 1.8f;
 
-            // Real omitted ranges must be detected from the original series
-            // before decimation. LTTB/min-max intentionally skip samples, and
-            // those visualization-only skips must never become NaN line breaks.
-            var sourceGaps = SeriesGeometry.FindGaps(series.X);
-            var (decimatedX, decimatedY) = Decimation.Select(series.X, series.Y, pointBudget);
-            var (gapX, gapY) = SeriesGeometry.InsertGapBreaks(decimatedX, decimatedY, sourceGaps);
-            var kind = ChooseKind(metric, decimatedX);
+            var (renderX, renderY) = Decimation.Select(series.X, series.Y, pointBudget);
+            var kind = ChooseKind(metric, renderX);
 
             if (kind == PlotKind.SignalXY)
             {
-                var signal = plot.Add.SignalXY(gapX, gapY);
+                var signal = plot.Add.SignalXY(renderX, renderY);
                 signal.Color = color;
                 signal.LineWidth = lineWidth;
                 signal.LegendText = series.LabelOrDefault;
@@ -119,7 +97,7 @@ public static class ChartPlotBuilder
             }
             else
             {
-                var scatter = plot.Add.Scatter(gapX, gapY);
+                var scatter = plot.Add.Scatter(renderX, renderY);
                 scatter.Color = color;
                 scatter.LineWidth = lineWidth;
                 scatter.LegendText = series.LabelOrDefault;
