@@ -12,6 +12,10 @@ namespace FrameViewAnalyzer.Analytics.Series;
 /// Portable imports return the analyzed series embedded by FrameView Analyzer
 /// directly, so a round-trip never reinterprets already-processed data.
 ///
+/// Raw capture time is deliberately compressed across excluded bins: chart X
+/// represents analyzed time, so loading screens disappear instead of leaving
+/// visual gaps. The original timestamps remain available in SessionAnalysis.
+///
 /// Session analyses are immutable, so completed metric series are cached by
 /// session + metric. The cache is weakly rooted by SessionAnalysis and is
 /// released automatically with the session. This makes repeated Pair/Multi
@@ -83,7 +87,7 @@ public static class SeriesBuilder
         var minimumSamplesPerBin = CaptureSourceDetector.IsNvidiaAppPerformanceLog(session.Capture)
             ? 1
             : AnalysisConstants.MinFramesPerBin;
-        var origin = session.Window.Start;
+        var analyzedXByBin = BuildAnalyzedTimeline(session.ValidBins);
         var xs = new List<double>();
         var ys = new List<double>();
 
@@ -91,7 +95,7 @@ public static class SeriesBuilder
         {
             foreach (var summary in session.Bins)
             {
-                if (!session.ValidBins.Contains(summary.Index))
+                if (!analyzedXByBin.TryGetValue(summary.Index, out var analyzedX))
                 {
                     continue;
                 }
@@ -104,7 +108,7 @@ public static class SeriesBuilder
                     continue;
                 }
 
-                xs.Add(summary.Start - origin);
+                xs.Add(analyzedX);
                 ys.Add(summary.Fps.Value);
             }
         }
@@ -117,7 +121,8 @@ public static class SeriesBuilder
             var buffer = new double[16];
             foreach (var index in session.ValidBins.Order())
             {
-                if (!session.RowsByBin.TryGetValue(index, out var sampleIndices))
+                if (!session.RowsByBin.TryGetValue(index, out var sampleIndices)
+                    || !analyzedXByBin.TryGetValue(index, out var analyzedX))
                 {
                     continue;
                 }
@@ -152,12 +157,29 @@ public static class SeriesBuilder
                     sum += buffer[i];
                 }
 
-                xs.Add(index * AnalysisConstants.FpsBinSeconds - origin);
+                xs.Add(analyzedX);
                 ys.Add(sum / count);
             }
         }
 
         return new MetricSeries(metric, xs.ToArray(), ys.ToArray(), SourceSession: session);
+    }
+
+    /// <summary>
+    /// Maps each retained one-second capture bin to a dense analyzed-time X
+    /// coordinate. Omitted loading/transition bins consume no chart time.
+    /// </summary>
+    internal static IReadOnlyDictionary<int, double> BuildAnalyzedTimeline(IReadOnlySet<int> validBins)
+    {
+        var result = new Dictionary<int, double>(validBins.Count);
+        var analyzedIndex = 0;
+        foreach (var bin in validBins.Order())
+        {
+            result[bin] = analyzedIndex * AnalysisConstants.FpsBinSeconds;
+            analyzedIndex++;
+        }
+
+        return result;
     }
 
     private static MetricDefinition? ResolveMetric(SessionAnalysis session, string metricId)
