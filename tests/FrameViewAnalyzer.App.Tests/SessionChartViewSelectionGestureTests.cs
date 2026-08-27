@@ -35,11 +35,9 @@ public class SessionChartViewSelectionGestureTests
             "Base",
             SessionRole.Base);
         view.ShowData(metric, [series]);
-        view.ApplyInteractions(wheelZoomEnabled: true, panEnabled: false, markersVisible: false);
+        view.ApplyInteractions(wheelZoomEnabled: true, panEnabled: false, framePointsEnabled: false);
 
         var plot = (WpfPlot)view.FindName("ChartHost")!;
-        // The interactive chart legitimately contains HorizontalSpans for
-        // omitted-load gaps; only the selection overlay changes this count.
         var baseline = plot.Plot.GetPlottables<HorizontalSpan>().Count();
         return new Host(view, plot, baseline);
     }
@@ -78,12 +76,8 @@ public class SessionChartViewSelectionGestureTests
             var host = CreateHost();
             var before = LimitsOf(host);
 
-            // MouseDown: the gesture begins.
             host.View.BeginRangeSelection(2.0);
             Assert.True(host.View.IsRangeSelectionActive);
-
-            // MouseUp at effectively the same X, with no MouseMove ever
-            // having created an overlay: the gesture must still finalize.
             host.View.EndRangeSelection(2.0);
 
             AssertNoSelectionState(host);
@@ -100,9 +94,6 @@ public class SessionChartViewSelectionGestureTests
 
             host.View.BeginRangeSelection(2.0);
             host.View.EndRangeSelection(2.0);
-
-            // A later pointer move with no button held must not begin a
-            // selection, draw an overlay, or re-capture the mouse.
             host.View.UpdateRangeSelection(8.0);
 
             AssertNoSelectionState(host);
