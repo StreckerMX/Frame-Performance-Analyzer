@@ -18,6 +18,11 @@ public static class FilterProfileDetector
     private const double TransitionFpsDelta = 30.0;
     private const double TransitionGpuRatio = 0.85;
     private const double TransitionGpuDelta = 10.0;
+    private const int AutoGpuMinimumSecondsForSeparation = 12;
+    private const int AutoGpuMinimumLowStateSeconds = 3;
+    private const double AutoGpuMinimumSeparationRatio = 0.15;
+    private const double AutoGpuMinimumClusterGap = 4.0;
+    private const double AutoGpuSeparatedCapRatio = 0.72;
 
     public static double ClampGpuThreshold(double value) => Math.Max(0.0, Math.Min(100.0, value));
 
@@ -32,8 +37,13 @@ public static class FilterProfileDetector
     }
 
     /// <summary>
-    /// Automatic GPU threshold: 55% of the 90th percentile of per-second
-    /// utilization means, rounded and clamped to [5, 80].
+    /// Automatic GPU threshold. The established 55% of the per-second GPU P90
+    /// remains the conservative baseline. When the utilization distribution
+    /// contains a clearly separated low-utilization state (typical of menus or
+    /// loading screens), a histogram split can raise the threshold to the
+    /// valley between low and gameplay states. The adaptive result is capped
+    /// relative to P90 so it cannot chase benchmark FPS or aggressively trim
+    /// ordinary lower-GPU gameplay.
     /// </summary>
     public static double ComputeAutoGpuThreshold(ParsedSamples samples)
     {
@@ -78,10 +88,136 @@ public static class FilterProfileDetector
             return AnalysisConstants.DefaultGpuThreshold;
         }
 
-        var threshold = Math.Round(reference.Value * AnalysisConstants.AutoGpuRatio, MidpointRounding.ToEven);
-        return ClampGpuThreshold(Math.Max(
+        var baseline = ClampGpuThreshold(Math.Max(
             AnalysisConstants.AutoGpuMin,
-            Math.Min(AnalysisConstants.AutoGpuMax, threshold)));
+            Math.Min(
+                AnalysisConstants.AutoGpuMax,
+                Math.Round(reference.Value * AnalysisConstants.AutoGpuRatio, MidpointRounding.ToEven))));
+        var separated = TryComputeSeparatedGpuThreshold(sorted, reference.Value, baseline);
+        return separated ?? baseline;
+    }
+
+    /// <summary>
+    /// Finds a strong two-state split in the per-second GPU distribution using
+    /// Otsu's between-class variance, then places the threshold in the empty
+    /// valley between the occupied low/high clusters. A minimum real gap keeps
+    /// smooth unimodal gameplay distributions on the conservative P90 fallback.
+    /// </summary>
+    private static double? TryComputeSeparatedGpuThreshold(
+        IReadOnlyList<double> sortedUtils,
+        double p90,
+        double baseline)
+    {
+        if (sortedUtils.Count < AutoGpuMinimumSecondsForSeparation)
+        {
+            return null;
+        }
+
+        var histogram = new int[101];
+        var total = 0;
+        var weightedSum = 0.0;
+        var mean = 0.0;
+        foreach (var raw in sortedUtils)
+        {
+            if (!double.IsFinite(raw))
+            {
+                continue;
+            }
+
+            var value = Math.Clamp(raw, 0.0, 100.0);
+            var bucket = (int)Math.Round(value, MidpointRounding.AwayFromZero);
+            histogram[bucket]++;
+            total++;
+            weightedSum += bucket;
+            mean += value;
+        }
+
+        if (total < AutoGpuMinimumSecondsForSeparation)
+        {
+            return null;
+        }
+
+        mean /= total;
+        var totalVariance = sortedUtils
+            .Where(double.IsFinite)
+            .Select(value => Math.Clamp(value, 0.0, 100.0))
+            .Sum(value => (value - mean) * (value - mean)) / total;
+        if (totalVariance <= 1e-9)
+        {
+            return null;
+        }
+
+        var lowCount = 0;
+        var lowSum = 0.0;
+        var bestThreshold = -1;
+        var bestBetweenVariance = double.NegativeInfinity;
+        for (var threshold = 0; threshold < 100; threshold++)
+        {
+            lowCount += histogram[threshold];
+            lowSum += histogram[threshold] * threshold;
+            var highCount = total - lowCount;
+            if (lowCount < AutoGpuMinimumLowStateSeconds || highCount < 3)
+            {
+                continue;
+            }
+
+            var lowMean = lowSum / lowCount;
+            var highMean = (weightedSum - lowSum) / highCount;
+            var lowWeight = lowCount / (double)total;
+            var highWeight = highCount / (double)total;
+            var betweenVariance = lowWeight * highWeight
+                * (lowMean - highMean) * (lowMean - highMean);
+            if (betweenVariance > bestBetweenVariance)
+            {
+                bestBetweenVariance = betweenVariance;
+                bestThreshold = threshold;
+            }
+        }
+
+        if (bestThreshold < 0
+            || bestBetweenVariance / totalVariance < AutoGpuMinimumSeparationRatio)
+        {
+            return null;
+        }
+
+        var lowMax = -1;
+        for (var bucket = bestThreshold; bucket >= 0; bucket--)
+        {
+            if (histogram[bucket] > 0)
+            {
+                lowMax = bucket;
+                break;
+            }
+        }
+
+        var highMin = -1;
+        for (var bucket = bestThreshold + 1; bucket <= 100; bucket++)
+        {
+            if (histogram[bucket] > 0)
+            {
+                highMin = bucket;
+                break;
+            }
+        }
+
+        if (lowMax < 0 || highMin < 0 || highMin - lowMax < AutoGpuMinimumClusterGap)
+        {
+            return null;
+        }
+
+        var valley = (lowMax + highMin) / 2.0;
+        var conservativeCap = Math.Min(
+            AnalysisConstants.AutoGpuMax,
+            p90 * AutoGpuSeparatedCapRatio);
+        var candidate = Math.Round(
+            Math.Min(valley, conservativeCap),
+            MidpointRounding.ToEven);
+        if (candidate <= baseline + 1.0)
+        {
+            return null;
+        }
+
+        return ClampGpuThreshold(Math.Max(AnalysisConstants.AutoGpuMin, candidate));
     }
 
     /// <summary>
