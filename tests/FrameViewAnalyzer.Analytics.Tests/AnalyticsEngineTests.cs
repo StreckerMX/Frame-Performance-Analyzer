@@ -90,7 +90,7 @@ public class AnalyticsEngineTests
     }
 
     [Fact]
-    public void Trim_removes_exactly_one_bin_from_each_edge()
+    public void Trim_removes_exactly_one_bin_from_each_outer_edge()
     {
         var session = _service.Analyze(
             TestCapture.MakeSession(),
@@ -131,7 +131,7 @@ public class AnalyticsEngineTests
     }
 
     [Fact]
-    public void Excludes_high_fps_transitions_between_benchmark_scenes()
+    public void Excludes_high_fps_transitions_between_benchmark_scenes_and_compresses_time()
     {
         var session = _service.Analyze(
             TestCapture.MakeMultiScene(),
@@ -139,10 +139,31 @@ public class AnalyticsEngineTests
 
         var series = SeriesBuilder.Build(session, "fps");
 
-        Assert.Equal([0.0, 1.0, 2.0, 3.0, 8.0, 9.0, 10.0, 11.0, 12.0], series.X);
+        Assert.Equal(
+            Enumerable.Range(0, 9).Select(value => (double)value),
+            series.X);
         Assert.True(series.Y.Max() < 120.0);
         Assert.Equal(1, session.Diagnostics.FpsOutlierBins);
         Assert.Equal(3, session.Diagnostics.BelowGpuBins);
+    }
+
+    [Fact]
+    public void Disabling_exclusion_really_disables_gpu_and_transition_filters()
+    {
+        var session = _service.Analyze(
+            TestCapture.MakeLowGpu(),
+            new AnalysisOptions(
+                GpuThreshold: 10,
+                TrimBufferSeconds: 0,
+                AutoGpuThreshold: false,
+                ExcludeTransitions: false));
+
+        var series = SeriesBuilder.Build(session, "fps");
+
+        Assert.Equal(6, series.X.Length);
+        Assert.Equal(0, session.Diagnostics.BelowGpuBins);
+        Assert.Equal(0, session.Diagnostics.FpsOutlierBins);
+        Assert.Equal(0, session.Diagnostics.TransitionEdgeBins);
     }
 
     [Fact]
