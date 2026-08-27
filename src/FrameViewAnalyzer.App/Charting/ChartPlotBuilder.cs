@@ -1,5 +1,6 @@
 using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.Core;
+using FrameViewAnalyzer.Core.Charting;
 using FrameViewAnalyzer.Core.Metrics;
 using ScottPlot;
 
