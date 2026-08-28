@@ -84,14 +84,14 @@ public partial class SessionChartView
 
     /// <summary>
     /// Frame points are an alternate representation, not an overlay. The
-    /// summary series remain in the plot so toggling is instant, but they are
-    /// hidden while the detailed frame series are active. Average/reference
-    /// lines and the rest of the chart stay visible.
+    /// summary series and their average lines remain cached for instant
+    /// toggling, but the active representation owns both the curve and average.
     /// </summary>
     private void ApplyFramePointReplacement()
     {
         var frameDetailActive = _framePointSeriesList.Count > 0;
         var framePlots = new HashSet<Scatter>(_framePointPlots);
+        var frameAveragePlots = new HashSet<HorizontalLine>(_framePointAveragePlots);
 
         foreach (var plottable in ChartHost.Plot.PlottableList)
         {
@@ -102,6 +102,11 @@ public partial class SessionChartView
                     break;
                 case Scatter scatter when !framePlots.Contains(scatter):
                     scatter.IsVisible = !frameDetailActive;
+                    break;
+                case HorizontalLine averageLine:
+                    averageLine.IsVisible = frameDetailActive
+                        ? frameAveragePlots.Contains(averageLine)
+                        : !frameAveragePlots.Contains(averageLine);
                     break;
             }
         }

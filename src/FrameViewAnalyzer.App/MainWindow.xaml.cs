@@ -140,6 +140,7 @@ public partial class MainWindow : Window
             else
             {
                 Interlocked.Increment(ref _framePointGeneration);
+                _viewModel.Chart.ClearFramePointSeries();
                 ChartView.Clear();
             }
         }
@@ -153,6 +154,7 @@ public partial class MainWindow : Window
             else
             {
                 Interlocked.Increment(ref _framePointGeneration);
+                _viewModel.Chart.ClearFramePointSeries();
                 ChartView.ClearFramePoints();
             }
         }
@@ -182,6 +184,7 @@ public partial class MainWindow : Window
         var metric = chart.SelectedMetric;
         if (!chart.MarkersVisible || !chart.HasData || metric is null)
         {
+            chart.ClearFramePointSeries();
             ChartView.ClearFramePoints();
             return;
         }
@@ -191,6 +194,7 @@ public partial class MainWindow : Window
             .ToList();
         if (sourceSeries.Count == 0)
         {
+            chart.ClearFramePointSeries();
             ChartView.ClearFramePoints();
             return;
         }
@@ -231,12 +235,14 @@ public partial class MainWindow : Window
                 return;
             }
 
+            chart.SetFramePointSeries(frameSeries);
             ChartView.SetFramePoints(frameSeries);
         }
         catch (Exception error)
         {
             if (generation == Volatile.Read(ref _framePointGeneration))
             {
+                chart.ClearFramePointSeries();
                 ChartView.ClearFramePoints();
                 AppLog.ErrorOperation("Frame point preparation", error);
                 _viewModel.StatusText = "FRAME POINTS UNAVAILABLE";

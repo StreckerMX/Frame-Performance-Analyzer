@@ -503,40 +503,15 @@
                 <StackPanel>
                     <Border Style="{StaticResource CardStyle}" Padding="16,14">
                         <StackPanel>
-                            <TextBlock Text="ANALYSIS RANGE" Style="{StaticResource SectionLabelStyle}" />
+                            <TextBlock Text="TIMELINE DATA" Style="{StaticResource SectionLabelStyle}" />
                             <CheckBox Margin="0,10,0,0"
-                                      Content="Automatic GPU threshold"
-                                      IsChecked="{Binding AnalysisRange.AutoGpuThresholdEnabled}"
-                                      IsEnabled="{Binding AnalysisRange.IsEnabled}"
-                                      Style="{StaticResource DarkCheckBoxStyle}" />
-                            <TextBlock Margin="0,12,0,0"
-                                       Text="{Binding AnalysisRange.GpuThresholdLabel}"
-                                       FontSize="{DynamicResource FontSize.Small}"
-                                       Foreground="{DynamicResource TextSoftBrush}" />
-                            <Slider Minimum="0"
-                                    Maximum="80"
-                                    Value="{Binding AnalysisRange.GpuThreshold, UpdateSourceTrigger=PropertyChanged}"
-                                    IsEnabled="{Binding AnalysisRange.ManualGpuThresholdEnabled}"
-                                    IsSnapToTickEnabled="False"
-                                    TickFrequency="1"
-                                    Style="{StaticResource DarkSliderStyle}" />
-                            <TextBlock Margin="0,12,0,0"
-                                       Text="{Binding AnalysisRange.TrimLabel}"
-                                       FontSize="{DynamicResource FontSize.Small}"
-                                       Foreground="{DynamicResource TextSoftBrush}" />
-                            <Slider Minimum="0"
-                                    Maximum="10"
-                                    Value="{Binding AnalysisRange.TrimBufferSeconds, UpdateSourceTrigger=PropertyChanged}"
-                                    IsEnabled="{Binding AnalysisRange.IsEnabled}"
-                                    TickFrequency="0.5"
-                                    Style="{StaticResource DarkSliderStyle}" />
-                            <CheckBox Margin="0,10,0,0"
-                                      Content="Exclude loading screens / FPS outliers"
+                                      Content="Precision filtering"
+                                      ToolTip="Off shows the complete raw capture. On applies the automatic loading-screen, FPS-outlier, transition-validation, and edge-trim pipeline."
                                       IsChecked="{Binding AnalysisRange.ExcludeTransitionsEnabled}"
                                       IsEnabled="{Binding AnalysisRange.IsEnabled}"
                                       Style="{StaticResource DarkCheckBoxStyle}" />
                             <TextBlock Margin="0,12,0,0"
-                                       Text="ACTIVE FILTER"
+                                       Text="DATA MODE"
                                        Style="{StaticResource SectionLabelStyle}" />
                             <TextBlock Margin="0,4,0,0"
                                        Text="{Binding AnalysisRange.FilterMethodText}"

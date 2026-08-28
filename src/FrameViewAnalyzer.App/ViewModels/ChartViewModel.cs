@@ -31,6 +31,7 @@ public partial class ChartViewModel : ObservableObject
     private ScottPlot.AxisLimits? _visibleBounds;
     private IReadOnlyList<ChartWorkspaceSession> _workspaceSessions = [];
     private IReadOnlyList<MetricSeries> _seriesList = [];
+    private IReadOnlyList<MetricSeries> _framePointSeriesList = [];
     private bool _isMultiWorkspace;
 
     [ObservableProperty]
@@ -73,10 +74,38 @@ public partial class ChartViewModel : ObservableObject
     /// <summary>All active workspace sessions in stable display order.</summary>
     public IReadOnlyList<ChartWorkspaceSession> WorkspaceSessions => _workspaceSessions;
 
-    /// <summary>All series available for the selected metric.</summary>
+    /// <summary>All one-second summary series available for the selected metric.</summary>
     public IReadOnlyList<MetricSeries> SeriesList => _seriesList;
 
     public bool IsMultiWorkspace => _isMultiWorkspace;
+
+    /// <summary>
+    /// Switches KPI calculations to the full-resolution frame representation.
+    /// Rendering decimation never reaches this method, so every statistic uses
+    /// the original per-frame values in the active viewport.
+    /// </summary>
+    public void SetFramePointSeries(IReadOnlyList<MetricSeries> seriesList)
+    {
+        var metricId = SelectedMetric?.Id;
+        _framePointSeriesList = metricId is null
+            ? []
+            : seriesList
+                .Where(series => string.Equals(series.Metric.Id, metricId, StringComparison.Ordinal))
+                .ToList();
+        UpdateVisibleRange(_visibleBounds);
+    }
+
+    /// <summary>Restores KPI calculations to the one-second summary series.</summary>
+    public void ClearFramePointSeries()
+    {
+        if (_framePointSeriesList.Count == 0)
+        {
+            return;
+        }
+
+        _framePointSeriesList = [];
+        UpdateVisibleRange(_visibleBounds);
+    }
 
     /// <summary>Compatibility entry point for the existing Pair workflow.</summary>
     public void SetSessions(SessionAnalysis? baseSession, SessionAnalysis? comparisonSession)
@@ -170,6 +199,7 @@ public partial class ChartViewModel : ObservableObject
     {
         _workspaceSessions = [];
         _seriesList = [];
+        _framePointSeriesList = [];
         _isMultiWorkspace = false;
         Session = null;
         ComparisonSession = null;
@@ -217,13 +247,14 @@ public partial class ChartViewModel : ObservableObject
     {
         _visibleBounds = bounds;
         var metric = SelectedMetric;
-        if (metric is null || SeriesList.Count == 0)
+        var statisticsSeries = ActiveStatisticsSeries();
+        if (metric is null || statisticsSeries.Count == 0)
         {
             ResetKpiValues();
             return;
         }
 
-        var populated = SeriesList.Where(series => series.X.Length > 0).ToList();
+        var populated = statisticsSeries.Where(series => series.X.Length > 0).ToList();
         if (populated.Count == 0)
         {
             ResetKpiValues();
@@ -239,9 +270,10 @@ public partial class ChartViewModel : ObservableObject
             var multiStats = new List<MultiVisibleStats>(populated.Count);
             foreach (var series in populated)
             {
-                var (stats, count) = VisibleRangeCalculator.Compute(
+                var (stats, _) = VisibleRangeCalculator.Compute(
                     metric, series.X, series.Y, minX, maxX);
-                multiStats.Add(new MultiVisibleStats(series, stats, count));
+                var summaryCount = VisibleSummaryCount(metric, series, minX, maxX);
+                multiStats.Add(new MultiVisibleStats(series, stats, summaryCount));
             }
 
             var fields = KpiFields(metric);
@@ -256,18 +288,23 @@ public partial class ChartViewModel : ObservableObject
 
         MetricStatistics? baseStats = null;
         var baseCount = 0;
-        if (Series is { X.Length: > 0 } baseSeries)
+        var baseSeries = populated.FirstOrDefault(series => series.Role == SessionRole.Base);
+        if (baseSeries is not null)
         {
-            (baseStats, baseCount) = VisibleRangeCalculator.Compute(
+            (baseStats, _) = VisibleRangeCalculator.Compute(
                 metric, baseSeries.X, baseSeries.Y, minX, maxX);
+            baseCount = VisibleSummaryCount(metric, baseSeries, minX, maxX);
         }
 
         MetricStatistics? comparisonStats = null;
         var comparisonCount = 0;
-        if (ComparisonSeries is { X.Length: > 0 } comparisonSeries)
+        var comparisonSeries = populated.FirstOrDefault(
+            series => series.Role == SessionRole.Comparison);
+        if (comparisonSeries is not null)
         {
-            (comparisonStats, comparisonCount) = VisibleRangeCalculator.Compute(
+            (comparisonStats, _) = VisibleRangeCalculator.Compute(
                 metric, comparisonSeries.X, comparisonSeries.Y, minX, maxX);
+            comparisonCount = VisibleSummaryCount(metric, comparisonSeries, minX, maxX);
         }
 
         var pairFields = KpiFields(metric);
@@ -283,6 +320,31 @@ public partial class ChartViewModel : ObservableObject
         }
 
         ApplyVisibleTimeTile(KpiTiles[^1], baseStats, baseCount, comparisonStats, comparisonCount);
+    }
+
+    private IReadOnlyList<MetricSeries> ActiveStatisticsSeries() =>
+        _framePointSeriesList.Count > 0 ? _framePointSeriesList : _seriesList;
+
+    private int VisibleSummaryCount(
+        MetricDefinition metric,
+        MetricSeries statisticsSeries,
+        double minX,
+        double maxX)
+    {
+        var summarySeries = _seriesList.FirstOrDefault(
+            series => series.WorkspaceIndex == statisticsSeries.WorkspaceIndex);
+        if (summarySeries is null)
+        {
+            return 0;
+        }
+
+        var (_, count) = VisibleRangeCalculator.Compute(
+            metric,
+            summarySeries.X,
+            summarySeries.Y,
+            minX,
+            maxX);
+        return count;
     }
 
     private static void ApplyMetricTile(
@@ -529,6 +591,9 @@ public partial class ChartViewModel : ObservableObject
 
     private void RefreshSeries()
     {
+        // A metric/workspace refresh invalidates any lazily-built frame series.
+        _framePointSeriesList = [];
+
         if (_workspaceSessions.Count == 0 || SelectedMetric is null)
         {
             _seriesList = [];

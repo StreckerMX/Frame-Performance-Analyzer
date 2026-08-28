@@ -25,6 +25,7 @@ public partial class SessionChartView : UserControl
     private IReadOnlyList<MetricSeries> _seriesList = [];
     private IReadOnlyList<MetricSeries> _framePointSeriesList = [];
     private readonly List<Scatter> _framePointPlots = [];
+    private readonly List<HorizontalLine> _framePointAveragePlots = [];
     private AxisLimits _fullLimits;
     private bool _wheelZoomEnabled = true;
     private bool _panEnabled = true;
@@ -75,6 +76,7 @@ public partial class SessionChartView : UserControl
         // repopulate this overlay if the user's Frame points toggle is enabled.
         _framePointSeriesList = [];
         _framePointPlots.Clear();
+        _framePointAveragePlots.Clear();
         HideTooltip();
 
         var previousSuppression = _suppressViewChanged;
@@ -303,6 +305,7 @@ public partial class SessionChartView : UserControl
         _seriesList = [];
         _framePointSeriesList = [];
         _framePointPlots.Clear();
+        _framePointAveragePlots.Clear();
         _crosshair = null;
         HideTooltip();
         ChartHost.Plot.Clear();
@@ -494,7 +497,13 @@ public partial class SessionChartView : UserControl
             ChartHost.Plot.Remove(plot);
         }
 
+        foreach (var plot in _framePointAveragePlots)
+        {
+            ChartHost.Plot.Remove(plot);
+        }
+
         _framePointPlots.Clear();
+        _framePointAveragePlots.Clear();
     }
 
     private void AddFramePointPlots()
@@ -541,6 +550,17 @@ public partial class SessionChartView : UserControl
             scatter.MarkerColor = color;
             scatter.Color = color;
             _framePointPlots.Add(scatter);
+
+            var average = FrameViewAnalyzer.Core.Math.Statistics.Mean(series.Y);
+            if (average is not null)
+            {
+                var averageLine = ChartHost.Plot.Add.HorizontalLine(
+                    average.Value,
+                    1.4f,
+                    color.WithAlpha(0.85));
+                averageLine.LinePattern = LinePattern.Dashed;
+                _framePointAveragePlots.Add(averageLine);
+            }
         }
     }
 

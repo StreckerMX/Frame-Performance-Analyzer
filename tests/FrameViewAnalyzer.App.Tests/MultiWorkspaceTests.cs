@@ -84,6 +84,44 @@ public class MultiWorkspaceTests
     }
 
     [Fact]
+    public void Multi_frame_points_recalculate_peer_kpis_without_counting_frames_as_seconds()
+    {
+        var viewModel = new ChartViewModel();
+        viewModel.SetWorkspace(
+        [
+            new ChartWorkspaceSession(Session("first.csv", frameTime: 10.0), "First"),
+            new ChartWorkspaceSession(Session("second.csv", frameTime: 20.0), "Second"),
+            new ChartWorkspaceSession(Session("third.csv", frameTime: 5.0), "Third"),
+        ],
+        isMultiWorkspace: true);
+        var frameX = Enumerable.Range(0, 20).Select(index => index / 4.0).ToArray();
+        var frameSeries = viewModel.SeriesList
+            .Select((series, index) => series with
+            {
+                X = frameX,
+                Y = Enumerable.Repeat(30.0 * (index + 1), frameX.Length).ToArray(),
+            })
+            .ToList();
+
+        viewModel.SetFramePointSeries(frameSeries);
+
+        Assert.Collection(
+            viewModel.KpiTiles[0].SeriesValues,
+            value => Assert.Equal("30.0 FPS", value.Value),
+            value => Assert.Equal("60.0 FPS", value.Value),
+            value => Assert.Equal("90.0 FPS", value.Value));
+        Assert.All(
+            viewModel.KpiTiles[^1].SeriesValues,
+            value => Assert.Equal("5 s", value.Value));
+
+        viewModel.ClearFramePointSeries();
+
+        Assert.Equal("100.0 FPS", viewModel.KpiTiles[0].SeriesValues[0].Value);
+        Assert.Equal("50.0 FPS", viewModel.KpiTiles[0].SeriesValues[1].Value);
+        Assert.Equal("200.0 FPS", viewModel.KpiTiles[0].SeriesValues[2].Value);
+    }
+
+    [Fact]
     public void Multi_lower_is_better_winner_percentage_is_negative()
     {
         var regular = Session("regular.csv", frameTime: 11.0);
