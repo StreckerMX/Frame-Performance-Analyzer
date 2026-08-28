@@ -505,7 +505,7 @@
                         <StackPanel>
                             <TextBlock Text="ANALYSIS RANGE" Style="{StaticResource SectionLabelStyle}" />
                             <CheckBox Margin="0,10,0,0"
-                                      Content="Automatic (full session)"
+                                      Content="Automatic GPU threshold"
                                       IsChecked="{Binding AnalysisRange.AutoGpuThresholdEnabled}"
                                       IsEnabled="{Binding AnalysisRange.IsEnabled}"
                                       Style="{StaticResource DarkCheckBoxStyle}" />
@@ -536,6 +536,15 @@
                                       IsEnabled="{Binding AnalysisRange.IsEnabled}"
                                       Style="{StaticResource DarkCheckBoxStyle}" />
                             <TextBlock Margin="0,12,0,0"
+                                       Text="ACTIVE FILTER"
+                                       Style="{StaticResource SectionLabelStyle}" />
+                            <TextBlock Margin="0,4,0,0"
+                                       Text="{Binding AnalysisRange.FilterMethodText}"
+                                       TextWrapping="Wrap"
+                                       FontSize="{DynamicResource FontSize.Small}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextSoftBrush}" />
+                            <TextBlock Margin="0,8,0,0"
                                        Text="{Binding AnalysisRange.FilterHelpText}"
                                        TextWrapping="Wrap"
                                        FontSize="{DynamicResource FontSize.Small}"
@@ -615,12 +624,14 @@
                 </Button>
                 <Button Grid.Column="6"
                         Margin="8,0,0,0"
-                        Content="Reset zoom"
+                        Content="Reset view"
+                        ToolTip="Return to the full timeline and fit the active data."
                         Click="ResetZoom_Click"
                         Style="{StaticResource GhostButtonStyle}" />
                 <Button Grid.Column="7"
                         Margin="8,0,0,0"
-                        Content="Auto zoom"
+                        Content="Fit visible Y"
+                        ToolTip="Keep the visible time range and refit the vertical scale."
                         Click="AutoZoom_Click"
                         Style="{StaticResource GhostButtonStyle}" />
             </Grid>

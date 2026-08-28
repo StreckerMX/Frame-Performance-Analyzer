@@ -153,6 +153,8 @@ public class AnalysisRangeViewModelTests
         Assert.Contains("chart samples", viewModel.AnalysisSummaryText);
         Assert.Contains("exclusion disabled", viewModel.AnalysisSummaryText);
         Assert.Contains("exclusion is disabled", viewModel.FilterHelpText);
+        Assert.Contains("Disabled", viewModel.FilterMethodText);
+        Assert.Contains("Trim only", viewModel.FilterMethodText);
     }
 
     [Fact]
@@ -164,6 +166,8 @@ public class AnalysisRangeViewModelTests
         viewModel.Attach(session, null);
 
         Assert.Contains("GPU utilization", viewModel.FilterHelpText);
+        Assert.Contains("Manual GPU gate (25%)", viewModel.FilterMethodText);
+        Assert.Contains("multimetric transition validation", viewModel.FilterMethodText);
         Assert.True(viewModel.FilteringControlsEnabled);
     }
 

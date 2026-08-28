@@ -15,8 +15,8 @@ namespace FrameViewAnalyzer.App.Views;
 /// <summary>
 /// ScottPlot host with the reference interaction model. ScottPlot's native
 /// input processor is disabled; wheel zoom (cursor-anchored), drag pan, and
-/// the hover tooltip are implemented here with pure viewport math. Optional
-/// frame-level detail is rendered as a lazy connected overlay and re-decimated
+/// the fixed cursor readout are implemented here with pure viewport math.
+/// Optional frame-level detail replaces the summary curve and is re-decimated
 /// for the visible viewport so normal chart interaction stays lightweight.
 /// </summary>
 public partial class SessionChartView : UserControl
@@ -96,7 +96,7 @@ public partial class SessionChartView : UserControl
     }
 
     /// <summary>
-    /// Replaces the optional frame-level overlay. The expensive series build is
+    /// Replaces the summary representation with optional frame-level detail. The expensive series build is
     /// performed by the caller off the UI thread; this method only renders the
     /// visible, adaptively-decimated subset. The frame samples are connected so
     /// the detailed curve follows the points instead of leaving a point cloud
@@ -104,16 +104,108 @@ public partial class SessionChartView : UserControl
     /// </summary>
     public void SetFramePoints(IReadOnlyList<MetricSeries> seriesList)
     {
+        if (seriesList.Count == 0)
+        {
+            ClearFramePoints();
+            return;
+        }
+
+        var previousLimits = ChartHost.Plot.Axes.GetLimits();
+        var previousFullLimits = _fullLimits;
         _framePointSeriesList = seriesList;
-        RebuildFramePointPlots();
-        ChartHost.Refresh();
+        RefitActiveRepresentation(previousLimits, previousFullLimits);
     }
 
     public void ClearFramePoints()
     {
+        if (_framePointSeriesList.Count == 0)
+        {
+            RemoveFramePointPlots();
+            ChartHost.Refresh();
+            return;
+        }
+
+        var previousLimits = ChartHost.Plot.Axes.GetLimits();
+        var previousFullLimits = _fullLimits;
         _framePointSeriesList = [];
         RemoveFramePointPlots();
-        ChartHost.Refresh();
+        RefitActiveRepresentation(previousLimits, previousFullLimits);
+    }
+
+    private IReadOnlyList<MetricSeries> ActiveViewportSeries() =>
+        _framePointSeriesList.Count > 0 ? _framePointSeriesList : _seriesList;
+
+    private void RefitActiveRepresentation(
+        AxisLimits previousLimits,
+        AxisLimits previousFullLimits)
+    {
+        if (_metric is null || _seriesList.Count == 0)
+        {
+            ChartHost.Refresh();
+            return;
+        }
+
+        var activeSeries = ActiveViewportSeries();
+        var fittedFull = ChartViewport.FullSeriesLimits(
+            activeSeries,
+            _metric.Id == "fps");
+        if (fittedFull is null)
+        {
+            ChartHost.Refresh();
+            return;
+        }
+
+        var wasFullView =
+            System.Math.Abs(previousLimits.Left - previousFullLimits.Left) < 0.01
+            && System.Math.Abs(previousLimits.Right - previousFullLimits.Right) < 0.01;
+        _fullLimits = fittedFull.Value;
+
+        AxisLimits target;
+        if (wasFullView)
+        {
+            target = _fullLimits;
+        }
+        else
+        {
+            var minimum = System.Math.Max(previousLimits.Left, _fullLimits.Left);
+            var maximum = System.Math.Min(previousLimits.Right, _fullLimits.Right);
+            if (maximum - minimum <= 1e-9)
+            {
+                target = _fullLimits;
+            }
+            else
+            {
+                var visible = new AxisLimits(
+                    minimum,
+                    maximum,
+                    _fullLimits.Bottom,
+                    _fullLimits.Top);
+                target = ChartViewport.AutoZoomToSeries(
+                    visible,
+                    activeSeries,
+                    _metric.Id == "fps") ?? visible;
+            }
+        }
+
+        ApplyViewport(target);
+    }
+
+    private void ApplyViewport(AxisLimits limits)
+    {
+        var previousSuppression = _suppressViewChanged;
+        _suppressViewChanged = true;
+        try
+        {
+            ChartHost.Plot.Axes.SetLimits(limits);
+            RebuildFramePointPlots();
+            ChartHost.Refresh();
+        }
+        finally
+        {
+            _suppressViewChanged = previousSuppression;
+        }
+
+        NotifyViewChanged();
     }
 
     /// <summary>
@@ -256,19 +348,27 @@ public partial class SessionChartView : UserControl
     public void ResetZoom()
     {
         CancelSelection();
-        if (_seriesList.Count == 0)
+        if (_metric is null || _seriesList.Count == 0)
         {
             return;
         }
 
-        _suppressViewChanged = true;
-        ChartHost.Plot.Axes.SetLimits(_fullLimits);
-        RebuildFramePointPlots();
-        ChartHost.Refresh();
-        _suppressViewChanged = false;
-        NotifyViewChanged();
+        var fitted = ChartViewport.FullSeriesLimits(
+            ActiveViewportSeries(),
+            _metric.Id == "fps");
+        if (fitted is null)
+        {
+            return;
+        }
+
+        _fullLimits = fitted.Value;
+        ApplyViewport(_fullLimits);
     }
 
+    /// <summary>
+    /// Keeps the current horizontal time window and refits only the vertical
+    /// axis to the active summary or frame-level data visible inside it.
+    /// </summary>
     public void AutoZoom()
     {
         CancelSelection();
@@ -277,21 +377,20 @@ public partial class SessionChartView : UserControl
             return;
         }
 
-        // Auto Zoom recovers the canonical full-series bounds, never the
-        // currently rendered/decimated viewport subset.
-        var fitted = ChartViewport.FullSeriesLimits(_seriesList, _metric.Id == "fps");
-        if (fitted is null)
+        var current = ChartHost.Plot.Axes.GetLimits();
+        var minimum = System.Math.Max(current.Left, _fullLimits.Left);
+        var maximum = System.Math.Min(current.Right, _fullLimits.Right);
+        if (maximum - minimum <= 1e-9)
         {
             return;
         }
 
-        _fullLimits = fitted.Value;
-        _suppressViewChanged = true;
-        ChartHost.Plot.Axes.SetLimits(fitted.Value);
-        RebuildFramePointPlots();
-        ChartHost.Refresh();
-        _suppressViewChanged = false;
-        NotifyViewChanged();
+        var visible = new AxisLimits(minimum, maximum, current.Bottom, current.Top);
+        var fitted = ChartViewport.AutoZoomToSeries(
+            visible,
+            ActiveViewportSeries(),
+            _metric.Id == "fps");
+        ApplyViewport(fitted ?? visible);
     }
 
     /// <summary>
@@ -327,17 +426,12 @@ public partial class SessionChartView : UserControl
         }
 
         var current = ChartHost.Plot.Axes.GetLimits();
+        var visible = new AxisLimits(minimum, maximum, current.Bottom, current.Top);
         var next = ChartViewport.AutoZoomToSeries(
-            new AxisLimits(minimum, maximum, current.Bottom, current.Top),
-            _seriesList,
+            visible,
+            ActiveViewportSeries(),
             _metric.Id == "fps");
-
-        _suppressViewChanged = true;
-        ChartHost.Plot.Axes.SetLimits(next ?? new AxisLimits(minimum, maximum, current.Bottom, current.Top));
-        RebuildFramePointPlots();
-        ChartHost.Refresh();
-        _suppressViewChanged = false;
-        NotifyViewChanged();
+        ApplyViewport(next ?? visible);
     }
 
     private void Render(bool fitToData = false)
@@ -541,14 +635,25 @@ public partial class SessionChartView : UserControl
 
         var position = e.GetPosition(ChartHost);
         var coordinates = ChartHost.Plot.GetCoordinates((float)position.X, (float)position.Y);
-        var current = ChartHost.Plot.Axes.GetLimits();
         var scale = e.Delta > 0 ? 0.75 : 1.35;
-        var next = ChartViewport.ZoomAt(current, coordinates.X, scale, _fullLimits);
-
-        ChartHost.Plot.Axes.SetLimits(next);
-        RebuildFramePointPlots();
-        ChartHost.Refresh();
+        ZoomAt(coordinates.X, scale);
         e.Handled = true;
+    }
+
+    internal void ZoomAt(double anchorX, double scale)
+    {
+        if (_metric is null || _seriesList.Count == 0)
+        {
+            return;
+        }
+
+        var current = ChartHost.Plot.Axes.GetLimits();
+        var horizontal = ChartViewport.ZoomAt(current, anchorX, scale, _fullLimits);
+        var fitted = ChartViewport.AutoZoomToSeries(
+            horizontal,
+            ActiveViewportSeries(),
+            _metric.Id == "fps");
+        ApplyViewport(fitted ?? horizontal);
     }
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -584,8 +689,14 @@ public partial class SessionChartView : UserControl
                 ChartHost.ReleaseMouseCapture();
             }
 
-            RebuildFramePointPlots();
-            ChartHost.Refresh();
+            var current = ChartHost.Plot.Axes.GetLimits();
+            var fitted = _metric is null
+                ? null
+                : ChartViewport.AutoZoomToSeries(
+                    current,
+                    ActiveViewportSeries(),
+                    _metric.Id == "fps");
+            ApplyViewport(fitted ?? current);
             return;
         }
 

@@ -82,8 +82,12 @@ public class ChartPlotBuilderTests
             Style,
             pointBudget: 200);
 
-        Assert.True(plot.Grid.XAxisStyle.MajorLineStyle.Width > 0);
-        Assert.True(plot.Grid.YAxisStyle.MajorLineStyle.Width > 0);
+        Assert.True(plot.Grid.XAxisStyle.MajorLineStyle.Width >= 1f);
+        Assert.True(plot.Grid.YAxisStyle.MajorLineStyle.Width >= 1f);
+        Assert.True(plot.Grid.XAxisStyle.MajorLineStyle.AntiAlias);
+        Assert.True(plot.Grid.YAxisStyle.MajorLineStyle.AntiAlias);
+        Assert.False(plot.Grid.XAxisStyle.MinorLineStyle.IsVisible);
+        Assert.False(plot.Grid.YAxisStyle.MinorLineStyle.IsVisible);
         Assert.Equal(0f, plot.Grid.XAxisStyle.MinorLineStyle.Width);
         Assert.Equal(0f, plot.Grid.YAxisStyle.MinorLineStyle.Width);
     }

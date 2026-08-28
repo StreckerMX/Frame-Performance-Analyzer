@@ -466,6 +466,8 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         var generation = Interlocked.Increment(ref _analysisGeneration);
+        using var busyScope = _busy.BeginVisible("Reanalyzing benchmark");
+        await Task.Yield();
         try
         {
             var previousBase = BaseSession;

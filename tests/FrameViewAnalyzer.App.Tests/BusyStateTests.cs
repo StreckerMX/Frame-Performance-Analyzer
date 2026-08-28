@@ -110,6 +110,24 @@ public class BusyStateTests
     }
 
     [Fact]
+    public void BeginVisible_shows_the_status_and_overlay_immediately()
+    {
+        var state = new BusyState();
+
+        using (state.BeginVisible("Reanalyzing benchmark"))
+        {
+            Assert.True(state.IsBusy);
+            Assert.True(state.IsBusyVisible);
+            Assert.Equal("Reanalyzing benchmark", state.OperationText);
+            Assert.Equal(1, state.EllipsisDots);
+        }
+
+        Assert.False(state.IsBusy);
+        Assert.False(state.IsBusyVisible);
+        Assert.Equal(0, state.EllipsisDots);
+    }
+
+    [Fact]
     public async Task Fast_operations_never_become_visibly_busy()
     {
         // Presentation threshold far above the operation duration.

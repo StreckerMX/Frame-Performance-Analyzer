@@ -29,6 +29,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
     private readonly DispatcherTimer _debounce;
     private bool _suppressEvents;
     private bool _isMultiSessionMode;
+    private bool _supportsMultimetricValidation;
 
     [ObservableProperty]
     private bool _isEnabled;
@@ -49,6 +50,9 @@ public partial class AnalysisRangeViewModel : ObservableObject
     private string _filterHelpText = AutomaticHelpText;
 
     [ObservableProperty]
+    private string _filterMethodText = "No active filter";
+
+    [ObservableProperty]
     private string _analysisSummaryText = "Load a capture to configure the analysis range.";
 
     /// <summary>Raised once per debounce window when Pair controls change.</summary>
@@ -67,8 +71,8 @@ public partial class AnalysisRangeViewModel : ObservableObject
         };
     }
 
-    /// <summary>Effective manual slider label, e.g. "10%".</summary>
-    public string GpuThresholdLabel => $"{GpuThreshold:F0}%";
+    /// <summary>Effective GPU gate label, e.g. "GPU gate: 10%".</summary>
+    public string GpuThresholdLabel => $"GPU gate: {GpuThreshold:F0}%";
 
     /// <summary>Effective trim label, e.g. "Trim 1.0 s".</summary>
     public string TrimLabel => $"Trim {TrimBufferSeconds:F1} s";
@@ -88,6 +92,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
     partial void OnGpuThresholdChanged(double value)
     {
         OnPropertyChanged(nameof(GpuThresholdLabel));
+        UpdateFilterHelpText();
         Schedule();
     }
 
@@ -146,6 +151,8 @@ public partial class AnalysisRangeViewModel : ObservableObject
     private void AttachCore(SessionAnalysis? session)
     {
         _debounce.Stop();
+        _supportsMultimetricValidation = session is not null
+            && !CaptureSourceDetector.IsNvidiaAppPerformanceLog(session.Capture);
         _suppressEvents = true;
         try
         {
@@ -153,6 +160,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
             if (session is null)
             {
                 FilterHelpText = AutomaticHelpText;
+                FilterMethodText = "No active filter";
                 return;
             }
 
@@ -163,6 +171,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
             ExcludeTransitionsEnabled = options.ExcludeTransitions;
             OnPropertyChanged(nameof(FilteringControlsEnabled));
             OnPropertyChanged(nameof(ManualGpuThresholdEnabled));
+            UpdateFilterHelpText();
         }
         finally
         {
@@ -176,6 +185,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
         if (baseSession is null)
         {
             FilterHelpText = AutomaticHelpText;
+            FilterMethodText = "No active filter";
             AnalysisSummaryText = "Load a capture to configure the analysis range.";
             return;
         }
@@ -212,6 +222,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
         if (sessions.Count == 0)
         {
             FilterHelpText = AutomaticHelpText;
+            FilterMethodText = "No active filter";
             AnalysisSummaryText = "Select two or more benchmarks to configure the Multi analysis range.";
             return;
         }
@@ -266,9 +277,17 @@ public partial class AnalysisRangeViewModel : ObservableObject
     {
         if (!ExcludeTransitionsEnabled)
         {
+            FilterMethodText = "Disabled · Trim only";
             FilterHelpText = "loading-screen / GPU / FPS-transition exclusion is disabled; Trim remains independent";
             return;
         }
+
+        var gpuGate = AutoGpuThresholdEnabled
+            ? $"Automatic GPU gate ({GpuThreshold:F0}%)"
+            : $"Manual GPU gate ({GpuThreshold:F0}%)";
+        FilterMethodText = _supportsMultimetricValidation
+            ? $"{gpuGate} + multimetric transition validation"
+            : $"{gpuGate} + FPS outlier filtering";
 
         FilterHelpText = AutoGpuThresholdEnabled
             ? AutomaticHelpText

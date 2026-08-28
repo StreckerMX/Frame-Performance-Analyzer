@@ -57,10 +57,15 @@ public static class ChartPlotBuilder
         // ScottPlot's major grid lines are generated from the same major ticks
         // that receive numeric axis labels. Keep only those lines so every
         // visible number on X/Y has one matching grid line and there are no
-        // unlabeled minor-grid stripes between them.
+        // unlabeled minor-grid stripes between them. One anti-aliased pixel
+        // keeps lines at fractional device coordinates from disappearing.
         plot.Grid.MajorLineColor = style.Grid.WithAlpha(0.55);
-        plot.Grid.MajorLineWidth = 0.6f;
+        plot.Grid.MajorLineWidth = 1.0f;
         plot.Grid.MinorLineWidth = 0f;
+        plot.Grid.XAxisStyle.MajorLineStyle.AntiAlias = true;
+        plot.Grid.YAxisStyle.MajorLineStyle.AntiAlias = true;
+        plot.Grid.XAxisStyle.MinorLineStyle.IsVisible = false;
+        plot.Grid.YAxisStyle.MinorLineStyle.IsVisible = false;
         plot.Axes.Color(style.Muted);
 
         var unitLabel = string.IsNullOrEmpty(metric.Unit)
