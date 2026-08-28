@@ -3,20 +3,34 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sp="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF">
     <Grid>
-        <sp:WpfPlot x:Name="ChartHost" />
+        <sp:WpfPlot x:Name="ChartHost"
+                    Loaded="ChartHost_PrecisionLoaded"
+                    MouseMove="ChartHost_PrecisionMouseMove"
+                    MouseLeave="ChartHost_PrecisionMouseLeave" />
+
+        <!-- Stable cursor readout. It replaces the floating tooltip and keeps
+             the benchmark/color identity in one fixed place. Hover only adds
+             the current value; the panel itself never chases the pointer. -->
+        <Border HorizontalAlignment="Left"
+                VerticalAlignment="Bottom"
+                Margin="12,0,0,12"
+                Padding="7,5"
+                IsHitTestVisible="False"
+                Background="{DynamicResource WindowBrush}"
+                CornerRadius="4"
+                Opacity="0.92">
+            <StackPanel x:Name="CursorReadoutPanel" />
+        </Border>
+
+        <!-- Kept only as a zero-size compatibility target for the legacy hover
+             handler while Precision Timeline migrates to the fixed readout. -->
         <Border x:Name="TooltipOverlay"
                 Visibility="Collapsed"
-                IsHitTestVisible="False"
-                HorizontalAlignment="Left"
-                VerticalAlignment="Top"
-                Background="{DynamicResource TooltipBackgroundBrush}"
-                BorderBrush="{DynamicResource TooltipBorderBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="10,6">
-            <TextBlock x:Name="TooltipText"
-                       Foreground="{DynamicResource TextBrush}"
-                       FontSize="{DynamicResource FontSize.Small}" />
+                Opacity="0"
+                Width="0"
+                Height="0"
+                IsHitTestVisible="False">
+            <TextBlock x:Name="TooltipText" />
         </Border>
     </Grid>
 </UserControl>
