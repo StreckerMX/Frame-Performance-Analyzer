@@ -21,7 +21,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
     public const double MaxTrimSeconds = 10.0;
 
     private const string AutomaticHelpText =
-        "automatic threshold uses 55% of the per-second GPU P90 as a fallback and may raise it when a clearly separated low-utilization loading state is detected";
+        "GPU utilization is the first-pass loading gate; FrameView frame timing, power, CPU and presentation telemetry validate transition edges so isolated performance drops remain in the analysis";
 
     /// <summary>Debounce for continuously-changing controls (sliders).</summary>
     public static readonly TimeSpan ChangeDebounce = TimeSpan.FromMilliseconds(400);
@@ -272,7 +272,7 @@ public partial class AnalysisRangeViewModel : ObservableObject
 
         FilterHelpText = AutoGpuThresholdEnabled
             ? AutomaticHelpText
-            : $"at least {GpuThreshold:F0}% GPU utilization will be required";
+            : $"at least {GpuThreshold:F0}% GPU utilization is the first-pass gate; FrameView telemetry validates transition edges";
     }
 
     private void AddExclusionDiagnostics(List<string> parts, SessionAnalysis session)
