@@ -679,7 +679,7 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public async Task Analysis_option_changes_reanalyze_both_sessions_and_persist_the_options()
+    public async Task Raw_data_mode_reanalyzes_both_sessions_and_persists_binary_options()
     {
         var (viewModel, _, _, dialogs, directory) = Create();
         try
@@ -690,18 +690,28 @@ public class MainWindowViewModelTests
             await viewModel.LoadComparisonFromPathAsync(dialogs.NextCsvPath);
 
             var selectedMetric = viewModel.Chart.SelectedMetric;
-            viewModel.AnalysisRange.TrimBufferSeconds = 2.0;
+            var rawOptions = new AnalysisOptions(
+                GpuThreshold: viewModel.AnalysisRange.GpuThreshold,
+                TrimBufferSeconds: 0.0,
+                AutoGpuThreshold: true,
+                ExcludeTransitions: false);
 
-            await viewModel.ApplyAnalysisOptionsAsync(viewModel.AnalysisRange.SnapshotOptions());
+            await viewModel.ApplyAnalysisOptionsAsync(rawOptions);
 
-            Assert.Equal(2.0, viewModel.BaseSession!.EffectiveOptions.TrimBufferSeconds);
-            Assert.Equal(2.0, viewModel.ComparisonSession!.EffectiveOptions.TrimBufferSeconds);
+            Assert.Equal(0.0, viewModel.BaseSession!.EffectiveOptions.TrimBufferSeconds);
+            Assert.Equal(0.0, viewModel.ComparisonSession!.EffectiveOptions.TrimBufferSeconds);
+            Assert.True(viewModel.BaseSession.EffectiveOptions.AutoGpuThreshold);
+            Assert.True(viewModel.ComparisonSession.EffectiveOptions.AutoGpuThreshold);
+            Assert.False(viewModel.BaseSession.EffectiveOptions.ExcludeTransitions);
+            Assert.False(viewModel.ComparisonSession.EffectiveOptions.ExcludeTransitions);
             Assert.Equal(selectedMetric, viewModel.Chart.SelectedMetric);
 
             var identity = CaptureIdentityResolver.TryBuild(basePath)!;
             var library = new JsonLibraryStore(Path.Combine(directory, "library.json")).Load();
             var record = library.Records[identity];
-            Assert.Equal("2", record.AnalysisOptions["trim_buffer_seconds"]);
+            Assert.Equal("0", record.AnalysisOptions["trim_buffer_seconds"]);
+            Assert.Equal("true", record.AnalysisOptions["auto_gpu_threshold"]);
+            Assert.Equal("false", record.AnalysisOptions["exclude_transitions"]);
             Assert.True(record.StatsSummary.ContainsKey("avg_fps"));
         }
         finally
