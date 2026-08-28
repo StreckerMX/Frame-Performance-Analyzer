@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.App.Charting;
+using FrameViewAnalyzer.Core;
 using FrameViewAnalyzer.Core.Charting;
 using ScottPlot;
 using ScottPlot.Plottables;
@@ -150,7 +151,7 @@ public partial class SessionChartView
         var seriesList = ActiveCursorSeries();
         var style = ChartStyle.FromApplicationResources();
         var isMultiWorkspace = seriesList.Count > 1
-            && seriesList.All(series => !series.IsReference && series.Role == Core.SessionRole.Comparison);
+            && seriesList.All(series => !series.IsReference && series.Role == SessionRole.Comparison);
         var colors = seriesList
             .Select(series => ChartPlotBuilder.SeriesColor(
                 style,
