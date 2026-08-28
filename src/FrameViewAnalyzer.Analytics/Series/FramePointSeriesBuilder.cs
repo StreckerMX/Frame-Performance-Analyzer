@@ -5,20 +5,17 @@ using FrameViewAnalyzer.Core.Metrics;
 namespace FrameViewAnalyzer.Analytics.Series;
 
 /// <summary>
-/// Lazily builds frame-level chart samples. Nothing in this type runs during
-/// normal capture loading: callers opt in explicitly, and completed results
-/// are cached by immutable SessionAnalysis + metric.
+/// Lazily builds true frame-level chart samples. Nothing in this type runs
+/// during normal capture loading: callers opt in explicitly, and completed
+/// results are cached by immutable SessionAnalysis + metric.
 ///
-/// FPS uses a centered 32-frame harmonic rolling estimate instead of raw
-/// 1000/MsBetweenPresents points. Raw per-present FPS is extremely noisy with
-/// modern presentation pipelines and Frame Generation; the rolling estimate
-/// retains one point per recorded frame while tracking the meaningful local
-/// frame rate. Other metrics expose their row-level values directly.
+/// FPS uses each analyzed frame's actual 1000/MsBetweenPresents value. The
+/// interactive chart is responsible for viewport decimation, so zooming can
+/// progressively reveal the original frames without smoothing real stutters
+/// or spikes out of the data. Other metrics expose their row-level values.
 /// </summary>
 public static class FramePointSeriesBuilder
 {
-    public const int FpsRollingWindowFrames = 32;
-
     private static readonly ConditionalWeakTable<
         SessionAnalysis,
         ConcurrentDictionary<string, Lazy<MetricSeries>>> Caches = new();
@@ -57,76 +54,41 @@ public static class FramePointSeriesBuilder
 
         var analyzedXByBin = SeriesBuilder.BuildAnalyzedTimeline(session.ValidBins);
         return metricId == "fps"
-            ? BuildRollingFps(session, metric, analyzedXByBin)
+            ? BuildRawFps(session, metric, analyzedXByBin)
             : BuildRawMetric(session, metric, analyzedXByBin);
     }
 
-    private static MetricSeries BuildRollingFps(
+    private static MetricSeries BuildRawFps(
         SessionAnalysis session,
         MetricDefinition metric,
         IReadOnlyDictionary<int, double> analyzedXByBin)
     {
         var xs = new List<double>();
         var ys = new List<double>();
-        var runs = ConsecutiveRuns(session.ValidBins.Order().ToList());
 
-        foreach (var run in runs)
+        foreach (var bin in session.ValidBins.Order())
         {
-            var sampleIndices = new List<int>();
-            foreach (var bin in run)
-            {
-                if (!session.RowsByBin.TryGetValue(bin, out var rows))
-                {
-                    continue;
-                }
-
-                foreach (var sampleIndex in rows)
-                {
-                    var frameTime = session.Samples.FrametimeMs[sampleIndex];
-                    if (double.IsFinite(frameTime) && frameTime > 0)
-                    {
-                        sampleIndices.Add(sampleIndex);
-                    }
-                }
-            }
-
-            if (sampleIndices.Count == 0)
+            if (!analyzedXByBin.TryGetValue(bin, out var binX)
+                || !session.RowsByBin.TryGetValue(bin, out var sampleIndices))
             {
                 continue;
             }
 
-            var prefixMs = new double[sampleIndices.Count + 1];
-            for (var i = 0; i < sampleIndices.Count; i++)
+            foreach (var sampleIndex in sampleIndices)
             {
-                prefixMs[i + 1] = prefixMs[i] + session.Samples.FrametimeMs[sampleIndices[i]];
-            }
-
-            for (var i = 0; i < sampleIndices.Count; i++)
-            {
-                var start = Math.Max(0, i - (FpsRollingWindowFrames / 2 - 1));
-                var end = Math.Min(sampleIndices.Count, start + FpsRollingWindowFrames);
-                start = Math.Max(0, end - FpsRollingWindowFrames);
-                var count = end - start;
-                var totalMs = prefixMs[end] - prefixMs[start];
-                if (count <= 0 || totalMs <= 0 || !double.IsFinite(totalMs))
+                var frameTime = session.Samples.FrametimeMs[sampleIndex];
+                if (!double.IsFinite(frameTime) || frameTime <= 0)
                 {
                     continue;
                 }
 
-                var sampleIndex = sampleIndices[i];
-                var time = session.Samples.TimeSeconds[sampleIndex];
-                var bin = (int)Math.Floor(time);
-                if (!analyzedXByBin.TryGetValue(bin, out var binX))
-                {
-                    continue;
-                }
-
-                var fps = 1000.0 * count / totalMs;
+                var fps = 1000.0 / frameTime;
                 if (!double.IsFinite(fps) || fps <= 0 || fps > AnalysisConstants.FpsChartCap)
                 {
                     continue;
                 }
 
+                var time = session.Samples.TimeSeconds[sampleIndex];
                 xs.Add(CompressedFrameX(binX, time, bin));
                 ys.Add(fps);
             }
@@ -195,28 +157,5 @@ public static class FramePointSeriesBuilder
         }
 
         return metricId == "fps" ? CoreMetricCatalog.CoreById["fps"] : null;
-    }
-
-    private static List<List<int>> ConsecutiveRuns(List<int> indices)
-    {
-        if (indices.Count == 0)
-        {
-            return [];
-        }
-
-        var runs = new List<List<int>> { new() { indices[0] } };
-        for (var i = 1; i < indices.Count; i++)
-        {
-            if (indices[i] == runs[^1][^1] + 1)
-            {
-                runs[^1].Add(indices[i]);
-            }
-            else
-            {
-                runs.Add(new List<int> { indices[i] });
-            }
-        }
-
-        return runs;
     }
 }
