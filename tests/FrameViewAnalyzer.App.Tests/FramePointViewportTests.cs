@@ -1,4 +1,5 @@
 using FrameViewAnalyzer.App.Views;
+using ScottPlot;
 
 namespace FrameViewAnalyzer.App.Tests;
 
@@ -37,5 +38,24 @@ public class FramePointViewportTests
     {
         Assert.Equal(0f, SessionChartView.FrameMarkerSize(5_000, 1_000));
         Assert.True(SessionChartView.FrameMarkerSize(800, 1_000) > 0);
+    }
+
+    [Fact]
+    public void Grid_normalization_makes_every_labeled_tick_major_and_every_unlabeled_tick_minor()
+    {
+        Tick[] ticks =
+        [
+            new Tick(0, "0", false),
+            new Tick(0.5, "", true),
+            new Tick(1, "1", true),
+            new Tick(1.5, "", false),
+        ];
+
+        SessionChartView.NormalizeTicks(ticks);
+
+        Assert.True(ticks[0].IsMajor);
+        Assert.False(ticks[1].IsMajor);
+        Assert.True(ticks[2].IsMajor);
+        Assert.False(ticks[3].IsMajor);
     }
 }
