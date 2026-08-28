@@ -2,7 +2,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using FrameViewAnalyzer.Analytics.Series;
 using FrameViewAnalyzer.App.Charting;
 using FrameViewAnalyzer.Core;
@@ -180,15 +179,15 @@ public partial class SessionChartView
             var color = colors[index];
             var rowPanel = new StackPanel
             {
-                Orientation = Orientation.Horizontal,
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
                 Margin = new Thickness(0, index == 0 ? 0 : 2, 0, 0),
             };
-            var dot = new Ellipse
+            var dot = new System.Windows.Shapes.Ellipse
             {
                 Width = 7,
                 Height = 7,
                 Margin = new Thickness(0, 0, 6, 0),
-                VerticalAlignment = VerticalAlignment.Center,
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
                 Fill = new SolidColorBrush(ToWpfColor(color)),
             };
             var label = new TextBlock
