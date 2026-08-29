@@ -72,6 +72,7 @@ public partial class BenchmarkLibraryWindow : Window
             mode,
             initiallySelectedPaths);
         DataContext = _viewModel;
+        Title = _viewModel.WindowTitle;
         WindowBusy.Attach(this, _busy);
 
         _viewModel.LoadBaseRequested += path => LoadBaseRequested?.Invoke(path);
