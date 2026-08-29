@@ -33,6 +33,8 @@ public partial class BenchmarkLibraryWindow : Window
     private readonly IFrameViewCsvReader _reader;
     private readonly ICaptureAnalysisService _analysis;
     private readonly BusyState _busy;
+    private readonly BenchmarkBrowserMode _mode;
+    private readonly string? _captureDirectory;
 
     public BenchmarkLibraryWindow(
         ILibraryStore libraryStore,
@@ -43,7 +45,9 @@ public partial class BenchmarkLibraryWindow : Window
         IDialogService dialogs,
         IFrameViewCsvReader reader,
         ICaptureAnalysisService analysis,
-        string? captureDirectory = null)
+        string? captureDirectory = null,
+        BenchmarkBrowserMode mode = BenchmarkBrowserMode.Library,
+        IReadOnlyList<string>? initiallySelectedPaths = null)
     {
         InitializeComponent();
         // Small screens / high DPI: cap to the working area; the row list is
@@ -56,14 +60,24 @@ public partial class BenchmarkLibraryWindow : Window
         _manualStore = manualStore;
         _reader = reader;
         _analysis = analysis;
+        _mode = mode;
+        _captureDirectory = captureDirectory;
         _busy = new BusyState();
-        _viewModel = new BenchmarkLibraryViewModel(libraryStore, manualStore, scanner, captureDirectory, _busy);
+        _viewModel = new BenchmarkLibraryViewModel(
+            libraryStore,
+            manualStore,
+            scanner,
+            captureDirectory,
+            _busy,
+            mode,
+            initiallySelectedPaths);
         DataContext = _viewModel;
         WindowBusy.Attach(this, _busy);
 
         _viewModel.LoadBaseRequested += path => LoadBaseRequested?.Invoke(path);
         _viewModel.LoadComparisonRequested += path => LoadComparisonRequested?.Invoke(path);
         _viewModel.CompareRequested += (first, second) => CompareRequested?.Invoke(first, second);
+        _viewModel.SelectionConfirmedRequested += ForwardContextSelection;
         _viewModel.CompareSelectedRequested += async paths =>
         {
             if (CompareSelectedRequested is { } requested)
@@ -92,7 +106,36 @@ public partial class BenchmarkLibraryWindow : Window
     /// <summary>Selected Library captures to load as equal peers in Multi.</summary>
     public event Action<IReadOnlyList<string>>? CompareSelectedRequested;
 
+    /// <summary>Selection made from the contextual Pair/Multi browser.</summary>
+    public event Action<BenchmarkBrowserMode, IReadOnlyList<string>>? SelectionConfirmedRequested;
+
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void BrowseCapture_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy.IsBusy || !_viewModel.ShowBrowseAction)
+        {
+            return;
+        }
+
+        var path = _dialogs.PickCsvFile(_captureDirectory);
+        if (path is null)
+        {
+            return;
+        }
+
+        ForwardContextSelection(_mode, [path]);
+    }
+
+    private void ForwardContextSelection(
+        BenchmarkBrowserMode mode,
+        IReadOnlyList<string> paths)
+    {
+        // Close the modal browser before MainWindow begins the potentially
+        // expensive load, so its immediate busy overlay is visible at once.
+        Close();
+        SelectionConfirmedRequested?.Invoke(mode, paths);
+    }
 
     private void ConfirmRemoveFromLibrary(LibraryRow row)
     {

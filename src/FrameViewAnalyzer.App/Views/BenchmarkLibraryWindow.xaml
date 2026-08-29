@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:converters="clr-namespace:FrameViewAnalyzer.App.Converters"
-        Title="Benchmark Library"
+        Title="{Binding WindowTitle}"
         Width="980"
         Height="680"
         MinWidth="800"
@@ -23,12 +23,45 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- Shared Library + contextual selection header -->
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="{Binding HeaderLabel}"
+                       Style="{StaticResource SectionLabelStyle}" />
+            <TextBlock Text="{Binding HeaderDescription}"
+                       Margin="0,3,0,0"
+                       FontSize="{DynamicResource FontSize.Small}"
+                       Foreground="{DynamicResource TextSoftBrush}"
+                       TextWrapping="Wrap" />
+            <Border Margin="0,10,0,0"
+                    Padding="12,9"
+                    Background="{DynamicResource PanelBrush}"
+                    BorderBrush="{DynamicResource CardBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                <DockPanel LastChildFill="True">
+                    <TextBlock DockPanel.Dock="Left"
+                               Text="SOURCE FOLDER"
+                               Margin="0,0,12,0"
+                               FontSize="{DynamicResource FontSize.Tiny}"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource AccentBrush}"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding CaptureFolder}"
+                               FontSize="{DynamicResource FontSize.Small}"
+                               Foreground="{DynamicResource TextBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                </DockPanel>
+            </Border>
+        </StackPanel>
+
         <!-- Search / filters / sort -->
-        <Grid Grid.Row="0">
+        <Grid Grid.Row="1" Margin="0,12,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -66,7 +99,7 @@
                       Style="{StaticResource DarkComboBoxStyle}" />
         </Grid>
 
-        <Grid Grid.Row="1" Margin="0,10,0,0">
+        <Grid Grid.Row="2" Margin="0,10,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -104,7 +137,10 @@
         </Grid>
 
         <!-- Recent Pair comparisons -->
-        <ItemsControl Grid.Row="2" Margin="0,10,0,0" ItemsSource="{Binding RecentPairs}">
+        <ItemsControl Grid.Row="3"
+                      Margin="0,10,0,0"
+                      ItemsSource="{Binding RecentPairs}"
+                      Visibility="{Binding IsLibraryMode, Converter={StaticResource BoolToVisibility}}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <WrapPanel />
@@ -127,7 +163,7 @@
         </ItemsControl>
 
         <!-- Rows -->
-        <ScrollViewer Grid.Row="3" Margin="0,10,0,0" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="4" Margin="0,10,0,0" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding Rows}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -150,7 +186,7 @@
                                           IsEnabled="{Binding Available}"
                                           Command="{Binding DataContext.ToggleSelectedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                           CommandParameter="{Binding}"
-                                          ToolTip="Select for Multi comparison" />
+                                          ToolTip="{Binding DataContext.SelectionCheckBoxToolTip, RelativeSource={RelativeSource AncestorType=Window}}" />
                                 <StackPanel Grid.Column="1">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding Title}"
@@ -187,12 +223,14 @@
                                             Command="{Binding DataContext.LoadBaseCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                             CommandParameter="{Binding}"
                                             IsEnabled="{Binding Available}"
+                                            Visibility="{Binding DataContext.ShowQuickPairActions, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}"
                                             Style="{StaticResource PrimaryButtonStyle}" />
                                     <Button Content="Comparison"
                                             Margin="8,0,0,0"
                                             Command="{Binding DataContext.LoadComparisonCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                             CommandParameter="{Binding}"
                                             IsEnabled="{Binding Available}"
+                                            Visibility="{Binding DataContext.ShowQuickPairActions, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}"
                                             Style="{StaticResource GhostButtonStyle}" />
                                     <Button Content="Remove"
                                             Margin="8,0,0,0"
@@ -208,13 +246,9 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <Grid Grid.Row="4" Margin="0,12,0,0">
+        <Grid Grid.Row="5" Margin="0,12,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" VerticalAlignment="Center">
@@ -223,40 +257,61 @@
                            FontWeight="Bold"
                            Foreground="{DynamicResource TextSoftBrush}"
                            TextWrapping="Wrap" />
-                <TextBlock Text="Remove hides a Library record without deleting its CSV. Base and Comparison remain quick Pair actions."
+                <TextBlock Text="{Binding FooterHelpText}"
                            Margin="0,2,12,0"
                            FontSize="{DynamicResource FontSize.Tiny}"
                            Foreground="{DynamicResource MutedBrush}"
                            TextWrapping="Wrap" />
             </StackPanel>
-            <Button Grid.Column="1"
-                    Content="Compare selected"
-                    Margin="0,0,8,0"
-                    Command="{Binding CompareSelectedCommand}"
-                    IsEnabled="{Binding CanCompareSelectedNow}"
-                    Style="{StaticResource PrimaryButtonStyle}" />
-            <Button Grid.Column="2"
-                    Content="Export package"
-                    Margin="0,0,8,0"
-                    Click="ExportPackage_Click"
-                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                    Style="{StaticResource GhostButtonStyle}" />
-            <Button Grid.Column="3"
-                    Content="Import package"
-                    Margin="0,0,8,0"
-                    Click="ImportPackage_Click"
-                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                    Style="{StaticResource GhostButtonStyle}" />
-            <Button Grid.Column="4"
-                    Content="Import legacy data"
-                    Margin="0,0,8,0"
-                    Click="ImportLegacy_Click"
-                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                    Style="{StaticResource GhostButtonStyle}" />
-            <Button Grid.Column="5"
-                    Content="Close"
-                    Click="Close_Click"
-                    Style="{StaticResource SecondaryButtonStyle}" />
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center">
+                <!-- Full management commands remain on the toolbar Library entry. -->
+                <Button Content="Compare selected"
+                        Margin="0,0,8,0"
+                        Command="{Binding CompareSelectedCommand}"
+                        IsEnabled="{Binding CanCompareSelectedNow}"
+                        Visibility="{Binding ShowLibraryActions, Converter={StaticResource BoolToVisibility}}"
+                        Style="{StaticResource PrimaryButtonStyle}" />
+                <Button Content="Export package"
+                        Margin="0,0,8,0"
+                        Click="ExportPackage_Click"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                        Visibility="{Binding ShowLibraryActions, Converter={StaticResource BoolToVisibility}}"
+                        Style="{StaticResource GhostButtonStyle}" />
+                <Button Content="Import package"
+                        Margin="0,0,8,0"
+                        Click="ImportPackage_Click"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                        Visibility="{Binding ShowLibraryActions, Converter={StaticResource BoolToVisibility}}"
+                        Style="{StaticResource GhostButtonStyle}" />
+                <Button Content="Import legacy data"
+                        Margin="0,0,8,0"
+                        Click="ImportLegacy_Click"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                        Visibility="{Binding ShowLibraryActions, Converter={StaticResource BoolToVisibility}}"
+                        Style="{StaticResource GhostButtonStyle}" />
+                <Button Content="Browse CSV..."
+                        Margin="0,0,8,0"
+                        Click="BrowseCapture_Click"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                        Visibility="{Binding ShowBrowseAction, Converter={StaticResource BoolToVisibility}}"
+                        Style="{StaticResource GhostButtonStyle}" />
+                <Button Content="Cancel"
+                        Margin="0,0,8,0"
+                        Click="Close_Click"
+                        Visibility="{Binding IsSelectionMode, Converter={StaticResource BoolToVisibility}}"
+                        Style="{StaticResource SecondaryButtonStyle}" />
+                <Button Content="{Binding PrimaryActionText}"
+                        Command="{Binding ConfirmSelectionCommand}"
+                        IsEnabled="{Binding CanConfirmSelectionNow}"
+                        Visibility="{Binding IsSelectionMode, Converter={StaticResource BoolToVisibility}}"
+                        Style="{StaticResource PrimaryButtonStyle}" />
+                <Button Content="Close"
+                        Click="Close_Click"
+                        Visibility="{Binding ShowLibraryActions, Converter={StaticResource BoolToVisibility}}"
+                        Style="{StaticResource SecondaryButtonStyle}" />
+            </StackPanel>
         </Grid>
     </Grid>
 </Window>

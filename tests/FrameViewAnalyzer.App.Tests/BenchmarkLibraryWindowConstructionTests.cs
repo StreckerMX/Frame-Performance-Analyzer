@@ -83,7 +83,11 @@ public class BenchmarkLibraryWindowConstructionTests
         return folder;
     }
 
-    private static BenchmarkLibraryWindow CreateWindow(Fixture fixture, string? captureDirectory)
+    private static BenchmarkLibraryWindow CreateWindow(
+        Fixture fixture,
+        string? captureDirectory,
+        BenchmarkBrowserMode mode = BenchmarkBrowserMode.Library,
+        IReadOnlyList<string>? initiallySelectedPaths = null)
     {
         var libraryStore = new JsonLibraryStore(fixture.LibraryPath);
         var manualStore = new JsonManualMetadataStore(fixture.MetadataPath);
@@ -101,7 +105,9 @@ public class BenchmarkLibraryWindowConstructionTests
             new DialogService(),
             new FrameViewCsvReader(),
             new CaptureAnalysisService(),
-            captureDirectory);
+            captureDirectory,
+            mode,
+            initiallySelectedPaths);
     }
 
     private static BenchmarkLibraryViewModel ViewModelOf(BenchmarkLibraryWindow window) =>
@@ -259,6 +265,60 @@ public class BenchmarkLibraryWindowConstructionTests
                 finally
                 {
                     window.Close();
+                }
+            }
+            finally
+            {
+                Cleanup(fixture);
+            }
+        });
+
+    [Fact]
+    public void Shared_browser_constructs_in_multi_mode_and_restores_the_current_order() =>
+        WpfStaTestHost.Run(() =>
+        {
+            WpfStaTestHost.EnsureApplication();
+            var fixture = CreateFixture();
+            try
+            {
+                SeedLibrary(
+                    fixture.LibraryPath,
+                    ("a", "GTA5", "1920x1080", "RTX 4090"),
+                    ("b", "Cyber", "3840x2160", "RTX 5090"));
+                var selected = new[] { "C:/captures/b.csv", "C:/captures/a.csv" };
+                var window = CreateWindow(
+                    fixture,
+                    captureDirectory: null,
+                    mode: BenchmarkBrowserMode.Multi,
+                    initiallySelectedPaths: selected);
+                try
+                {
+                    Assert.Equal("Select benchmarks", window.Title);
+                    window.Show();
+                    var viewModel = ViewModelOf(window);
+                    PumpUntil(
+                        () => viewModel.CountText == "2 record(s)",
+                        TimeSpan.FromSeconds(20));
+
+                    Assert.Equal(BenchmarkBrowserMode.Multi, viewModel.Mode);
+                    Assert.True(viewModel.IsSelectionMode);
+                    Assert.False(viewModel.ShowLibraryActions);
+                    Assert.Equal(2, viewModel.SelectedCount);
+                    Assert.True(viewModel.CanConfirmSelectionNow);
+
+                    IReadOnlyList<string>? requested = null;
+                    viewModel.SelectionConfirmedRequested += (_, paths) => requested = paths;
+                    viewModel.ConfirmSelectionCommand.Execute(null);
+
+                    Assert.NotNull(requested);
+                    Assert.Equal(selected, requested!.ToArray());
+                }
+                finally
+                {
+                    if (window.IsVisible)
+                    {
+                        window.Close();
+                    }
                 }
             }
             finally

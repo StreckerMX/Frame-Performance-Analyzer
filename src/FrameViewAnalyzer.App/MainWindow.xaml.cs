@@ -339,10 +339,35 @@ public partial class MainWindow : Window
         return new SessionDetailsWindow(viewModel);
     }
 
-    private void Library_Click(object sender, RoutedEventArgs e)
+    private void Library_Click(object sender, RoutedEventArgs e) =>
+        OpenBenchmarkBrowser(BenchmarkBrowserMode.Library);
+
+    private void LoadBaseBrowser_Click(object sender, RoutedEventArgs e) =>
+        OpenBenchmarkBrowser(BenchmarkBrowserMode.PairBase);
+
+    private void LoadComparisonBrowser_Click(object sender, RoutedEventArgs e)
     {
-        // Opening the Library is instant; MainWindow never turns busy for it.
-        // The Library window owns whatever loading it performs.
+        if (_viewModel.BaseSession is null)
+        {
+            _dialogs.ShowInfo(
+                "Benchmark browser",
+                "Load a Base benchmark before selecting a comparison.");
+            return;
+        }
+
+        OpenBenchmarkBrowser(BenchmarkBrowserMode.PairComparison);
+    }
+
+    /// <summary>
+    /// Opens the same searchable/indexed browser for Library management,
+    /// Pair slot selection, or equal-peer Multi selection.
+    /// </summary>
+    private void OpenBenchmarkBrowser(
+        BenchmarkBrowserMode mode,
+        IReadOnlyList<string>? initiallySelectedPaths = null)
+    {
+        // Opening the browser is instant; it owns its folder refresh and busy
+        // presentation. MainWindow becomes busy only after a selection closes it.
         if (_busy.IsBusy)
         {
             return;
@@ -358,7 +383,9 @@ public partial class MainWindow : Window
             _dialogs,
             _reader,
             _analysis,
-            captureDirectory)
+            captureDirectory,
+            mode,
+            initiallySelectedPaths)
         {
             Owner = this,
         };
@@ -369,6 +396,21 @@ public partial class MainWindow : Window
         {
             await _viewModel.LoadBaseFromPathAsync(first);
             await _viewModel.LoadComparisonFromPathAsync(second);
+        };
+        library.SelectionConfirmedRequested += async (selectionMode, paths) =>
+        {
+            switch (selectionMode)
+            {
+                case BenchmarkBrowserMode.PairBase:
+                    await _viewModel.LoadBaseFromPathAsync(paths[0]);
+                    break;
+                case BenchmarkBrowserMode.PairComparison:
+                    await _viewModel.LoadComparisonFromPathAsync(paths[0]);
+                    break;
+                case BenchmarkBrowserMode.Multi:
+                    await _viewModel.LoadMultiBenchmarksAsync(paths);
+                    break;
+            }
         };
         library.ShowDialog();
     }
