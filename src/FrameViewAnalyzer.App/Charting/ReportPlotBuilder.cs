@@ -30,7 +30,8 @@ public static class ReportPlotBuilder
         IReadOnlyList<string> Lines,
         bool UseProfessionalLayout = false,
         bool IsMultiReport = false,
-        IReadOnlyDictionary<string, ManualMetadata?>? ManualMetadataByPath = null);
+        IReadOnlyDictionary<string, ManualMetadata?>? ManualMetadataByPath = null,
+        bool UseFramePoints = false);
 
     private sealed record ReportBuildContext(IReadOnlyList<ReportGroup> Groups);
 
@@ -534,7 +535,7 @@ public static class ReportPlotBuilder
             string.Join("  ·  ", commonParts),
             config,
             runs,
-            BuildMethodology(sessions),
+            BuildMethodology(sessions, header.UseFramePoints),
             buildContext?.Groups.Count ?? 0);
     }
 
@@ -694,7 +695,9 @@ public static class ReportPlotBuilder
             : null;
     }
 
-    private static MethodologyContext BuildMethodology(IReadOnlyList<SessionAnalysis> sessions)
+    private static MethodologyContext BuildMethodology(
+        IReadOnlyList<SessionAnalysis> sessions,
+        bool useFramePoints)
     {
         if (sessions.Count == 0)
         {
@@ -718,7 +721,9 @@ public static class ReportPlotBuilder
             new ReportField("GPU ACTIVITY FILTER", gpuVaries ? "Per benchmark" : gpuValues[0]),
             new ReportField("EDGE TRIM", trimVaries ? "Per benchmark" : trimValues[0]),
             new ReportField("LOADS / TRANSITIONS", transitionsVary ? "Per benchmark" : transitionValues[0]),
-            new ReportField("CHART AGGREGATION", "1 analyzed value per second"),
+            new ReportField(
+                "CHART RESOLUTION",
+                useFramePoints ? "Per-frame analyzed data (where available)" : "1 analyzed value per second"),
         ],
         gpuVaries,
         trimVaries,

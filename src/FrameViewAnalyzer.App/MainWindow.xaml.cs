@@ -508,16 +508,19 @@ public partial class MainWindow : Window
         }
 
         var isMultiReport = selection.Sessions.All(option => option.IsMultiPeer);
+        var useFramePoints = _viewModel.Chart.MarkersVisible;
         var byId = selection.Sessions
             .SelectMany(option => option.Session.Catalog)
             .GroupBy(metric => metric.Id, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
 
-        // Series extraction over full-resolution samples is CPU-bound; run it
-        // off the UI thread so the status bar keeps animating.
+        // Build the report from the same data representation the user is
+        // inspecting. Frame-point mode sources true analyzed frames for every
+        // selected metric; ReportPlotBuilder later performs visualization-only
+        // extrema-preserving decimation to fit the PNG pixel budget.
         var groups = await _busy.RunOnThreadPoolAsync(
             "Preparing report",
-            () => BuildReportGroups(selection, byId, isMultiReport));
+            () => BuildReportGroups(selection, byId, isMultiReport, useFramePoints));
 
         if (groups.Count == 0)
         {
@@ -542,7 +545,7 @@ public partial class MainWindow : Window
             // ChartStyle reads WPF application resources; capture it on the
             // UI thread, then render and encode the PNG off the UI thread.
             var style = ChartStyle.FromApplicationResources();
-            var header = BuildReportHeader(selection);
+            var header = BuildReportHeader(selection, useFramePoints);
             await _busy.RunOnThreadPoolAsync("Exporting report", () =>
             {
                 var multiplot = ReportPlotBuilder.Build(groups, style);
@@ -587,7 +590,8 @@ public partial class MainWindow : Window
     private static List<ReportPlotBuilder.ReportGroup> BuildReportGroups(
         ExportReportSelection selection,
         IReadOnlyDictionary<string, FrameViewAnalyzer.Core.Metrics.MetricDefinition> byId,
-        bool isMultiReport)
+        bool isMultiReport,
+        bool useFramePoints)
     {
         var groups = new List<ReportPlotBuilder.ReportGroup>();
         foreach (var metricId in selection.MetricIds)
@@ -600,7 +604,7 @@ public partial class MainWindow : Window
             var seriesList = new List<MetricSeries>();
             foreach (var option in selection.Sessions)
             {
-                var series = SeriesBuilder.Build(option.Session, metricId);
+                var series = ReportSeriesBuilder.Build(option.Session, metricId, useFramePoints);
                 if (series.Y.Length == 0)
                 {
                     continue;
@@ -627,7 +631,9 @@ public partial class MainWindow : Window
         return groups;
     }
 
-    private ReportPlotBuilder.ReportHeader BuildReportHeader(ExportReportSelection selection)
+    private ReportPlotBuilder.ReportHeader BuildReportHeader(
+        ExportReportSelection selection,
+        bool useFramePoints)
     {
         var first = selection.Sessions[0];
         var headerSession = first.Session;
@@ -681,7 +687,8 @@ public partial class MainWindow : Window
             lines,
             UseProfessionalLayout: true,
             IsMultiReport: isMultiReport,
-            ManualMetadataByPath: manualMetadataByPath);
+            ManualMetadataByPath: manualMetadataByPath,
+            UseFramePoints: useFramePoints);
     }
 
     private async void ExportCsv_Click(object sender, RoutedEventArgs e)
