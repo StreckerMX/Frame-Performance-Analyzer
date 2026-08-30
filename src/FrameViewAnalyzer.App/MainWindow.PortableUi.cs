@@ -48,7 +48,7 @@ public partial class MainWindow
         var importButton = new Button
         {
             Content = "Import",
-            ToolTip = "Import a FrameView Analyzer analyzed-data CSV or JSON export",
+            ToolTip = "Import a Frame Performance Analyzer analyzed-data CSV or JSON export",
         };
         importButton.SetResourceReference(FrameworkElement.StyleProperty, "GhostButtonStyle");
         importButton.Click += ImportPortable_Click;

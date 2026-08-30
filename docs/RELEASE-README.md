@@ -1,130 +1,142 @@
-# FrameView Analyzer 2.2.0
+# Frame Performance Analyzer 3.2.0
 
-**Version:** 2.2.0 (stable release)
+**Release:** Precision Timeline
+**Version:** 3.2.0
+**Windows package version:** 3.2.0.0
 
-FrameView Analyzer is a native Windows desktop application for analyzing NVIDIA
-FrameView captures and NVIDIA App performance-overlay logs. Version 2.2.0
-expands the original Base vs. Comparison workflow into a complete Pair / Multi
-benchmark workspace while keeping Pair fast and familiar.
+Frame Performance Analyzer is a native Windows desktop application for
+analyzing and comparing NVIDIA FrameView captures and NVIDIA App
+performance-overlay logs. Version 3.2.0 introduces the Precision Timeline
+workflow while preserving the established Pair, Multi, Library, and export
+features.
 
-## What's new in 2.2.0
+## What's new in 3.2.0
 
-- Adds a **Pair | Multi** workspace switch. Pair keeps the familiar Base vs. Comparison workflow; Multi compares **2–8 captures as equal peers** with no reference benchmark.
-- Adds a stable eight-color Multi palette used consistently by charts, KPI rows, the export selector, and exported PNG reports.
-- Generalizes chart state and metric union from two sessions to N sessions.
-- Makes the visible-range KPI strip follow the selected metric and current zoom range.
-- Shows `AVERAGE`, `Max`, `Min`, and `VISIBLE TIME` for every metric, with `1% LOW` and `0.1% LOW` added only for FPS.
-- Marks the winning Multi statistic with its signed percentage advantage over the runner-up, respecting whether higher or lower values are better for the metric.
-- Enables **Analysis Range** in Multi. GPU threshold, edge trim, and loading-screen / FPS-culler exclusion are applied to every selected benchmark with transactional rollback if any re-analysis fails.
-- Adds Library row checkboxes for selecting **2–8 benchmarks** and a `Compare selected` action that opens the same Multi workspace used by the folder selector.
-- Adds non-destructive Library removal. Removing a record hides it persistently without deleting the source CSV and clears stale recent-comparison references.
-- Replaces the old PNG All/Single selector with explicit **benchmark and metric checklists**. FPS is selected by default and up to eight metrics can be included.
-- Adds an editable **REPORT TITLE** field before PNG export. Pair defaults to `BENCHMARK COMPARISON`; Multi defaults to `MULTI BENCHMARK COMPARISON`.
-- Adds timestamped suggested PNG filenames so repeated exports do not reuse the same name. Multi filenames use a neutral `MULTI_BENCHMARK_COMPARISON_...` identity instead of borrowing the first benchmark name.
-- Preserves the current chart time/zoom bounds when switching metrics.
-- Retains NVIDIA App performance-log support introduced in 2.1.0, including sampled FPS and dynamic telemetry metrics.
+- **Precision filtering** is one explicit binary mode. Off keeps the complete
+  raw capture. On applies automatic GPU gating, FPS outlier handling, fixed
+  outer-edge trimming, and conservative multivariable loading/transition
+  validation.
+- The transition detector combines frame and presentation cadence with the
+  available GPU, CPU, render-queue, latency, dropped-frame, and Frame
+  Generation telemetry. An isolated real performance drop is not removed just
+  because GPU utilization changed.
+- **Analyzed time** is compressed. Excluded loading and transition regions no
+  longer leave artificial empty gaps in the chart timeline.
+- **Frame points** replace the one-second summary curve with true per-frame
+  values. Visual decimation only controls drawing density; zoom reveals more of
+  the original data and FPS KPIs use every analyzed frame.
+- **Pair** continues to compare a Base and Comparison with role-aware colors,
+  visible-range statistics, and direction-aware deltas.
+- **Multi** compares 2–8 captures as equal peers with stable colors shared by
+  charts, KPI rows, cursor values, selection, and exports.
+- Pair, Comparison, Multi, and Library now use one **unified benchmark
+  browser** with search, filters, full-card selection, source-folder control,
+  and protection against choosing the current Base as its own Comparison.
+- Metadata **Benchmark name** values appear together with the detected capture
+  name in the quick selector, so repeated captures remain distinguishable.
+- The interface uses themed scrollbars, exact tick-aligned grid lines, a fixed
+  cursor-value readout, and distinct **Reset view** and **Fit visible Y**
+  actions.
+- Public branding is now **Frame Performance Analyzer**. Technical project
+  names, persisted storage locations, Microsoft Store identity, and legitimate
+  NVIDIA FrameView terminology remain stable for compatibility.
 
-## Pair and Multi workflows
+## Supported input
 
-### Pair
+- **NVIDIA FrameView detailed logs** (`*_Log.csv`) with per-frame timing and
+  available hardware/presentation telemetry.
+- **NVIDIA FrameView summary CSVs** (`FrameView_Summary.csv`), opened as a
+  read-only table.
+- **NVIDIA App performance logs** (`NVIDIA_App_Performance_Log_*.csv`) with
+  sampled FPS and available GPU/CPU telemetry.
+- **Frame Performance Analyzer portable analyzed-data exports** in CSV or JSON.
+  Files produced by earlier application versions remain import-compatible.
 
-Use Pair for the normal one-vs-one workflow. Load a **Base** capture and,
-optionally, a **Comparison** capture. KPI tiles show A/B values and the metric's
-improvement or regression using the correct performance direction.
+NVIDIA App logs have lower temporal precision than detailed FrameView logs.
+Frame Performance Analyzer does not synthesize frame-level precision absent
+from the source file.
 
-### Multi
+## Pair and Multi
 
-Use Multi when comparing more than two configurations or when you want two
-captures treated as equal peers instead of Base/Comparison roles. Select 2–8
-captures from the chosen capture folder or directly from Benchmark Library.
-Every selected benchmark receives a stable color and appears in each applicable
-visible-range KPI tile.
+Use **Pair** for a Base versus Comparison workflow. Use **Multi** when two to
+eight runs should be treated as equal peers. Both modes support the same metric
+selection, Precision filtering, visible-range behavior, frame-point timeline,
+zoom/pan controls, cursor values, and export system.
 
-## PNG report workflow
+## Precision Timeline controls
 
-The PNG report dialog lets you:
+- **Precision filtering off:** recorded data remains raw; no loading,
+  transition, FPS-outlier, GPU-gate, or edge-trim exclusions are applied.
+- **Precision filtering on:** the complete automatic pipeline is applied.
+- **Frame points off:** the chart uses the normal one-second summary.
+- **Frame points on:** real per-frame values and frame-level FPS statistics
+  replace the summary representation.
+- **Reset view:** restores the complete analyzed timeline.
+- **Fit visible Y:** keeps the current X interval and fits Y to its visible
+  values.
 
-1. Select exactly which loaded benchmarks to include.
-2. Select FPS and any additional available metrics, up to eight charts.
-3. Edit the report title before rendering.
-4. Export a Pair or Multi report with the same benchmark identity and colors used in the application.
+## Library and metadata
 
-Multi reports use neutral `Benchmark:` header lines and do not present the first
-capture's hardware/configuration as if it described every selected peer.
+The unified browser combines saved Library records with captures discovered in
+the active source folder. It supports search, filters, sorting, availability,
+recent Pair comparisons, 2–8 benchmark Multi selection, package import/export,
+and non-destructive Library removal.
 
-## System requirements
+Metadata can record a custom benchmark name, game or scene, resolution,
+graphics preset, upscaler, Frame Generation, Ray Tracing, driver, notes, and
+tags. Metadata is stored by the application; source CSV files are never
+modified.
 
-- **Windows 11 x64 recommended.**
-- **Windows 10 x64** support is limited to editions/releases currently supported by .NET 10, such as applicable Enterprise/LTSC versions.
-- **No .NET installation is required.** The release build is self-contained.
-- No installer: unzip and run.
+## Exports
 
-## How to launch
+- Professional PNG reports for selected Pair or Multi benchmarks and metrics.
+- Statistics CSV export.
+- Benchmark JSON/package export.
+- Portable analyzed-data CSV/JSON export and import.
 
-1. Unzip `FrameViewAnalyzer-v2.2.0-win-x64.zip`.
-2. Double-click `FrameViewAnalyzer.exe`.
+Exports honor the current visible range where applicable. The portable format
+version is unchanged by the product rebranding, preserving compatibility with
+existing files.
 
-Windows SmartScreen may warn about an unknown publisher because the executable
-is not code-signed. Choose **More info > Run anyway** only if you trust the
-source of the download.
+## GitHub ZIP
 
-## Code signing policy
+1. Unzip `FramePerformanceAnalyzer-v3.2.0-win-x64.zip`.
+2. Double-click `FramePerformanceAnalyzer.exe`.
 
-FrameView Analyzer is applying for the SignPath Foundation Open Source Code Signing program. If approved, official releases will use **Free code signing provided by SignPath.io, certificate by SignPath Foundation**.
+The build is self-contained for Windows x64; a separate .NET runtime is not
+required. A matching `.sha256` file is published for ZIP verification.
 
-The complete signing scope, maintainer roles, privacy statement, build provenance, and verification process are documented in [`CODE_SIGNING_POLICY.md`](../CODE_SIGNING_POLICY.md).
+Windows SmartScreen may show an unknown-publisher warning while the SignPath
+Foundation application and signing integration remain pending. Run a binary
+only when it came from the official repository release.
 
-## Supported files
+## Microsoft Store package
 
-- **FrameView Log CSVs** (`*_Log.csv`) - analyzed from per-frame timing data and available in Pair or Multi.
-- **NVIDIA App Performance Logs** (`NVIDIA_App_Performance_Log_*.csv`) - analyzed as low-rate sampled telemetry and available in Pair or Multi.
-- **FrameView Summary CSVs** (`FrameView_Summary.csv`) - opened as a read-only table and never occupy analysis slots.
+The Store artifact is
+`FramePerformanceAnalyzer-Store-3.2.0.0-x64.msix`. Microsoft Store signs the
+package after certification. The physical filename and public DisplayName use
+the new brand, while the Partner Center package identity intentionally remains
+`Strecker.FrameViewAnalyzer`.
 
-NVIDIA App performance logs have lower temporal precision than FrameView logs.
-Their FPS values are sampled telemetry rather than frame-by-frame timing, so
-FrameView Analyzer does not synthesize precision absent from the source file.
+## Local data and compatibility
 
-## Benchmark Library
+The public rebranding does not migrate or duplicate existing data:
 
-The Library supports search, filters, sorting, recent Pair comparisons, direct
-`Base` / `Comparison` loading, Multi row selection, and non-destructive record
-removal. Removing a Library record never deletes its original CSV file.
-
-## Where data is stored
-
-| What | Location |
+| Data | Stable location |
 |---|---|
-| Settings, metadata, library | `%APPDATA%\FrameViewAnalyzer\V2\` |
-| Log files | `%LOCALAPPDATA%\FrameViewAnalyzer\logs\` |
+| Settings, metadata, and Library | `%APPDATA%\FrameViewAnalyzer\V2\` |
+| Diagnostic logs | `%LOCALAPPDATA%\FrameViewAnalyzer\logs\` |
 
-The portable ZIP does **not** store settings beside the executable. Logs are
-kept locally, roll daily, and are retained for 7 days. The application has
-**no telemetry** and makes no network calls.
+The solution/projects (`FrameViewAnalyzer.*`), AppUserModelId
+(`StreckerMX.FrameViewAnalyzer`), repository URL, portable format version, and
+Store identity remain unchanged intentionally.
 
-## Validation
+## Privacy and independence
 
-2.2.0 was validated with the Windows/.NET 10 automated test suite and Release
-build, plus manual UI testing of Pair, Multi, Multi Analysis Range, Library
-multi-selection/removal, FrameView and NVIDIA App metrics, editable PNG report
-titles, benchmark/metric report selection, and exported Multi charts.
+Frame Performance Analyzer is local-first, contains no telemetry, and makes no
+network calls during normal analysis. It is an independent project and is not
+affiliated with or endorsed by NVIDIA Corporation.
 
-Each GitHub release includes the self-contained Windows x64 ZIP and a matching
-`.sha256` checksum file.
-
-## How to uninstall
-
-1. Delete the extracted application folder and downloaded ZIP.
-2. Optionally delete the data folders listed above to remove local settings, metadata, Library records, and logs.
-
-## Known deviations
-
-- No Help / Learn-more card yet.
-- No single-series fill-under-curve shading (cosmetic only).
-- Dynamic metric IDs use FNV-1a for display keys and are not persisted as user data.
-- UI is English-only; string centralization remains a future refactor.
-
-Time-range drag selection remains available in Pair: turn **Drag pan** off and
-drag horizontally on the chart (minimum span 1 second).
-
-See `README.md` for screenshots and the repository `docs/` folder for the
-architecture, parity, and performance documentation.
+See [`PRIVACY.md`](../PRIVACY.md),
+[`CODE_SIGNING_POLICY.md`](../CODE_SIGNING_POLICY.md), and
+[`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md) for details.

@@ -10,8 +10,8 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
 
     <!-- Stable Windows file metadata used by SignPath artifact restrictions. -->
-    <Product>FrameView Analyzer</Product>
-    <AssemblyTitle>FrameView Analyzer</AssemblyTitle>
+    <Product>Frame Performance Analyzer</Product>
+    <AssemblyTitle>Frame Performance Analyzer</AssemblyTitle>
     <Description>Native Windows benchmark analysis for NVIDIA FrameView captures and NVIDIA App performance logs.</Description>
     <Company>StreckerMX</Company>
     <Authors>StreckerMX</Authors>

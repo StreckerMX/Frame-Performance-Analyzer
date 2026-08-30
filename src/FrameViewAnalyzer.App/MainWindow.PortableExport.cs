@@ -20,7 +20,7 @@ public partial class MainWindow
         }
 
         var path = _dialogs.PickOpenFile(
-            "FrameView Analyzer data (*.json;*.csv)|*.json;*.csv|JSON (*.json)|*.json|CSV (*.csv)|*.csv");
+            "Frame Performance Analyzer data (*.json;*.csv)|*.json;*.csv|JSON (*.json)|*.json|CSV (*.csv)|*.csv");
         if (path is null)
         {
             return;

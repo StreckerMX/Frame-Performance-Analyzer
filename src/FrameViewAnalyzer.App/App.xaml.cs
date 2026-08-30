@@ -79,16 +79,16 @@ public partial class App : Application
             var window = _services.GetRequiredService<MainWindow>();
             window.Show();
             Log.Information(
-                "FrameView Analyzer {Version} started",
+                "Frame Performance Analyzer {Version} started",
                 ReleaseInfo.InformationalVersion);
         }
         catch (Exception error)
         {
             // Controlled startup failure: log it, tell the user, and stop.
-            Log.Fatal(error, "FrameView Analyzer startup failed");
+            Log.Fatal(error, "Frame Performance Analyzer startup failed");
             MessageBox.Show(
                 $"The application could not start.\n\n{error.Message}",
-                "FrameView Analyzer",
+                "Frame Performance Analyzer",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(1);
@@ -103,7 +103,7 @@ public partial class App : Application
         }
         finally
         {
-            Log.Information("FrameView Analyzer exiting");
+            Log.Information("Frame Performance Analyzer exiting");
             AppLog.Close();
         }
 

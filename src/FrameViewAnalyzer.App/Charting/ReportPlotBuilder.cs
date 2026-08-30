@@ -699,7 +699,7 @@ public static class ReportPlotBuilder
         if (sessions.Count == 0)
         {
             return new MethodologyContext(
-                [new ReportField("ANALYSIS", "Current FrameView Analyzer session state")],
+                [new ReportField("ANALYSIS", "Current Frame Performance Analyzer session state")],
                 false,
                 false,
                 false);
@@ -1394,7 +1394,7 @@ public static class ReportPlotBuilder
             divider);
         var baseline = top + 28 - font.Metrics.Ascent;
         canvas.DrawText(
-            $"FrameView Analyzer  ·  {context.Runs.Count} benchmark(s)  ·  {context.MetricCount} chart(s)",
+            $"Frame Performance Analyzer  ·  {context.Runs.Count} benchmark(s)  ·  {context.MetricCount} chart(s)",
             ReportPadding,
             baseline,
             SKTextAlign.Left,

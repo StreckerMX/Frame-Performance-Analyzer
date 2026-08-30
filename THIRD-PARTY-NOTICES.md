@@ -1,6 +1,6 @@
-# Third-party notices — FrameView Analyzer
+# Third-party notices — Frame Performance Analyzer
 
-FrameView Analyzer itself is distributed under the MIT License (see `LICENSE`).
+Frame Performance Analyzer itself is distributed under the MIT License (see `LICENSE`).
 
 The self-contained single-file distribution embeds the following third-party
 components and their transitive dependencies. License identifiers below are

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="760" viewBox="0 0 1440 760" role="img" aria-labelledby="title desc">
-  <title id="title">FrameView Analyzer</title>
-  <desc id="desc">Animated FrameView Analyzer header with application logo, product slogan, workflow summary, and subtle green scans.</desc>
+  <title id="title">Frame Performance Analyzer</title>
+  <desc id="desc">Animated Frame Performance Analyzer header with application logo, product slogan, workflow summary, and subtle green scans.</desc>
   <defs>
     <linearGradient id="scan" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#76B900" stop-opacity="0"/>
@@ -12,7 +12,7 @@
     <style>
       .sans{font-family:Inter,"Segoe UI",Arial,sans-serif}.mono{font-family:ui-monospace,"Cascadia Mono","Cascadia Code",Consolas,monospace}.fg{fill:#F4F6F8}.muted{fill:#A5AFB9}.green{fill:#76B900}.cyan{fill:#00D4FF}.hero{font-size:66px;font-weight:720}.slogan{font-size:27px;font-weight:500}.sub{font-size:19px;letter-spacing:.1em}.pr{font-size:20px;font-weight:650}.code{font-size:18px}
     </style>
-    <clipPath id="c1"><rect x="370" y="148" width="0" height="92"><animate attributeName="width" from="0" to="820" begin="1.65s" dur="1.15s" fill="freeze"/></rect></clipPath>
+    <clipPath id="c1"><rect x="370" y="148" width="0" height="92"><animate attributeName="width" from="0" to="960" begin="1.65s" dur="1.15s" fill="freeze"/></rect></clipPath>
     <clipPath id="c2"><rect x="370" y="250" width="0" height="46"><animate attributeName="width" from="0" to="620" begin="2.95s" dur="1.05s" fill="freeze"/></rect></clipPath>
     <clipPath id="c3"><rect x="370" y="315" width="0" height="42"><animate attributeName="width" from="0" to="920" begin="4.15s" dur="1.25s" fill="freeze"/></rect></clipPath>
     <clipPath id="c4"><rect x="370" y="420" width="0" height="43"><animate attributeName="width" from="0" to="250" begin="5.55s" dur=".65s" fill="freeze"/></rect></clipPath>
@@ -42,7 +42,7 @@
     <animate attributeName="stroke-dashoffset" from="1" to="0" begin=".55s" dur="1.0s" fill="freeze"/>
   </path>
 
-  <text x="370" y="220" class="sans fg hero" clip-path="url(#c1)">FrameView Analyzer</text>
+  <text x="370" y="220" class="sans fg hero" clip-path="url(#c1)">Frame Performance Analyzer</text>
   <text x="370" y="282" class="sans green slogan" clip-path="url(#c2)">Analyze. Compare. Understand performance.</text>
   <text x="370" y="346" class="mono muted sub" clip-path="url(#c3)">WINDOWS / NVIDIA FRAMEVIEW / NVIDIA APP / PERFORMANCE ANALYSIS</text>
 

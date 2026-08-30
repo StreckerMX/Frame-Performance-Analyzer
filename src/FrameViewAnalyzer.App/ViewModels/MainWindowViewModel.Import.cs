@@ -6,7 +6,7 @@ public partial class MainWindowViewModel
 {
     /// <summary>
     /// Replaces the active workspace with sessions restored from a portable
-    /// FrameView Analyzer CSV/JSON export. Imported snapshots are intentionally
+    /// Frame Performance Analyzer CSV/JSON export. Imported snapshots are intentionally
     /// read-only with respect to the analysis-range filters because no raw
     /// FrameView rows are embedded in the portable file.
     /// </summary>

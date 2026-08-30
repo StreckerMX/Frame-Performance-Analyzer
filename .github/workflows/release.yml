@@ -48,7 +48,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
-          $zip = "artifacts/release/FrameViewAnalyzer-v$env:VERSION-win-x64.zip"
+          $zip = "artifacts/release/FramePerformanceAnalyzer-v$env:VERSION-win-x64.zip"
           $checksum = "$zip.sha256"
 
           if (-not (Test-Path $zip)) {
@@ -67,7 +67,7 @@ jobs:
           gh release create $env:TAG $zip $checksum `
             --repo $env:GITHUB_REPOSITORY `
             --target $env:GITHUB_SHA `
-            --title "FrameView Analyzer $env:VERSION" `
+            --title "Frame Performance Analyzer $env:VERSION" `
             --generate-notes
 
           if ($LASTEXITCODE -ne 0) {

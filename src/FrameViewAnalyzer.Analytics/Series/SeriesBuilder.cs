@@ -9,7 +9,7 @@ namespace FrameViewAnalyzer.Analytics.Series;
 /// Builds per-bin metric series for a session. FrameView FPS points come from
 /// harmonic per-frame summaries. Sampled telemetry sources use their
 /// source-aware bin summaries. Other metrics average usable values per bin.
-/// Portable imports return the analyzed series embedded by FrameView Analyzer
+/// Portable imports return the analyzed series embedded by Frame Performance Analyzer
 /// directly, so a round-trip never reinterprets already-processed data.
 ///
 /// Raw capture time is deliberately compressed across excluded bins: chart X

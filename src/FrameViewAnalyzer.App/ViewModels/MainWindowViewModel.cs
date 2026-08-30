@@ -127,7 +127,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>Raised when a keyboard shortcut requests the Benchmark JSON export.</summary>
     public event EventHandler? ExportBenchmarkJsonRequested;
 
-    public string VersionText => $"FrameView Analyzer v{ReleaseInfo.InformationalVersion}";
+    public string VersionText => $"Frame Performance Analyzer v{ReleaseInfo.InformationalVersion}";
 
     public MainWindowViewModel(
         ISettingsStore settings,
