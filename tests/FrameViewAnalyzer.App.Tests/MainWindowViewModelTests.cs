@@ -677,6 +677,57 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task Quick_capture_selector_combines_custom_and_detected_names_immediately()
+    {
+        var (viewModel, settings, _, _, directory) = Create();
+        try
+        {
+            settings.Current = settings.Current with { CaptureDirectory = directory };
+            var path = WriteCapture(directory, "FrameView_GTA5_Enhanced_Log.csv");
+            await viewModel.ReloadCaptureFolderAsync();
+            Assert.Equal("GTA5_Enhanced", Assert.Single(viewModel.Captures).Display);
+
+            await viewModel.LoadBaseFromPathAsync(path);
+            viewModel.PersistMetadata(
+                viewModel.BaseSession!,
+                new ManualMetadata(BenchmarkName: "Ultra 4K run"));
+
+            var customized = Assert.Single(viewModel.Captures);
+            Assert.Equal("Ultra 4K run · GTA5_Enhanced", customized.Display);
+            Assert.Equal("GTA5_Enhanced", customized.DetectedDisplay);
+
+            // A folder refresh reads the same persisted metadata rather than
+            // falling back to the ambiguous detected name.
+            await viewModel.ReloadCaptureFolderAsync();
+            Assert.Equal(
+                "Ultra 4K run · GTA5_Enhanced",
+                Assert.Single(viewModel.Captures).Display);
+
+            viewModel.PersistMetadata(viewModel.BaseSession!, new ManualMetadata());
+            Assert.Equal("GTA5_Enhanced", Assert.Single(viewModel.Captures).Display);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Theory]
+    [InlineData("", "GTA5_Enhanced")]
+    [InlineData("gta5_enhanced", "GTA5_Enhanced")]
+    [InlineData("  Custom benchmark  ", "Custom benchmark · GTA5_Enhanced")]
+    public void Quick_capture_label_avoids_duplicates_and_trims_custom_names(
+        string customName,
+        string expected)
+    {
+        var actual = MainWindowViewModel.QuickCaptureDisplay(
+            "GTA5_Enhanced",
+            new ManualMetadata(BenchmarkName: customName));
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
     public async Task Empty_metadata_removes_the_entry_and_restores_detected_lines()
     {
         var (viewModel, _, _, dialogs, directory) = Create();

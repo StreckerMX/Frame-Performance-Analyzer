@@ -21,7 +21,10 @@ using FrameViewAnalyzer.Infrastructure.Stores;
 namespace FrameViewAnalyzer.App.ViewModels;
 
 /// <summary>One quick-capture option in the capture dropdown.</summary>
-public sealed record CaptureOption(string Path, string Display);
+public sealed record CaptureOption(
+    string Path,
+    string Display,
+    string DetectedDisplay = "");
 
 /// <summary>
 /// Main-window state: theme mode, the Base/Comparison session pair, session
@@ -207,9 +210,13 @@ public partial class MainWindowViewModel : ObservableObject
                     continue;
                 }
 
+                var detectedDisplay = CaptureFileNaming.SanitizeDisplayName(info.Name);
+                var identity = CaptureIdentityResolver.TryBuild(info.Path);
+                var manual = identity is null ? null : _metadataStore.Get(identity);
                 Captures.Add(new CaptureOption(
                     info.Path,
-                    CaptureFileNaming.SanitizeDisplayName(info.Name)));
+                    QuickCaptureDisplay(detectedDisplay, manual),
+                    detectedDisplay));
             }
 
             StatusText = Captures.Count == 0
@@ -701,7 +708,65 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         RefreshSessionCards();
+        RefreshQuickCaptureMetadata(session.Capture.Path, metadata);
         StatusText = $"METADATA SAVED  ·  {session.Capture.DisplayName}";
+    }
+
+    /// <summary>
+    /// Quick-selector label: keep the detected capture name visible while
+    /// leading with the user's benchmark name when one has been assigned.
+    /// </summary>
+    internal static string QuickCaptureDisplay(
+        string detectedDisplay,
+        ManualMetadata? manual)
+    {
+        var benchmarkName = manual?.BenchmarkName.Trim() ?? string.Empty;
+        return benchmarkName.Length == 0
+            || string.Equals(benchmarkName, detectedDisplay, StringComparison.OrdinalIgnoreCase)
+                ? detectedDisplay
+                : $"{benchmarkName} · {detectedDisplay}";
+    }
+
+    /// <summary>
+    /// Reflect metadata edits in the already-populated toolbar without
+    /// rescanning the folder or reloading the selected capture.
+    /// </summary>
+    private void RefreshQuickCaptureMetadata(string path, ManualMetadata? manual)
+    {
+        for (var index = 0; index < Captures.Count; index++)
+        {
+            var current = Captures[index];
+            if (!SameCapturePath(current.Path, path))
+            {
+                continue;
+            }
+
+            var detectedDisplay = current.DetectedDisplay.Length > 0
+                ? current.DetectedDisplay
+                : CaptureFileNaming.SanitizeDisplayName(Path.GetFileName(current.Path));
+            var updated = current with
+            {
+                Display = QuickCaptureDisplay(detectedDisplay, manual),
+                DetectedDisplay = detectedDisplay,
+            };
+            if (updated == current)
+            {
+                return;
+            }
+
+            var remainsSelected = SelectedCapture is { } selected
+                && SameCapturePath(selected.Path, path);
+            Captures[index] = updated;
+            if (remainsSelected)
+            {
+                // Bypass the generated change callback: this is a label-only
+                // update and must not load the capture a second time.
+                _selectedCapture = updated;
+                OnPropertyChanged(nameof(SelectedCapture));
+            }
+
+            return;
+        }
     }
 
     private ManualMetadata? ManualMetadataOf(SessionAnalysis? session)
