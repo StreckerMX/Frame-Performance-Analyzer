@@ -36,7 +36,7 @@ jobs:
 
           ## Code signing
 
-          FrameView Analyzer is applying to use SignPath Foundation for code signing. The integration is pending approval, so the binaries attached to this release remain unsigned and Windows SmartScreen may still show an unknown-publisher warning.
+          Frame Performance Analyzer is applying to use SignPath Foundation for code signing. The integration is pending approval, so the binaries attached to this release remain unsigned and Windows SmartScreen may still show an unknown-publisher warning.
 
           Once approved, official future Windows release binaries will use **Free code signing provided by SignPath.io, certificate by SignPath Foundation**. See the repository's `CODE_SIGNING_POLICY.md` for signing scope, build provenance, privacy, and verification details.
           EOF

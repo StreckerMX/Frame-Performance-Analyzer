@@ -100,11 +100,9 @@ public class MultiAnalysisRangeTests
             Assert.True(setup.ViewModel.AnalysisRange.IsEnabled);
             Assert.Contains("Applied to all 3 benchmarks", setup.ViewModel.AnalysisRange.AnalysisSummaryText);
 
-            setup.ViewModel.AnalysisRange.AutoGpuThresholdEnabled = false;
-            setup.ViewModel.AnalysisRange.GpuThreshold = 35.0;
-            setup.ViewModel.AnalysisRange.TrimBufferSeconds = 0.0;
+            // The single binary toggle applies immediately: off restores the
+            // complete raw capture for every Multi peer.
             setup.ViewModel.AnalysisRange.ExcludeTransitionsEnabled = false;
-            setup.ViewModel.AnalysisRange.ApplyNow();
 
             // Re-analysis runs off the UI thread (busy system); wait for it.
             await WaitUntilAsync(
@@ -116,10 +114,12 @@ public class MultiAnalysisRangeTests
             Assert.Equal(3, setup.ViewModel.Chart.SeriesList.Count);
             Assert.All(setup.ViewModel.MultiSessions, item =>
             {
-                Assert.False(item.Session.EffectiveOptions.AutoGpuThreshold);
-                Assert.Equal(35.0, item.Session.EffectiveOptions.GpuThreshold);
+                Assert.True(item.Session.EffectiveOptions.AutoGpuThreshold);
                 Assert.Equal(0.0, item.Session.EffectiveOptions.TrimBufferSeconds);
                 Assert.False(item.Session.EffectiveOptions.ExcludeTransitions);
+                Assert.Equal(
+                    item.Session.Diagnostics.TotalBins,
+                    item.Session.Diagnostics.VisibleBins);
             });
             Assert.Contains("REANALYZED", setup.ViewModel.StatusText);
             Assert.Contains("Applied to all 3 benchmarks", setup.ViewModel.AnalysisRange.AnalysisSummaryText);
@@ -148,9 +148,7 @@ public class MultiAnalysisRangeTests
             var previousThreshold = previous[0].EffectiveOptions.GpuThreshold;
             setup.Analysis.ThrowOnReanalyzeCall = 2;
 
-            setup.ViewModel.AnalysisRange.AutoGpuThresholdEnabled = false;
-            setup.ViewModel.AnalysisRange.GpuThreshold = 47.0;
-            setup.ViewModel.AnalysisRange.ApplyNow();
+            setup.ViewModel.AnalysisRange.ExcludeTransitionsEnabled = false;
 
             // Re-analysis runs off the UI thread (busy system); wait for the
             // failure handling to finish.
@@ -166,6 +164,7 @@ public class MultiAnalysisRangeTests
             }
 
             Assert.Equal(previousThreshold, setup.ViewModel.AnalysisRange.GpuThreshold);
+            Assert.True(setup.ViewModel.AnalysisRange.ExcludeTransitionsEnabled);
             Assert.Contains("Previous workspace kept", setup.ViewModel.StatusText);
             Assert.NotNull(setup.Dialogs.LastError);
             Assert.Contains("Multi analysis error", setup.Dialogs.LastError);

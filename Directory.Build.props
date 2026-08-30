@@ -10,8 +10,8 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
 
     <!-- Stable Windows file metadata used by SignPath artifact restrictions. -->
-    <Product>FrameView Analyzer</Product>
-    <AssemblyTitle>FrameView Analyzer</AssemblyTitle>
+    <Product>Frame Performance Analyzer</Product>
+    <AssemblyTitle>Frame Performance Analyzer</AssemblyTitle>
     <Description>Native Windows benchmark analysis for NVIDIA FrameView captures and NVIDIA App performance logs.</Description>
     <Company>StreckerMX</Company>
     <Authors>StreckerMX</Authors>
@@ -19,11 +19,11 @@
 
     <!-- Single source of truth for the product version.
          Changing this file triggers the release workflow; manual workflow runs are also supported.
-         Version/InformationalVersion = 3.1.4 (UI, startup log, and packaging
+         Version/InformationalVersion = 3.2.0 (UI, startup log, and packaging
          read this); AssemblyVersion/FileVersion stay numeric for Windows. -->
-    <VersionPrefix>3.1.4</VersionPrefix>
-    <AssemblyVersion>3.1.4.0</AssemblyVersion>
-    <FileVersion>3.1.4.0</FileVersion>
+    <VersionPrefix>3.2.0</VersionPrefix>
+    <AssemblyVersion>3.2.0.0</AssemblyVersion>
+    <FileVersion>3.2.0.0</FileVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 </Project>

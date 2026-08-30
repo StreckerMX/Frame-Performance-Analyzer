@@ -1,0 +1,87 @@
+<Window x:Class="FrameViewAnalyzer.App.Views.ThemedDialogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="440"
+        MinWidth="360"
+        MaxWidth="560"
+        SizeToContent="Height"
+        MaxHeight="480"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource WindowBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="{DynamicResource FontFamily.App}"
+        Icon="/FrameViewAnalyzer.App;component/assets/frameview-analyzer.ico">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="30" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border x:Name="IconBadge"
+                    Grid.Column="0"
+                    Width="26"
+                    Height="26"
+                    Margin="0,1,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    CornerRadius="13"
+                    Background="{DynamicResource PanelAltBrush}"
+                    BorderThickness="1.5">
+                <TextBlock x:Name="IconGlyph"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           FontSize="14"
+                           FontWeight="Bold" />
+            </Border>
+
+            <StackPanel Grid.Column="1" Margin="9,0,0,0">
+                <TextBlock x:Name="DialogHeading"
+                           FontSize="{DynamicResource FontSize.Title}"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"
+                           TextWrapping="Wrap" />
+                <ScrollViewer MaxHeight="240"
+                              Margin="0,7,0,0"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <TextBlock x:Name="DialogMessage"
+                               FontSize="{DynamicResource FontSize.Body}"
+                               Foreground="{DynamicResource TextSoftBrush}"
+                               LineHeight="17"
+                               TextWrapping="Wrap" />
+                </ScrollViewer>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="1"
+                Height="1"
+                Margin="0,14,0,10"
+                Background="{DynamicResource CardBorderBrush}" />
+
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button x:Name="CancelButton"
+                    MinWidth="78"
+                    Margin="0,0,7,0"
+                    Content="No"
+                    IsCancel="True"
+                    Visibility="Collapsed"
+                    Style="{StaticResource SecondaryButtonStyle}" />
+            <Button x:Name="PrimaryButton"
+                    MinWidth="78"
+                    Content="OK"
+                    IsDefault="True"
+                    Style="{StaticResource PrimaryButtonStyle}" />
+        </StackPanel>
+    </Grid>
+</Window>

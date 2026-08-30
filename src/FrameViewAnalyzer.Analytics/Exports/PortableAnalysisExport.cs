@@ -192,7 +192,7 @@ public static class PortableAnalysisExport
         if (document.FormatVersion != FormatVersion)
         {
             throw new InvalidDataException(
-                $"Unsupported FrameView Analyzer data format version {document.FormatVersion}. Expected {FormatVersion}.");
+                $"Unsupported Frame Performance Analyzer data format version {document.FormatVersion}. Expected {FormatVersion}.");
         }
 
         if (document.Sessions.Count == 0)

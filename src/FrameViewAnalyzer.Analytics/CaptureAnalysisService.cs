@@ -63,6 +63,23 @@ public sealed class CaptureAnalysisService : ICaptureAnalysisService
             options.ExcludeTransitions,
             minimumSamplesPerBin);
 
+        // GPU utilization is only the inexpensive first-pass loading gate. For
+        // FrameView logs, inspect the immediate internal gap edges with the
+        // other telemetry already present in the CSV (frame cadence, GPU
+        // power/clocks, CPU load/power/clocks, queue depth, latency/present
+        // timings, dropped frames and Frame Generation state). A real FPS dip
+        // is preserved unless multiple independent families agree that the
+        // application is changing operating state.
+        if (options.ExcludeTransitions && !CaptureSourceDetector.IsNvidiaAppPerformanceLog(capture))
+        {
+            profile = MultimetricTransitionRefiner.Refine(
+                capture,
+                samples,
+                rowsByBin,
+                bins,
+                profile);
+        }
+
         var metadata = ExtractMetadata(
             capture,
             samples,

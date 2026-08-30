@@ -132,12 +132,23 @@ public sealed class BusyState : IDisposable
     /// message must describe the real work; animated dots are added later by
     /// the presentation layer, never stored here.
     /// </summary>
-    public BusyScope Begin(string operation)
+    public BusyScope Begin(string operation) => BeginCore(operation, showImmediately: false);
+
+    /// <summary>
+    /// Opens a scope whose status bar and dim overlay become visible immediately.
+    /// Use this for deliberate user actions which are known to rebuild the
+    /// workspace, where a visible working state is preferable to the normal
+    /// no-flicker delay.
+    /// </summary>
+    public BusyScope BeginVisible(string operation) => BeginCore(operation, showImmediately: true);
+
+    private BusyScope BeginCore(string operation, bool showImmediately)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(operation);
 
         bool becameBusy;
         bool visibleTextChanged;
+        bool becameVisible = false;
         BusyScope scope;
         lock (_gate)
         {
@@ -149,11 +160,27 @@ public sealed class BusyState : IDisposable
             scope = new BusyScope(this, operation);
             _scopes.Add(scope);
             becameBusy = _scopes.Count == 1;
-            visibleTextChanged = !becameBusy && _busyVisible;
             if (becameBusy)
             {
-                _showTimer = new Timer(OnShowTimerTick, null, _displayDelay, Timeout.InfiniteTimeSpan);
+                if (showImmediately)
+                {
+                    StartVisibleTimers();
+                    becameVisible = true;
+                }
+                else
+                {
+                    _showTimer = new Timer(OnShowTimerTick, null, _displayDelay, Timeout.InfiniteTimeSpan);
+                }
             }
+            else if (showImmediately && !_busyVisible)
+            {
+                _showTimer?.Dispose();
+                _showTimer = null;
+                StartVisibleTimers();
+                becameVisible = true;
+            }
+
+            visibleTextChanged = !becameBusy && _busyVisible;
         }
 
         if (becameBusy)
@@ -161,10 +188,15 @@ public sealed class BusyState : IDisposable
             BusyChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        if (visibleTextChanged)
+        if (becameVisible || visibleTextChanged)
         {
             // The visible text follows the innermost operation.
             BusyVisibleChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        if (becameVisible)
+        {
+            EllipsisChanged?.Invoke(this, EventArgs.Empty);
         }
 
         return scope;
@@ -268,11 +300,19 @@ public sealed class BusyState : IDisposable
         }
     }
 
+    private void StartVisibleTimers()
+    {
+        _busyVisible = true;
+        _dots = 1;
+        _dotsTimer?.Dispose();
+        _dotsTimer = new Timer(OnDotsTimerTick, null, _ellipsisStep, _ellipsisStep);
+    }
+
     private void OnShowTimerTick(object? state)
     {
         lock (_gate)
         {
-            if (_disposed || _scopes.Count == 0)
+            if (_disposed || _scopes.Count == 0 || _busyVisible)
             {
                 _showTimer?.Dispose();
                 _showTimer = null;
@@ -283,9 +323,7 @@ public sealed class BusyState : IDisposable
             // delay, so it is worth showing.
             _showTimer?.Dispose();
             _showTimer = null;
-            _busyVisible = true;
-            _dots = 1;
-            _dotsTimer = new Timer(OnDotsTimerTick, null, _ellipsisStep, _ellipsisStep);
+            StartVisibleTimers();
         }
 
         BusyVisibleChanged?.Invoke(this, EventArgs.Empty);

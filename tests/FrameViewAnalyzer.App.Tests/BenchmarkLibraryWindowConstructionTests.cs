@@ -1,5 +1,7 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Library;
@@ -83,16 +85,23 @@ public class BenchmarkLibraryWindowConstructionTests
         return folder;
     }
 
-    private static BenchmarkLibraryWindow CreateWindow(Fixture fixture, string? captureDirectory)
+    private static BenchmarkLibraryWindow CreateWindow(
+        Fixture fixture,
+        string? captureDirectory,
+        BenchmarkBrowserMode mode = BenchmarkBrowserMode.Library,
+        IReadOnlyList<string>? initiallySelectedPaths = null,
+        string? excludedSelectionPath = null)
     {
         var libraryStore = new JsonLibraryStore(fixture.LibraryPath);
         var manualStore = new JsonManualMetadataStore(fixture.MetadataPath);
+        var settingsStore = new JsonSettingsStore(fixture.SettingsPath);
         return new BenchmarkLibraryWindow(
             libraryStore,
             manualStore,
             new CaptureFolderScanner(new FrameViewCsvReader()),
+            settingsStore,
             new LegacyDataImporter(
-                new JsonSettingsStore(fixture.SettingsPath),
+                settingsStore,
                 manualStore,
                 libraryStore,
                 fixture.Root,
@@ -101,7 +110,10 @@ public class BenchmarkLibraryWindowConstructionTests
             new DialogService(),
             new FrameViewCsvReader(),
             new CaptureAnalysisService(),
-            captureDirectory);
+            captureDirectory,
+            mode,
+            initiallySelectedPaths,
+            excludedSelectionPath);
     }
 
     private static BenchmarkLibraryViewModel ViewModelOf(BenchmarkLibraryWindow window) =>
@@ -255,6 +267,111 @@ public class BenchmarkLibraryWindowConstructionTests
                     Assert.Empty(viewModel.Rows);
                     Assert.Single(viewModel.GameOptions);
                     Assert.Equal(BenchmarkLibraryViewModel.AllValue, viewModel.SelectedGame);
+                }
+                finally
+                {
+                    window.Close();
+                }
+            }
+            finally
+            {
+                Cleanup(fixture);
+            }
+        });
+
+    [Fact]
+    public void Shared_browser_constructs_in_multi_mode_and_restores_the_current_order() =>
+        WpfStaTestHost.Run(() =>
+        {
+            WpfStaTestHost.EnsureApplication();
+            var fixture = CreateFixture();
+            try
+            {
+                SeedLibrary(
+                    fixture.LibraryPath,
+                    ("a", "GTA5", "1920x1080", "RTX 4090"),
+                    ("b", "Cyber", "3840x2160", "RTX 5090"));
+                var selected = new[] { "C:/captures/b.csv", "C:/captures/a.csv" };
+                var window = CreateWindow(
+                    fixture,
+                    captureDirectory: null,
+                    mode: BenchmarkBrowserMode.Multi,
+                    initiallySelectedPaths: selected);
+                try
+                {
+                    Assert.Equal("Select benchmarks", window.Title);
+                    window.Show();
+                    var viewModel = ViewModelOf(window);
+                    PumpUntil(
+                        () => viewModel.CountText == "2 record(s)",
+                        TimeSpan.FromSeconds(20));
+
+                    Assert.Equal(BenchmarkBrowserMode.Multi, viewModel.Mode);
+                    Assert.True(viewModel.IsSelectionMode);
+                    Assert.False(viewModel.ShowLibraryActions);
+                    Assert.Equal(2, viewModel.SelectedCount);
+                    Assert.True(viewModel.CanConfirmSelectionNow);
+
+                    IReadOnlyList<string>? requested = null;
+                    viewModel.SelectionConfirmedRequested += (_, paths) => requested = paths;
+                    viewModel.ConfirmSelectionCommand.Execute(null);
+
+                    Assert.NotNull(requested);
+                    Assert.Equal(selected, requested!.ToArray());
+                }
+                finally
+                {
+                    if (window.IsVisible)
+                    {
+                        window.Close();
+                    }
+                }
+            }
+            finally
+            {
+                Cleanup(fixture);
+            }
+        });
+
+    [Fact]
+    public void Comparison_browser_uses_the_shared_themed_scrollbar_and_disables_current_base() =>
+        WpfStaTestHost.Run(() =>
+        {
+            WpfStaTestHost.EnsureApplication();
+            var fixture = CreateFixture();
+            try
+            {
+                SeedLibrary(
+                    fixture.LibraryPath,
+                    ("a", "GTA5", "1920x1080", "RTX 4090"),
+                    ("b", "Cyber", "3840x2160", "RTX 5090"));
+                var window = CreateWindow(
+                    fixture,
+                    captureDirectory: null,
+                    mode: BenchmarkBrowserMode.PairComparison,
+                    excludedSelectionPath: "C:/captures/a.csv");
+                try
+                {
+                    window.Show();
+                    var viewModel = ViewModelOf(window);
+                    PumpUntil(
+                        () => viewModel.CountText == "2 record(s)",
+                        TimeSpan.FromSeconds(20));
+
+                    Assert.Equal("Select comparison benchmark", window.Title);
+                    Assert.True(viewModel.IsComparisonSelectionMode);
+                    var currentBase = Assert.Single(
+                        viewModel.Rows,
+                        row => row.Record.Identity == "a");
+                    Assert.True(currentBase.IsCurrentBase);
+                    Assert.False(currentBase.Selectable);
+
+                    Assert.IsType<ScrollViewer>(window.FindName("BenchmarkRowsScrollViewer"));
+                    var globalStyle = Assert.IsType<Style>(
+                        Application.Current!.TryFindResource(typeof(ScrollBar)));
+                    Assert.Contains(
+                        globalStyle.Setters.OfType<Setter>(),
+                        setter => setter.Property == ScrollBar.TemplateProperty);
                 }
                 finally
                 {

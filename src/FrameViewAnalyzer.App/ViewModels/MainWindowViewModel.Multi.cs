@@ -232,6 +232,8 @@ public partial class MainWindowViewModel
 
         var previous = MultiSessions.ToList();
         var generation = Interlocked.Increment(ref _analysisGeneration);
+        using var busyScope = _busy.BeginVisible("Reanalyzing benchmarks");
+        await Task.Yield();
         try
         {
             // Re-analysis is CPU-bound; run it off the UI thread so the busy

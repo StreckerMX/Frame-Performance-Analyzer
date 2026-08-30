@@ -9,7 +9,7 @@ using FrameViewAnalyzer.Core.Models;
 namespace FrameViewAnalyzer.Infrastructure.Exports;
 
 /// <summary>
-/// Reads and writes FrameView Analyzer portable analyzed-data snapshots.
+/// Reads and writes Frame Performance Analyzer portable analyzed-data snapshots.
 /// JSON is the rich structured representation; CSV is a tidy multi-record
 /// representation (document/session/point/statistic rows) carrying the same
 /// information and therefore supports the same import round-trip.
@@ -139,7 +139,7 @@ public static class PortableAnalysisFile
             ? ReadJson(path)
             : extension.Equals(".csv", StringComparison.OrdinalIgnoreCase)
                 ? ReadCsv(path)
-                : throw new InvalidDataException("Only FrameView Analyzer .json and .csv data exports can be imported.");
+                : throw new InvalidDataException("Only Frame Performance Analyzer .json and .csv data exports can be imported.");
     }
 
     public static PortableAnalysisDocument ReadJson(string path)
@@ -156,7 +156,7 @@ public static class PortableAnalysisFile
         }
         catch (JsonException error)
         {
-            throw new InvalidDataException("The selected file is not a valid FrameView Analyzer analyzed-data JSON export.", error);
+            throw new InvalidDataException("The selected file is not a valid Frame Performance Analyzer analyzed-data JSON export.", error);
         }
     }
 
@@ -174,7 +174,7 @@ public static class PortableAnalysisFile
             || !header.Contains("format_version", StringComparer.Ordinal))
         {
             throw new InvalidDataException(
-                "This CSV is not a portable FrameView Analyzer analyzed-data export. Older Statistics CSV files cannot recreate chart data.");
+                "This CSV is not a portable Frame Performance Analyzer analyzed-data export. Older Statistics CSV files cannot recreate chart data.");
         }
 
         var sessions = new Dictionary<int, SessionAccumulator>();

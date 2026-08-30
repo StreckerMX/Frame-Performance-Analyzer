@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -36,6 +37,7 @@ public partial class MainWindow : Window
     private readonly IFrameViewCsvReader _reader;
     private readonly ICaptureAnalysisService _analysis;
     private readonly BusyState _busy;
+    private int _framePointGeneration;
 
     public MainWindow(
         MainWindowViewModel viewModel,
@@ -130,14 +132,33 @@ public partial class MainWindow : Window
             {
                 ChartView.ShowData(_viewModel.Chart.SelectedMetric, _viewModel.Chart.SeriesList);
                 SyncInteractions();
+                if (_viewModel.Chart.MarkersVisible)
+                {
+                    _ = RefreshFramePointsAsync();
+                }
             }
             else
             {
+                Interlocked.Increment(ref _framePointGeneration);
+                _viewModel.Chart.ClearFramePointSeries();
                 ChartView.Clear();
             }
         }
-        else if (e.PropertyName == nameof(ChartViewModel.MarkersVisible)
-                 || e.PropertyName == nameof(ChartViewModel.WheelZoomEnabled)
+        else if (e.PropertyName == nameof(ChartViewModel.MarkersVisible))
+        {
+            SyncInteractions();
+            if (_viewModel.Chart.MarkersVisible)
+            {
+                _ = RefreshFramePointsAsync();
+            }
+            else
+            {
+                Interlocked.Increment(ref _framePointGeneration);
+                _viewModel.Chart.ClearFramePointSeries();
+                ChartView.ClearFramePoints();
+            }
+        }
+        else if (e.PropertyName == nameof(ChartViewModel.WheelZoomEnabled)
                  || e.PropertyName == nameof(ChartViewModel.PanEnabled))
         {
             SyncInteractions();
@@ -148,6 +169,86 @@ public partial class MainWindow : Window
         _viewModel.Chart.WheelZoomEnabled,
         _viewModel.Chart.PanEnabled,
         _viewModel.Chart.MarkersVisible);
+
+    /// <summary>
+    /// Prepares frame-level detail only after the user enables Frame points.
+    /// The builder is cached per immutable session + metric, so normal loading
+    /// performs no extra work and repeated requests are effectively instant.
+    /// A generation guard prevents stale work from replacing a newer metric or
+    /// workspace selection.
+    /// </summary>
+    private async Task RefreshFramePointsAsync()
+    {
+        var generation = Interlocked.Increment(ref _framePointGeneration);
+        var chart = _viewModel.Chart;
+        var metric = chart.SelectedMetric;
+        if (!chart.MarkersVisible || !chart.HasData || metric is null)
+        {
+            chart.ClearFramePointSeries();
+            ChartView.ClearFramePoints();
+            return;
+        }
+
+        var sourceSeries = chart.SeriesList
+            .Where(series => series.SourceSession is not null)
+            .ToList();
+        if (sourceSeries.Count == 0)
+        {
+            chart.ClearFramePointSeries();
+            ChartView.ClearFramePoints();
+            return;
+        }
+
+        try
+        {
+            var metricId = metric.Id;
+            var frameSeries = await _busy.RunOnThreadPoolAsync(
+                "Preparing frame points",
+                () =>
+                {
+                    var result = new List<MetricSeries>(sourceSeries.Count);
+                    foreach (var source in sourceSeries)
+                    {
+                        var session = source.SourceSession!;
+                        var built = FramePointSeriesBuilder.Build(session, metricId);
+                        if (built.Y.Length == 0)
+                        {
+                            continue;
+                        }
+
+                        result.Add(built with
+                        {
+                            Label = source.Label,
+                            Role = source.Role,
+                            WorkspaceIndex = source.WorkspaceIndex,
+                            IsReference = source.IsReference,
+                        });
+                    }
+
+                    return (IReadOnlyList<MetricSeries>)result;
+                });
+
+            if (generation != Volatile.Read(ref _framePointGeneration)
+                || !chart.MarkersVisible
+                || chart.SelectedMetric?.Id != metricId)
+            {
+                return;
+            }
+
+            chart.SetFramePointSeries(frameSeries);
+            ChartView.SetFramePoints(frameSeries);
+        }
+        catch (Exception error)
+        {
+            if (generation == Volatile.Read(ref _framePointGeneration))
+            {
+                chart.ClearFramePointSeries();
+                ChartView.ClearFramePoints();
+                AppLog.ErrorOperation("Frame point preparation", error);
+                _viewModel.StatusText = "FRAME POINTS UNAVAILABLE";
+            }
+        }
+    }
 
     private void ResetZoom_Click(object sender, RoutedEventArgs e) => ChartView.ResetZoom();
 
@@ -238,26 +339,59 @@ public partial class MainWindow : Window
         return new SessionDetailsWindow(viewModel);
     }
 
-    private void Library_Click(object sender, RoutedEventArgs e)
+    private void Library_Click(object sender, RoutedEventArgs e) =>
+        OpenBenchmarkBrowser(BenchmarkBrowserMode.Library);
+
+    private void LoadBaseBrowser_Click(object sender, RoutedEventArgs e) =>
+        OpenBenchmarkBrowser(BenchmarkBrowserMode.PairBase);
+
+    private void LoadComparisonBrowser_Click(object sender, RoutedEventArgs e)
     {
-        // Opening the Library is instant; MainWindow never turns busy for it.
-        // The Library window owns whatever loading it performs.
+        if (_viewModel.BaseSession is null)
+        {
+            _dialogs.ShowInfo(
+                "Benchmark browser",
+                "Load a Base benchmark before selecting a comparison.");
+            return;
+        }
+
+        OpenBenchmarkBrowser(
+            BenchmarkBrowserMode.PairComparison,
+            excludedSelectionPath: _viewModel.BaseSession.Capture.Path);
+    }
+
+    /// <summary>
+    /// Opens the same searchable/indexed browser for Library management,
+    /// Pair slot selection, or equal-peer Multi selection.
+    /// </summary>
+    private void OpenBenchmarkBrowser(
+        BenchmarkBrowserMode mode,
+        IReadOnlyList<string>? initiallySelectedPaths = null,
+        string? excludedSelectionPath = null)
+    {
+        // Opening the browser is instant; it owns its folder refresh and busy
+        // presentation. MainWindow becomes busy only after a selection closes it.
         if (_busy.IsBusy)
         {
             return;
         }
 
-        var captureDirectory = _settings.Load().CaptureDirectory;
+        var captureDirectory = _settings.Load().CaptureDirectory
+            ?? PlatformFolders.FrameViewDirectory();
         var library = new BenchmarkLibraryWindow(
             _libraryStore,
             _manualMetadataStore,
             _scanner,
+            _settings,
             _legacyImporter,
             _exportService,
             _dialogs,
             _reader,
             _analysis,
-            captureDirectory)
+            captureDirectory,
+            mode,
+            initiallySelectedPaths,
+            excludedSelectionPath)
         {
             Owner = this,
         };
@@ -269,8 +403,27 @@ public partial class MainWindow : Window
             await _viewModel.LoadBaseFromPathAsync(first);
             await _viewModel.LoadComparisonFromPathAsync(second);
         };
+        library.SelectionConfirmedRequested += async (selectionMode, paths) =>
+        {
+            switch (selectionMode)
+            {
+                case BenchmarkBrowserMode.PairBase:
+                    await _viewModel.LoadBaseFromPathAsync(paths[0]);
+                    break;
+                case BenchmarkBrowserMode.PairComparison:
+                    await _viewModel.LoadComparisonFromPathAsync(paths[0]);
+                    break;
+                case BenchmarkBrowserMode.Multi:
+                    await _viewModel.LoadMultiBenchmarksAsync(paths);
+                    break;
+            }
+        };
         library.ShowDialog();
     }
+
+    /// <summary>Keeps the main toolbar synchronized with folder changes made in the browser.</summary>
+    internal Task RefreshCaptureFolderFromSettingsAsync() =>
+        _viewModel.ReloadCaptureFolderAsync();
 
     private void ExportPng_Click(object sender, RoutedEventArgs e)
     {
@@ -355,16 +508,19 @@ public partial class MainWindow : Window
         }
 
         var isMultiReport = selection.Sessions.All(option => option.IsMultiPeer);
+        var useFramePoints = _viewModel.Chart.MarkersVisible;
         var byId = selection.Sessions
             .SelectMany(option => option.Session.Catalog)
             .GroupBy(metric => metric.Id, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
 
-        // Series extraction over full-resolution samples is CPU-bound; run it
-        // off the UI thread so the status bar keeps animating.
+        // Build the report from the same data representation the user is
+        // inspecting. Frame-point mode sources true analyzed frames for every
+        // selected metric; ReportPlotBuilder later performs visualization-only
+        // extrema-preserving decimation to fit the PNG pixel budget.
         var groups = await _busy.RunOnThreadPoolAsync(
             "Preparing report",
-            () => BuildReportGroups(selection, byId, isMultiReport));
+            () => BuildReportGroups(selection, byId, isMultiReport, useFramePoints));
 
         if (groups.Count == 0)
         {
@@ -389,7 +545,7 @@ public partial class MainWindow : Window
             // ChartStyle reads WPF application resources; capture it on the
             // UI thread, then render and encode the PNG off the UI thread.
             var style = ChartStyle.FromApplicationResources();
-            var header = BuildReportHeader(selection);
+            var header = BuildReportHeader(selection, useFramePoints);
             await _busy.RunOnThreadPoolAsync("Exporting report", () =>
             {
                 var multiplot = ReportPlotBuilder.Build(groups, style);
@@ -434,7 +590,8 @@ public partial class MainWindow : Window
     private static List<ReportPlotBuilder.ReportGroup> BuildReportGroups(
         ExportReportSelection selection,
         IReadOnlyDictionary<string, FrameViewAnalyzer.Core.Metrics.MetricDefinition> byId,
-        bool isMultiReport)
+        bool isMultiReport,
+        bool useFramePoints)
     {
         var groups = new List<ReportPlotBuilder.ReportGroup>();
         foreach (var metricId in selection.MetricIds)
@@ -447,7 +604,7 @@ public partial class MainWindow : Window
             var seriesList = new List<MetricSeries>();
             foreach (var option in selection.Sessions)
             {
-                var series = SeriesBuilder.Build(option.Session, metricId);
+                var series = ReportSeriesBuilder.Build(option.Session, metricId, useFramePoints);
                 if (series.Y.Length == 0)
                 {
                     continue;
@@ -474,7 +631,9 @@ public partial class MainWindow : Window
         return groups;
     }
 
-    private ReportPlotBuilder.ReportHeader BuildReportHeader(ExportReportSelection selection)
+    private ReportPlotBuilder.ReportHeader BuildReportHeader(
+        ExportReportSelection selection,
+        bool useFramePoints)
     {
         var first = selection.Sessions[0];
         var headerSession = first.Session;
@@ -528,7 +687,8 @@ public partial class MainWindow : Window
             lines,
             UseProfessionalLayout: true,
             IsMultiReport: isMultiReport,
-            ManualMetadataByPath: manualMetadataByPath);
+            ManualMetadataByPath: manualMetadataByPath,
+            UseFramePoints: useFramePoints);
     }
 
     private async void ExportCsv_Click(object sender, RoutedEventArgs e)

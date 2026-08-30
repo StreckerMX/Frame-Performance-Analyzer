@@ -12,7 +12,6 @@ public partial class AnalysisRangeViewModel
     /// </summary>
     public void AttachPortable(IReadOnlyList<SessionAnalysis> sessions, bool isMultiWorkspace)
     {
-        _debounce.Stop();
         _isMultiSessionMode = isMultiWorkspace;
         _suppressEvents = true;
         try
@@ -31,6 +30,11 @@ public partial class AnalysisRangeViewModel
             GpuThreshold = Math.Clamp(options.GpuThreshold, MinGpuThreshold, MaxGpuThreshold);
             TrimBufferSeconds = Math.Clamp(options.TrimBufferSeconds, MinTrimSeconds, MaxTrimSeconds);
             ExcludeTransitionsEnabled = options.ExcludeTransitions;
+            FilterMethodText = options.ExcludeTransitions
+                ? "Imported filtered data · Read-only"
+                : options.TrimBufferSeconds <= 0
+                    ? "Imported raw data · Read-only"
+                    : "Imported legacy data · Read-only";
             FilterHelpText = "imported analyzed data is read-only; load the original capture to change filtering";
             AnalysisSummaryText = sessions.Count == 1
                 ? "Imported analyzed-data snapshot  ·  Analysis controls are locked to the exported data."

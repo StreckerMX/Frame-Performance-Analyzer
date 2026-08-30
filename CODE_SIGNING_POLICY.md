@@ -2,7 +2,7 @@
 
 ## Status
 
-FrameView Analyzer is applying for the SignPath Foundation Open Source Code Signing program.
+Frame Performance Analyzer is applying for the SignPath Foundation Open Source Code Signing program.
 
 Once the project is approved, release binaries will use **Free code signing provided by SignPath.io, certificate by SignPath Foundation**.
 
@@ -10,11 +10,11 @@ Until approval and pipeline integration are complete, existing release binaries 
 
 ## Signing scope
 
-Only official FrameView Analyzer release artifacts built from this repository are eligible for signing.
+Only official Frame Performance Analyzer release artifacts built from this repository are eligible for signing.
 
 - Source repository: `https://github.com/StreckerMX/FrameView-Analyzer`
-- Signed product: `FrameView Analyzer`
-- Primary signed binary: `FrameViewAnalyzer.exe`
+- Signed product: `Frame Performance Analyzer`
+- Primary signed binary: `FramePerformanceAnalyzer.exe`
 - Build system: GitHub Actions on GitHub-hosted Windows runners
 - Release source: the repository's versioned release workflow
 
@@ -22,7 +22,7 @@ The project will not use the SignPath Foundation certificate to sign unrelated p
 
 ## Team roles
 
-FrameView Analyzer is currently maintained by a single project owner.
+Frame Performance Analyzer is currently maintained by a single project owner.
 
 - **Committer / author:** [StreckerMX](https://github.com/StreckerMX)
 - **Reviewer:** [StreckerMX](https://github.com/StreckerMX)
@@ -38,7 +38,7 @@ After SignPath integration is enabled, signing will happen before the final ZIP 
 
 ## Privacy
 
-FrameView Analyzer does not include telemetry and does not make network calls during normal operation.
+Frame Performance Analyzer does not include telemetry and does not make network calls during normal operation.
 
 **This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.**
 
@@ -46,7 +46,7 @@ Application settings, benchmark metadata, Library records, and logs are stored l
 
 ## System changes and uninstall
 
-FrameView Analyzer is distributed as a portable, self-contained Windows x64 application. It does not require an installer and does not modify system configuration as part of installation.
+Frame Performance Analyzer is distributed as a portable, self-contained Windows x64 application. It does not require an installer and does not modify system configuration as part of installation.
 
 To uninstall it, delete the extracted application folder. Local application data can optionally be removed from the locations documented in `docs/RELEASE-README.md`.
 

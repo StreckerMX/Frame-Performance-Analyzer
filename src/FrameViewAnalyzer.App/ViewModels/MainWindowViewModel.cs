@@ -21,7 +21,10 @@ using FrameViewAnalyzer.Infrastructure.Stores;
 namespace FrameViewAnalyzer.App.ViewModels;
 
 /// <summary>One quick-capture option in the capture dropdown.</summary>
-public sealed record CaptureOption(string Path, string Display);
+public sealed record CaptureOption(
+    string Path,
+    string Display,
+    string DetectedDisplay = "");
 
 /// <summary>
 /// Main-window state: theme mode, the Base/Comparison session pair, session
@@ -91,6 +94,8 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private CaptureOption? _selectedCapture;
 
+    private bool _suppressSelectedCaptureLoad;
+
     public ObservableCollection<CaptureOption> Captures { get; } = [];
 
     public ChartViewModel Chart { get; }
@@ -122,7 +127,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>Raised when a keyboard shortcut requests the Benchmark JSON export.</summary>
     public event EventHandler? ExportBenchmarkJsonRequested;
 
-    public string VersionText => $"FrameView Analyzer v{ReleaseInfo.InformationalVersion}";
+    public string VersionText => $"Frame Performance Analyzer v{ReleaseInfo.InformationalVersion}";
 
     public MainWindowViewModel(
         ISettingsStore settings,
@@ -174,7 +179,7 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnSelectedCaptureChanged(CaptureOption? value)
     {
         // Switching captures mid-operation would race the loader.
-        if (value is not null && !_busy.IsBusy)
+        if (value is not null && !_busy.IsBusy && !_suppressSelectedCaptureLoad)
         {
             _ = LoadBaseFromPathAsync(value.Path);
         }
@@ -207,9 +212,13 @@ public partial class MainWindowViewModel : ObservableObject
                     continue;
                 }
 
+                var detectedDisplay = CaptureFileNaming.SanitizeDisplayName(info.Name);
+                var identity = CaptureIdentityResolver.TryBuild(info.Path);
+                var manual = identity is null ? null : _metadataStore.Get(identity);
                 Captures.Add(new CaptureOption(
                     info.Path,
-                    CaptureFileNaming.SanitizeDisplayName(info.Name)));
+                    QuickCaptureDisplay(detectedDisplay, manual),
+                    detectedDisplay));
             }
 
             StatusText = Captures.Count == 0
@@ -221,6 +230,9 @@ public partial class MainWindowViewModel : ObservableObject
             StatusText = "READY  ·  Capture folder unavailable";
         }
     }
+
+    /// <summary>Refreshes the toolbar after another app window changes the shared folder setting.</summary>
+    public Task ReloadCaptureFolderAsync() => RefreshCapturesAsync();
 
     [RelayCommand]
     private async Task ChooseCaptureFolderAsync()
@@ -305,8 +317,20 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>Loads a comparison by path (Library "Load as Comparison").</summary>
-    public Task LoadComparisonFromPathAsync(string path) =>
-        _busy.RunAsync("Loading comparison capture", () => LoadComparisonFromPathCoreAsync(path));
+    public Task LoadComparisonFromPathAsync(string path)
+    {
+        if (BaseSession is not null && SameCapturePath(BaseSession.Capture.Path, path))
+        {
+            _dialogs.ShowInfo(
+                "Benchmark comparison",
+                "Base and Comparison must be different benchmarks.");
+            return Task.CompletedTask;
+        }
+
+        return _busy.RunAsync(
+            "Loading comparison capture",
+            () => LoadComparisonFromPathCoreAsync(path));
+    }
 
     private async Task LoadComparisonFromPathCoreAsync(string path)
     {
@@ -373,6 +397,21 @@ public partial class MainWindowViewModel : ObservableObject
             or InvalidOperationException)
         {
             // Library bookkeeping is best-effort; loading must never fail.
+        }
+    }
+
+    private static bool SameCapturePath(string first, string second)
+    {
+        try
+        {
+            return string.Equals(
+                Path.GetFullPath(first).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                Path.GetFullPath(second).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception error) when (error is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return string.Equals(first, second, StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -466,6 +505,8 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         var generation = Interlocked.Increment(ref _analysisGeneration);
+        using var busyScope = _busy.BeginVisible("Reanalyzing benchmark");
+        await Task.Yield();
         try
         {
             var previousBase = BaseSession;
@@ -669,7 +710,72 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         RefreshSessionCards();
+        RefreshQuickCaptureMetadata(session.Capture.Path, metadata);
         StatusText = $"METADATA SAVED  ·  {session.Capture.DisplayName}";
+    }
+
+    /// <summary>
+    /// Quick-selector label: keep the detected capture name visible while
+    /// leading with the user's benchmark name when one has been assigned.
+    /// </summary>
+    internal static string QuickCaptureDisplay(
+        string detectedDisplay,
+        ManualMetadata? manual)
+    {
+        var benchmarkName = manual?.BenchmarkName.Trim() ?? string.Empty;
+        return benchmarkName.Length == 0
+            || string.Equals(benchmarkName, detectedDisplay, StringComparison.OrdinalIgnoreCase)
+                ? detectedDisplay
+                : $"{benchmarkName} · {detectedDisplay}";
+    }
+
+    /// <summary>
+    /// Reflect metadata edits in the already-populated toolbar without
+    /// rescanning the folder or reloading the selected capture.
+    /// </summary>
+    private void RefreshQuickCaptureMetadata(string path, ManualMetadata? manual)
+    {
+        for (var index = 0; index < Captures.Count; index++)
+        {
+            var current = Captures[index];
+            if (!SameCapturePath(current.Path, path))
+            {
+                continue;
+            }
+
+            var detectedDisplay = current.DetectedDisplay.Length > 0
+                ? current.DetectedDisplay
+                : CaptureFileNaming.SanitizeDisplayName(Path.GetFileName(current.Path));
+            var updated = current with
+            {
+                Display = QuickCaptureDisplay(detectedDisplay, manual),
+                DetectedDisplay = detectedDisplay,
+            };
+            if (updated == current)
+            {
+                return;
+            }
+
+            var remainsSelected = SelectedCapture is { } selected
+                && SameCapturePath(selected.Path, path);
+            Captures[index] = updated;
+            if (remainsSelected)
+            {
+                // This is a label-only update and must not load the capture a
+                // second time through OnSelectedCaptureChanged.
+                _suppressSelectedCaptureLoad = true;
+                try
+                {
+                    SelectedCapture = updated;
+                }
+                finally
+                {
+                    _suppressSelectedCaptureLoad = false;
+                }
+            }
+
+            return;
+        }
     }
 
     private ManualMetadata? ManualMetadataOf(SessionAnalysis? session)

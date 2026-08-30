@@ -199,7 +199,8 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsHighlighted" Value="True">
-                            <Setter TargetName="ItemChrome" Property="Background" Value="{DynamicResource ButtonHoverBrush}" />
+                            <Setter TargetName="ItemChrome" Property="Background" Value="{DynamicResource AccentDimBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="ItemChrome" Property="Background" Value="{DynamicResource AccentDimBrush}" />

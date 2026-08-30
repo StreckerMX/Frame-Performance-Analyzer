@@ -30,3 +30,27 @@ jobs:
 
       - name: Test (Release)
         run: dotnet test FrameViewAnalyzer.sln --configuration Release --no-build
+
+      - name: Validate GitHub release package
+        shell: pwsh
+        run: ./scripts/package-release.ps1 -SkipBuildAndTest
+
+      - name: Verify GitHub release artifact contract
+        shell: pwsh
+        run: |
+          $version = (dotnet msbuild src/FrameViewAnalyzer.App/FrameViewAnalyzer.App.csproj -getProperty:Version).Trim()
+          $zip = "artifacts/release/FramePerformanceAnalyzer-v$version-win-x64.zip"
+          $checksum = "$zip.sha256"
+          if (-not (Test-Path $zip)) { throw "Missing release ZIP: $zip" }
+          if (-not (Test-Path $checksum)) { throw "Missing release checksum: $checksum" }
+
+          $expanded = "artifacts/release/validation"
+          if (Test-Path $expanded) { Remove-Item $expanded -Recurse -Force }
+          Expand-Archive $zip $expanded
+          if (-not (Test-Path "$expanded/FramePerformanceAnalyzer.exe")) {
+            throw 'FramePerformanceAnalyzer.exe is missing from the release ZIP.'
+          }
+
+          $expected = ((Get-Content $checksum -Raw) -split '\s+')[0]
+          $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($expected -ne $actual) { throw 'Release ZIP checksum does not match.' }

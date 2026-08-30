@@ -79,18 +79,31 @@ public partial class App : Application
             var window = _services.GetRequiredService<MainWindow>();
             window.Show();
             Log.Information(
-                "FrameView Analyzer {Version} started",
+                "Frame Performance Analyzer {Version} started",
                 ReleaseInfo.InformationalVersion);
         }
         catch (Exception error)
         {
-            // Controlled startup failure: log it, tell the user, and stop.
-            Log.Fatal(error, "FrameView Analyzer startup failed");
-            MessageBox.Show(
-                $"The application could not start.\n\n{error.Message}",
-                "FrameView Analyzer",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            // Controlled startup failure: use the themed dialog whenever the
+            // service provider exists. A native MessageBox remains only as the
+            // last-resort path for failures that occur before UI services can
+            // be constructed at all.
+            Log.Fatal(error, "Frame Performance Analyzer startup failed");
+            if (_services?.GetService<IDialogService>() is { } dialogs)
+            {
+                dialogs.ShowError(
+                    "Frame Performance Analyzer",
+                    $"The application could not start.\n\n{error.Message}");
+            }
+            else
+            {
+                MessageBox.Show(
+                    $"The application could not start.\n\n{error.Message}",
+                    "Frame Performance Analyzer",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+
             Shutdown(1);
         }
     }
@@ -103,7 +116,7 @@ public partial class App : Application
         }
         finally
         {
-            Log.Information("FrameView Analyzer exiting");
+            Log.Information("Frame Performance Analyzer exiting");
             AppLog.Close();
         }
 

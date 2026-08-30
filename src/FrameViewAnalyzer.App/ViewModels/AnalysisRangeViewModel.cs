@@ -1,16 +1,16 @@
-using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Filtering;
 using FrameViewAnalyzer.Core.Formatting;
+using FrameViewAnalyzer.Core.Models;
 
 namespace FrameViewAnalyzer.App.ViewModels;
 
 /// <summary>
-/// Analysis-range controls mirroring the Python reference rail: automatic or
-/// manual GPU threshold, edge trim, and transition exclusion. The view model
-/// holds no analytics logic — it snapshots AnalysisOptions and raises the
-/// appropriate debounced event so the owner re-analyzes Pair or Multi sessions.
+/// Binary timeline-data mode: raw capture data or the complete automatic
+/// Precision filtering pipeline. Legacy option properties remain available for
+/// imported snapshots, but live re-analysis always uses one canonical option
+/// set per mode.
 /// </summary>
 public partial class AnalysisRangeViewModel : ObservableObject
 {
@@ -19,12 +19,15 @@ public partial class AnalysisRangeViewModel : ObservableObject
     public const double MinTrimSeconds = 0.0;
     public const double MaxTrimSeconds = 10.0;
 
-    /// <summary>Debounce for continuously-changing controls (sliders).</summary>
-    public static readonly TimeSpan ChangeDebounce = TimeSpan.FromMilliseconds(400);
+    private const string PrecisionHelpText =
+        "Automatically detects loading screens and FPS outliers, validates doubtful transition edges with available FrameView telemetry, and trims only the outer 1.0 s capture edges";
 
-    private readonly DispatcherTimer _debounce;
+    private const string RawHelpText =
+        "No GPU gate, FPS-outlier removal, transition validation, or edge trim is applied";
+
     private bool _suppressEvents;
     private bool _isMultiSessionMode;
+    private bool _supportsMultimetricValidation;
 
     [ObservableProperty]
     private bool _isEnabled;
@@ -42,63 +45,79 @@ public partial class AnalysisRangeViewModel : ObservableObject
     private bool _excludeTransitionsEnabled = true;
 
     [ObservableProperty]
-    private string _filterHelpText =
-        "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)";
+    private string _filterHelpText = PrecisionHelpText;
+
+    [ObservableProperty]
+    private string _filterMethodText = "No active filter";
 
     [ObservableProperty]
     private string _analysisSummaryText = "Load a capture to configure the analysis range.";
 
-    /// <summary>Raised once per debounce window when Pair controls change.</summary>
+    /// <summary>Raised immediately when the Pair data mode changes.</summary>
     public event EventHandler<AnalysisOptions>? OptionsChanged;
 
-    /// <summary>Raised once per debounce window when Multi controls change.</summary>
+    /// <summary>Raised immediately when the Multi data mode changes.</summary>
     public event EventHandler<AnalysisOptions>? MultiOptionsChanged;
 
-    public AnalysisRangeViewModel()
-    {
-        _debounce = new DispatcherTimer { Interval = ChangeDebounce };
-        _debounce.Tick += (_, _) =>
-        {
-            _debounce.Stop();
-            RaiseOptionsChanged();
-        };
-    }
-
-    /// <summary>Effective manual slider label, e.g. "10%".</summary>
-    public string GpuThresholdLabel => $"{GpuThreshold:F0}%";
+    /// <summary>Effective GPU gate label, e.g. "GPU gate: 10%".</summary>
+    public string GpuThresholdLabel => $"GPU gate: {GpuThreshold:F0}%";
 
     /// <summary>Effective trim label, e.g. "Trim 1.0 s".</summary>
     public string TrimLabel => $"Trim {TrimBufferSeconds:F1} s";
 
-    /// <summary>The manual GPU slider is only usable when a session is loaded and automatic mode is off.</summary>
-    public bool ManualGpuThresholdEnabled => IsEnabled && !AutoGpuThresholdEnabled;
+    /// <summary>GPU filtering controls are meaningful only while exclusion is enabled.</summary>
+    public bool FilteringControlsEnabled => IsEnabled && ExcludeTransitionsEnabled;
+
+    /// <summary>The manual GPU slider is usable only when automatic thresholding is off.</summary>
+    public bool ManualGpuThresholdEnabled => FilteringControlsEnabled && !AutoGpuThresholdEnabled;
+
+    partial void OnIsEnabledChanged(bool value)
+    {
+        OnPropertyChanged(nameof(FilteringControlsEnabled));
+        OnPropertyChanged(nameof(ManualGpuThresholdEnabled));
+    }
 
     partial void OnGpuThresholdChanged(double value)
     {
         OnPropertyChanged(nameof(GpuThresholdLabel));
-        Schedule();
+        UpdateFilterHelpText();
     }
 
     partial void OnTrimBufferSecondsChanged(double value)
     {
         OnPropertyChanged(nameof(TrimLabel));
-        Schedule();
     }
 
     partial void OnAutoGpuThresholdEnabledChanged(bool value)
     {
         OnPropertyChanged(nameof(ManualGpuThresholdEnabled));
-        Schedule();
+        UpdateFilterHelpText();
     }
 
-    partial void OnExcludeTransitionsEnabledChanged(bool value) => Schedule();
+    partial void OnExcludeTransitionsEnabledChanged(bool value)
+    {
+        OnPropertyChanged(nameof(FilteringControlsEnabled));
+        OnPropertyChanged(nameof(ManualGpuThresholdEnabled));
+        UpdateFilterHelpText();
 
-    /// <summary>Snapshots the current controls into an AnalysisOptions.</summary>
+        // This is a discrete mode switch, not a continuously-changing slider.
+        // Raise synchronously so BusyState can disable/dim the window before
+        // the CPU-bound re-analysis begins on the next dispatcher turn.
+        ApplyModeImmediately();
+    }
+
+    /// <summary>
+    /// Returns the canonical live options for the selected data mode.
+    /// Off is truly raw (no exclusions and no trim); on runs the complete
+    /// automatic Precision filtering pipeline.
+    /// </summary>
     public AnalysisOptions SnapshotOptions() =>
         new(
             GpuThreshold: Math.Clamp(GpuThreshold, MinGpuThreshold, MaxGpuThreshold),
-            TrimBufferSeconds: Math.Clamp(TrimBufferSeconds, MinTrimSeconds, MaxTrimSeconds),
-            AutoGpuThreshold: AutoGpuThresholdEnabled,
+            TrimBufferSeconds: ExcludeTransitionsEnabled
+                ? AnalysisConstants.DefaultTrimBufferSeconds
+                : 0.0,
+            AutoGpuThreshold: true,
             ExcludeTransitions: ExcludeTransitionsEnabled);
 
     /// <summary>
@@ -126,16 +145,16 @@ public partial class AnalysisRangeViewModel : ObservableObject
 
     private void AttachCore(SessionAnalysis? session)
     {
-        _debounce.Stop();
+        _supportsMultimetricValidation = session is not null
+            && !CaptureSourceDetector.IsNvidiaAppPerformanceLog(session.Capture);
         _suppressEvents = true;
         try
         {
             IsEnabled = session is not null;
-            OnPropertyChanged(nameof(ManualGpuThresholdEnabled));
             if (session is null)
             {
-                FilterHelpText =
-                    "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)";
+                FilterHelpText = PrecisionHelpText;
+                FilterMethodText = "No active filter";
                 return;
             }
 
@@ -144,6 +163,9 @@ public partial class AnalysisRangeViewModel : ObservableObject
             GpuThreshold = Math.Clamp(options.GpuThreshold, MinGpuThreshold, MaxGpuThreshold);
             TrimBufferSeconds = Math.Clamp(options.TrimBufferSeconds, MinTrimSeconds, MaxTrimSeconds);
             ExcludeTransitionsEnabled = options.ExcludeTransitions;
+            OnPropertyChanged(nameof(FilteringControlsEnabled));
+            OnPropertyChanged(nameof(ManualGpuThresholdEnabled));
+            UpdateFilterHelpText();
         }
         finally
         {
@@ -156,8 +178,8 @@ public partial class AnalysisRangeViewModel : ObservableObject
     {
         if (baseSession is null)
         {
-            FilterHelpText =
-                "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)";
+            FilterHelpText = PrecisionHelpText;
+            FilterMethodText = "No active filter";
             AnalysisSummaryText = "Load a capture to configure the analysis range.";
             return;
         }
@@ -168,11 +190,17 @@ public partial class AnalysisRangeViewModel : ObservableObject
         var total = diagnostics.TotalBins;
         var visible = diagnostics.VisibleBins;
         var percent = total > 0 ? visible * 100.0 / total : 0.0;
+        var recordedSamples = baseSession.Samples.Count;
+        var analyzedSamples = CountAnalyzedSamples(baseSession);
+        var sampleNoun = CaptureSourceDetector.IsNvidiaAppPerformanceLog(baseSession.Capture)
+            ? "samples"
+            : "frames";
         var parts = new List<string>
         {
+            $"{recordedSamples:N0} recorded {sampleNoun} · {analyzedSamples:N0} analyzed {sampleNoun} · {visible:N0} chart samples",
             $"{visible:N0} / {total:N0} seconds analyzed ({percent:F0}%)",
         };
-        AddExclusionDiagnostics(parts, diagnostics);
+        AddExclusionDiagnostics(parts, baseSession);
 
         if (comparisonSession is not null)
         {
@@ -187,8 +215,8 @@ public partial class AnalysisRangeViewModel : ObservableObject
     {
         if (sessions.Count == 0)
         {
-            FilterHelpText =
-                "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)";
+            FilterHelpText = PrecisionHelpText;
+            FilterMethodText = "No active filter";
             AnalysisSummaryText = "Select two or more benchmarks to configure the Multi analysis range.";
             return;
         }
@@ -198,26 +226,43 @@ public partial class AnalysisRangeViewModel : ObservableObject
         var total = sessions.Sum(session => session.Diagnostics.TotalBins);
         var visible = sessions.Sum(session => session.Diagnostics.VisibleBins);
         var percent = total > 0 ? visible * 100.0 / total : 0.0;
+        var recorded = sessions.Sum(session => session.Samples.Count);
+        var analyzed = sessions.Sum(CountAnalyzedSamples);
         var outlierBins = sessions.Sum(session => session.Diagnostics.FpsOutlierBins);
+        var transitionEdgeBins = sessions.Sum(session => session.Diagnostics.TransitionEdgeBins);
         var belowGpuBins = sessions.Sum(session => session.Diagnostics.BelowGpuBins);
         var edgeTrimmedBins = sessions.Sum(session => session.Diagnostics.EdgeTrimmedBins);
         var parts = new List<string>
         {
-            $"{sessions.Count} benchmarks  ·  {visible:N0} / {total:N0} benchmark-seconds analyzed ({percent:F0}%)",
+            $"{sessions.Count} benchmarks · {recorded:N0} recorded samples · {analyzed:N0} analyzed samples",
+            $"{visible:N0} / {total:N0} benchmark-seconds analyzed ({percent:F0}%)",
         };
 
-        if (outlierBins > 0)
-        {
-            parts.Add($"Excluded {outlierBins:N0} benchmark-seconds of FPS outliers.");
-        }
-        else if (belowGpuBins > 0)
+        if (belowGpuBins > 0)
         {
             parts.Add($"Excluded {belowGpuBins:N0} benchmark-seconds below the GPU utilization threshold.");
         }
 
+        if (outlierBins > 0)
+        {
+            parts.Add($"Excluded {outlierBins:N0} benchmark-seconds of global FPS outliers.");
+        }
+
+        if (transitionEdgeBins > 0)
+        {
+            parts.Add($"Removed {transitionEdgeBins:N0} unstable transition-edge second(s).");
+        }
+
         if (edgeTrimmedBins > 0)
         {
-            parts.Add($"Removed {TrimBufferSeconds:F1} s from the detected segment edges in each benchmark.");
+            parts.Add($"Trimmed the outer {TrimBufferSeconds:F1} s capture edges where applicable.");
+        }
+
+        if (!sessions[0].EffectiveOptions.ExcludeTransitions)
+        {
+            parts.Add(edgeTrimmedBins == 0
+                ? "Raw data mode: no loading-screen, FPS, transition, or edge samples were excluded."
+                : "Legacy unfiltered data: transition exclusion was disabled, but the saved edge trim remains.");
         }
 
         parts.Add($"Applied to all {sessions.Count} benchmarks.");
@@ -226,34 +271,68 @@ public partial class AnalysisRangeViewModel : ObservableObject
 
     private void UpdateFilterHelpText()
     {
-        FilterHelpText = AutoGpuThresholdEnabled
-            ? "the threshold will use 55% of the per-second GPU 90th percentile (limited to 5–80%)"
-            : $"at least {GpuThreshold:F0}% GPU utilization will be required";
+        if (!ExcludeTransitionsEnabled)
+        {
+            FilterMethodText = "Raw data · Every recorded sample";
+            FilterHelpText = RawHelpText;
+            return;
+        }
+
+        FilterMethodText = _supportsMultimetricValidation
+            ? $"Precision filtering · Automatic GPU gate ({GpuThreshold:F0}%) + multimetric validation"
+            : $"Precision filtering · Automatic GPU gate ({GpuThreshold:F0}%) + FPS outlier filtering";
+        FilterHelpText = _supportsMultimetricValidation
+            ? PrecisionHelpText
+            : "Automatically applies the GPU gate, FPS-outlier filtering, and a fixed 1.0 s outer-edge trim";
     }
 
-    private void AddExclusionDiagnostics(List<string> parts, FilterDiagnostics diagnostics)
+    private void AddExclusionDiagnostics(List<string> parts, SessionAnalysis session)
     {
+        var diagnostics = session.Diagnostics;
+        if (diagnostics.BelowGpuBins > 0)
+        {
+            parts.Add($"Excluded {diagnostics.BelowGpuBins:N0} s below the GPU utilization threshold.");
+        }
+
         if (diagnostics.FpsOutlierBins > 0)
         {
-            parts.Add($"Excluded: {diagnostics.FpsOutlierBins:N0} s of FPS outliers above {diagnostics.FpsUpperBound:F0} FPS.");
+            parts.Add($"Excluded {diagnostics.FpsOutlierBins:N0} s of FPS outliers above {diagnostics.FpsUpperBound:F0} FPS.");
         }
-        else if (diagnostics.BelowGpuBins > 0)
+
+        if (diagnostics.TransitionEdgeBins > 0)
         {
-            parts.Add($"Excluded: {diagnostics.BelowGpuBins:N0} s below the GPU utilization threshold.");
+            parts.Add($"Removed {diagnostics.TransitionEdgeBins:N0} unstable transition-edge second(s).");
         }
 
         if (diagnostics.EdgeTrimmedBins > 0)
         {
-            parts.Add($"Removed {TrimBufferSeconds:F1} s from the start and end of the detected segment.");
+            parts.Add($"Trimmed the outer {TrimBufferSeconds:F1} s capture edges where applicable.");
+        }
+
+        if (!session.EffectiveOptions.ExcludeTransitions)
+        {
+            parts.Add(diagnostics.EdgeTrimmedBins == 0
+                ? "Raw data mode: no loading-screen, FPS, transition, or edge samples were excluded."
+                : "Legacy unfiltered data: transition exclusion was disabled, but the saved edge trim remains.");
         }
     }
 
-    /// <summary>Applies pending changes immediately (used by tests).</summary>
-    public void ApplyNow()
+    private static int CountAnalyzedSamples(SessionAnalysis session)
     {
-        _debounce.Stop();
-        RaiseOptionsChanged();
+        var count = 0;
+        foreach (var bin in session.ValidBins)
+        {
+            if (session.RowsByBin.TryGetValue(bin, out var rows))
+            {
+                count += rows.Length;
+            }
+        }
+
+        return count;
     }
+
+    /// <summary>Applies pending changes immediately (used by tests).</summary>
+    public void ApplyNow() => RaiseOptionsChanged();
 
     private void RaiseOptionsChanged()
     {
@@ -268,18 +347,13 @@ public partial class AnalysisRangeViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Trailing-edge debounce: every control change restarts the 400 ms delay,
-    /// so the active Pair/Multi event fires only after ~400 ms of inactivity.
-    /// </summary>
-    private void Schedule()
+    private void ApplyModeImmediately()
     {
         if (_suppressEvents || !IsEnabled)
         {
             return;
         }
 
-        _debounce.Stop();
-        _debounce.Start();
+        RaiseOptionsChanged();
     }
 }

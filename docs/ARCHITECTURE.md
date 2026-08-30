@@ -1,4 +1,4 @@
-# FrameView Analyzer v2 — C#/.NET/WPF Architecture
+# Frame Performance Analyzer v2 — C#/.NET/WPF Architecture
 
 > Status: **APPROVED** (2026-08-14). The Python application
 > (`StreckerMX/frameview-analyzer`) is the behavioral reference. This

@@ -1,5 +1,8 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using System.Windows.Media;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Exports;
 using FrameViewAnalyzer.App.Busy;
@@ -32,18 +35,25 @@ public partial class BenchmarkLibraryWindow : Window
     private readonly IManualMetadataStore _manualStore;
     private readonly IFrameViewCsvReader _reader;
     private readonly ICaptureAnalysisService _analysis;
+    private readonly ISettingsStore _settings;
     private readonly BusyState _busy;
+    private readonly BenchmarkBrowserMode _mode;
+    private string? _captureDirectory;
 
     public BenchmarkLibraryWindow(
         ILibraryStore libraryStore,
         IManualMetadataStore manualStore,
         CaptureFolderScanner scanner,
+        ISettingsStore settings,
         ILegacyDataImporter legacyImporter,
         IExportService exportService,
         IDialogService dialogs,
         IFrameViewCsvReader reader,
         ICaptureAnalysisService analysis,
-        string? captureDirectory = null)
+        string? captureDirectory = null,
+        BenchmarkBrowserMode mode = BenchmarkBrowserMode.Library,
+        IReadOnlyList<string>? initiallySelectedPaths = null,
+        string? excludedSelectionPath = null)
     {
         InitializeComponent();
         // Small screens / high DPI: cap to the working area; the row list is
@@ -54,16 +64,29 @@ public partial class BenchmarkLibraryWindow : Window
         _dialogs = dialogs;
         _libraryStore = libraryStore;
         _manualStore = manualStore;
+        _settings = settings;
         _reader = reader;
         _analysis = analysis;
+        _mode = mode;
+        _captureDirectory = captureDirectory;
         _busy = new BusyState();
-        _viewModel = new BenchmarkLibraryViewModel(libraryStore, manualStore, scanner, captureDirectory, _busy);
+        _viewModel = new BenchmarkLibraryViewModel(
+            libraryStore,
+            manualStore,
+            scanner,
+            captureDirectory,
+            _busy,
+            mode,
+            initiallySelectedPaths,
+            excludedSelectionPath);
         DataContext = _viewModel;
+        Title = _viewModel.WindowTitle;
         WindowBusy.Attach(this, _busy);
 
         _viewModel.LoadBaseRequested += path => LoadBaseRequested?.Invoke(path);
         _viewModel.LoadComparisonRequested += path => LoadComparisonRequested?.Invoke(path);
         _viewModel.CompareRequested += (first, second) => CompareRequested?.Invoke(first, second);
+        _viewModel.SelectionConfirmedRequested += ForwardContextSelection;
         _viewModel.CompareSelectedRequested += async paths =>
         {
             if (CompareSelectedRequested is { } requested)
@@ -92,20 +115,115 @@ public partial class BenchmarkLibraryWindow : Window
     /// <summary>Selected Library captures to load as equal peers in Multi.</summary>
     public event Action<IReadOnlyList<string>>? CompareSelectedRequested;
 
+    /// <summary>Selection made from the contextual Pair/Multi browser.</summary>
+    public event Action<BenchmarkBrowserMode, IReadOnlyList<string>>? SelectionConfirmedRequested;
+
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private async void ChooseCaptureFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy.IsBusy)
+        {
+            return;
+        }
+
+        var folder = _dialogs.PickFolder(_captureDirectory);
+        if (folder is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var scope = _busy.BeginVisible("Changing capture folder");
+            _settings.Save(_settings.Load() with { CaptureDirectory = folder });
+            _captureDirectory = folder;
+            await _viewModel.ChangeCaptureFolderAsync(folder);
+
+            if (Owner is FrameViewAnalyzer.App.MainWindow mainWindow)
+            {
+                await mainWindow.RefreshCaptureFolderFromSettingsAsync();
+            }
+        }
+        catch (Exception error) when (error is IOException
+            or UnauthorizedAccessException
+            or InvalidOperationException)
+        {
+            AppLog.ErrorOperation("Capture folder change", error);
+            _dialogs.ShowError("Capture folder", error.Message);
+        }
+    }
+
+    private void BenchmarkRow_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_busy.IsBusy || IsInsideButton(e.OriginalSource as DependencyObject))
+        {
+            return;
+        }
+
+        ToggleBenchmarkRow(sender);
+        e.Handled = true;
+    }
+
+    private void BenchmarkRow_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (_busy.IsBusy
+            || e.Key is not (Key.Enter or Key.Space)
+            || IsInsideButton(e.OriginalSource as DependencyObject))
+        {
+            return;
+        }
+
+        ToggleBenchmarkRow(sender);
+        e.Handled = true;
+    }
+
+    private void ToggleBenchmarkRow(object sender)
+    {
+        if (sender is FrameworkElement { DataContext: LibraryRow row })
+        {
+            _viewModel.ToggleSelectedCommand.Execute(row);
+        }
+    }
+
+    private static bool IsInsideButton(DependencyObject? element)
+    {
+        while (element is not null)
+        {
+            if (element is ButtonBase)
+            {
+                return true;
+            }
+
+            element = element is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(element)
+                : LogicalTreeHelper.GetParent(element);
+        }
+
+        return false;
+    }
+
+    private void ForwardContextSelection(
+        BenchmarkBrowserMode mode,
+        IReadOnlyList<string> paths)
+    {
+        // Close the modal browser before MainWindow begins the potentially
+        // expensive load, so its immediate busy overlay is visible at once.
+        Close();
+        SelectionConfirmedRequested?.Invoke(mode, paths);
+    }
 
     private void ConfirmRemoveFromLibrary(LibraryRow row)
     {
-        var result = MessageBox.Show(
-            this,
+        var confirmed = _dialogs.Confirm(
+            "Remove from Library",
             $"Remove '{row.Title}' from Benchmark Library?\n\n"
             + "The source CSV will not be deleted. The record will stay hidden when the capture folder is refreshed.",
-            "Remove from Library",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No);
+            confirmText: "Remove",
+            cancelText: "Cancel",
+            destructive: true);
 
-        if (result == MessageBoxResult.Yes)
+        if (confirmed)
         {
             _viewModel.RemoveFromLibrary(row);
         }
@@ -126,12 +244,7 @@ public partial class BenchmarkLibraryWindow : Window
                 "Reading legacy data",
                 () => _legacyImporter.Import());
             await _viewModel.RefreshAsync();
-            MessageBox.Show(
-                this,
-                result.Summary(),
-                "Legacy import",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            _dialogs.ShowSuccess("Legacy import", result.Summary());
         }
         catch (Exception error)
         {
@@ -179,7 +292,7 @@ public partial class BenchmarkLibraryWindow : Window
                 });
                 return prepared;
             });
-            _dialogs.ShowInfo(
+            _dialogs.ShowSuccess(
                 "Export",
                 $"Package saved to:\n{path}\n\n"
                 + $"Exported: {result.Exported} capture(s)\n"
@@ -230,7 +343,7 @@ public partial class BenchmarkLibraryWindow : Window
             _manualStore.Reload();
 
             await _viewModel.RefreshAsync();
-            _dialogs.ShowInfo(
+            _dialogs.ShowSuccess(
                 "Benchmark package",
                 $"Imported {proposal.Imported} capture(s), {proposal.Skipped} skipped.");
         }

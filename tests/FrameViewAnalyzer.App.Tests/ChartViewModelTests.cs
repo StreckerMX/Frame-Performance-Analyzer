@@ -134,6 +134,7 @@ public class ChartViewModelTests
         viewModel.SetSessions(baseSession, comparison);
 
         Assert.Equal(2, viewModel.SeriesList.Count);
+        Assert.Equal("Base", viewModel.SeriesList[0].LabelOrDefault);
         Assert.Equal("Comparison", viewModel.SeriesList[1].LabelOrDefault);
         Assert.NotNull(viewModel.ComparisonSeries);
     }

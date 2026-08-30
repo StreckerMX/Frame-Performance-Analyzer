@@ -1,8 +1,8 @@
 <div align="center">
-  <img src="docs/assets/readme-hero.svg" width="100%" alt="FrameView Analyzer animated hero" />
+  <img src="docs/assets/readme-hero.svg" width="100%" alt="Frame Performance Analyzer animated hero" />
 </div>
 
-# FrameView Analyzer
+# Frame Performance Analyzer
 
 A native Windows desktop application for analyzing and comparing **NVIDIA FrameView** captures and **NVIDIA App performance-overlay logs**.
 
@@ -11,25 +11,25 @@ A native Windows desktop application for analyzing and comparing **NVIDIA FrameV
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D4)](https://github.com/StreckerMX/FrameView-Analyzer/releases/latest)
 [![License](https://img.shields.io/github/license/StreckerMX/FrameView-Analyzer)](LICENSE)
 
-FrameView Analyzer turns NVIDIA performance CSV captures into an interactive benchmark workspace. Inspect frame-rate and telemetry data over time, compare two runs with the familiar **Pair** workflow, compare **2–8 benchmarks as equal peers** in **Multi**, isolate noisy or loading-screen regions, organize captures in a local Library, and export presentation-ready reports and portable analyzed data.
+Frame Performance Analyzer turns NVIDIA performance CSV captures into an interactive benchmark workspace. Inspect frame-rate and telemetry data over time, compare two runs with the familiar **Pair** workflow, compare **2–8 benchmarks as equal peers** in **Multi**, isolate noisy or loading-screen regions, organize captures in a local Library, and export presentation-ready reports and portable analyzed data.
 
 ## Screenshots
 
 ### Pair comparison
 
 <p align="center">
-  <img src="docs/screenshots/analysis-dark.png" alt="FrameView Analyzer Pair comparison in dark theme" width="100%">
+  <img src="docs/screenshots/analysis-dark.png" alt="Frame Performance Analyzer Pair comparison in dark theme" width="100%">
 </p>
 
 <table>
   <tr>
     <td width="50%" align="center">
       <strong>Light theme</strong><br><br>
-      <img src="docs/screenshots/analysis-light.png" alt="FrameView Analyzer Pair comparison in light theme">
+      <img src="docs/screenshots/analysis-light.png" alt="Frame Performance Analyzer Pair comparison in light theme">
     </td>
     <td width="50%" align="center">
       <strong>Multi benchmark workspace</strong><br><br>
-      <img src="docs/screenshots/multi-workspace.png" alt="FrameView Analyzer Multi benchmark workspace">
+      <img src="docs/screenshots/multi-workspace.png" alt="Frame Performance Analyzer Multi benchmark workspace">
     </td>
   </tr>
 </table>
@@ -40,11 +40,11 @@ FrameView Analyzer turns NVIDIA performance CSV captures into an interactive ben
   <tr>
     <td width="50%" align="center">
       <strong>Benchmark Library</strong><br><br>
-      <img src="docs/screenshots/benchmark-library.png" alt="FrameView Analyzer Benchmark Library with multi-selection">
+      <img src="docs/screenshots/benchmark-library.png" alt="Frame Performance Analyzer Benchmark Library with multi-selection">
     </td>
     <td width="50%" align="center">
       <strong>PNG report selection</strong><br><br>
-      <img src="docs/screenshots/export-dialog.png" alt="FrameView Analyzer PNG report export dialog">
+      <img src="docs/screenshots/export-dialog.png" alt="Frame Performance Analyzer PNG report export dialog">
     </td>
   </tr>
 </table>
@@ -53,7 +53,7 @@ FrameView Analyzer turns NVIDIA performance CSV captures into an interactive ben
 <summary><strong>Exported multi-benchmark report</strong></summary>
 <br>
 <p align="center">
-  <img src="docs/screenshots/export-report.png" alt="FrameView Analyzer exported multi-benchmark PNG report" width="55%">
+  <img src="docs/screenshots/export-report.png" alt="Frame Performance Analyzer exported multi-benchmark PNG report" width="55%">
 </p>
 </details>
 
@@ -63,66 +63,71 @@ Download the latest stable build from **[GitHub Releases](https://github.com/Str
 
 For the current stable release:
 
-1. Download `FrameViewAnalyzer-v3.1.4-win-x64.zip`.
+1. Download `FramePerformanceAnalyzer-v3.2.0-win-x64.zip`.
 2. Extract the archive.
-3. Run `FrameViewAnalyzer.exe`.
+3. Run `FramePerformanceAnalyzer.exe`.
 
 The application is distributed as a **self-contained Windows x64 build**, so installing the .NET runtime separately is not required.
+
+Microsoft Store builds use `FramePerformanceAnalyzer-Store-3.2.0.0-x64.msix`. The Store-facing name is **Frame Performance Analyzer**, while its Partner Center package identity remains unchanged for compatibility with the validated listing.
 
 > Windows SmartScreen may show an unknown-publisher warning because the executable is not code-signed.
 
 ## Code signing policy
 
-FrameView Analyzer is applying for the SignPath Foundation Open Source Code Signing program. If approved, official release binaries will use **Free code signing provided by SignPath.io, certificate by SignPath Foundation**.
+Frame Performance Analyzer is applying for the SignPath Foundation Open Source Code Signing program. If approved, official release binaries will use **Free code signing provided by SignPath.io, certificate by SignPath Foundation**.
 
 The current application has no telemetry and makes no network calls during normal operation. Signing scope, project roles, privacy guarantees, build provenance, and verification details are documented in the **[Code signing policy](CODE_SIGNING_POLICY.md)**.
 
-## Highlights in 3.1.4
+## Highlights in 3.2.0 — Precision Timeline
 
-- **Adaptive FPS scaling.** FPS charts no longer force a zero baseline. The vertical axis adapts to the visible data while keeping a minimum span so small differences remain readable without becoming visually exaggerated.
-- **Persistent visible time range.** A manually selected or zoomed time window stays active when switching metrics in the same workspace, while the Y-axis is recalculated for the newly selected metric.
-- **Range-aware exports.** PNG reports plus analyzed CSV and JSON exports use the current visible time range, so exported results match the section being inspected on screen.
-- **Portable analyzed-data import.** CSV/JSON analyzed-data exports can be imported back into FrameView Analyzer, restoring chart-ready metric series without requiring the original raw capture rows.
-- **Clean export round trips.** Imported benchmark names preserve their original labels instead of accumulating Pair role prefixes after repeated export/import cycles.
-- **Correct comparison arrows.** Pair KPI arrows now reflect the actual value movement. Lower-is-better improvements such as frame time or latency use a green down arrow instead of a green up arrow.
-- **Pair and Multi parity.** Adaptive chart behavior, visible-range handling, export scoping, and comparison presentation are covered across both Pair and Multi workflows.
+- **Precision filtering.** One explicit switch chooses between the complete raw capture and the automatic filtering pipeline. The multivariable transition detector combines frame cadence with available GPU, CPU, queue, latency, dropped-frame, and Frame Generation telemetry instead of letting GPU utilization decide alone.
+- **Compressed analyzed timeline.** Excluded loading and transition regions are removed from analyzed time instead of leaving artificial gaps in the chart.
+- **True frame-level inspection.** Frame points replace the one-second summary curve with real per-frame values. Wide views are visually decimated, while zoom progressively reveals the original detail; frame-level KPIs always use the complete source values.
+- **Unified benchmark browser.** Pair, Comparison, Multi, and Library reuse one searchable selector with full-card selection, role colors, source-folder control, and protection against selecting the current Base as its own Comparison.
+- **Clearer benchmark identity.** Custom benchmark names from Metadata appear together with the detected capture name in the quick selector, making repeated game captures easy to distinguish.
+- **Pair and Multi parity.** Both workspaces share Precision filtering, frame-point statistics, visible-range behavior, busy presentation, zoom/pan, and exports.
+- **Interface polish.** Themed scrollbars, exact tick-aligned grid lines, fixed cursor readouts, and distinct **Reset view** / **Fit visible Y** actions keep the dense benchmark interface predictable.
+- **Distribution rebranding.** The public product and downloadable files are now **Frame Performance Analyzer**, while NVIDIA FrameView terminology and stable technical identities remain compatible.
 
 ## Features
 
-- **Interactive performance charts** with metric switching, hover inspection, cursor-anchored zoom, drag pan, range selection, automatic zoom, and adaptive FPS Y-axis scaling.
+- **Interactive performance charts** with metric switching, a fixed cursor value readout, cursor-anchored zoom, drag pan, range selection, full-view reset, visible-Y fitting, and adaptive FPS scaling.
+- **Optional true per-frame timelines** with viewport-aware visual decimation and full-resolution statistics.
 - **Pair comparison** with Base / Comparison KPI deltas, direction-aware arrows, and quick loading from the Benchmark Library.
 - **Multi comparison** for 2–8 equal peers with stable colors, shared metric selection, per-benchmark KPI rows, and N-series chart overlays.
 - **Visible-range statistics** that recalculate from the current chart window and preserve the visible time range when switching metrics.
 - **Automatic analysis tools** for full capture, worst-performance region, most stable region, largest performance drop, and Pair A/B difference analysis.
-- **Capture filtering** with GPU-active range detection, edge trimming, transition/loading-screen exclusion, and source-aware FPS outlier handling.
+- **Binary raw / Precision filtering modes** with automatic GPU gating, conservative multivariable transition validation, loading-screen exclusion, FPS outlier handling, and compressed analyzed time.
 - **NVIDIA App performance-log support** with sampled FPS, NVIDIA-provided 1% Low, GPU/CPU utilization, latency, clocks, temperatures, power, voltage, fan telemetry, and other numeric metrics when present.
 - **Benchmark metadata** for game, scene, resolution, graphics preset, upscaler, Frame Generation, Ray Tracing, driver version, notes, and tags.
-- **Benchmark Library** with search, filters, sorting, availability tracking, recent Pair comparisons, direct Base/Comparison loading, Multi checkboxes, and non-destructive removal.
+- **Unified Benchmark Library and selector** with search, filters, sorting, availability tracking, recent Pair comparisons, full-row Base/Comparison/Multi selection, source-folder control, and non-destructive removal.
 - **PNG report export** with benchmark and metric checklists, editable report title, Pair/Multi-aware headers, stable Multi colors, current-range rendering, and timestamped suggested filenames.
-- **Portable analyzed-data export/import** for current-range CSV and JSON snapshots that can be reopened later in FrameView Analyzer.
+- **Portable analyzed-data export/import** for current-range CSV and JSON snapshots that can be reopened later in Frame Performance Analyzer.
 - **Dark and light themes** with native Windows title-bar integration and a responsive full-width dashboard.
 
 ## Supported input
 
-FrameView Analyzer supports:
+Frame Performance Analyzer supports:
 
 - **NVIDIA FrameView detailed logs**, including standard `*_Log.csv` session files. FrameView FPS is calculated from per-frame timing data.
 - **NVIDIA FrameView summary CSVs**, opened as a read-only table.
 - **NVIDIA App performance-overlay logs**, including `NVIDIA_App_Performance_Log_*.csv`. These are low-rate telemetry samples rather than per-frame captures, so FPS is aggregated from NVIDIA's sampled FPS values and the exported `FPS 1(%) Low` column is exposed as its own metric.
-- **FrameView Analyzer portable analyzed-data exports**, allowing previously exported CSV/JSON analysis snapshots to be imported without the original raw capture.
+- **Frame Performance Analyzer portable analyzed-data exports**, allowing previously exported CSV/JSON analysis snapshots to be imported without the original raw capture.
 
 CSV loading includes tolerant handling for common encoding and numeric-format variations found in real-world captures.
 
 ## Typical workflow
 
-1. Select a capture folder or open a supported CSV, or import a FrameView Analyzer analyzed-data export.
+1. Select a capture folder or open a supported CSV, or import a Frame Performance Analyzer analyzed-data export.
 2. Stay in **Pair** to load a Base run and, optionally, a Comparison run.
 3. Or switch to **Multi** and select 2–8 captures from the folder or Benchmark Library.
 4. Choose a metric, inspect the chart, zoom into a time range, and review the visible-range KPIs.
 5. Switch metrics without losing the selected time window when investigating the same event across FPS, frame time, latency, utilization, or other telemetry.
-6. Adjust **Analysis Range** when GPU activity, edge trimming, or loading-screen exclusion needs refinement.
-7. Add metadata when you want clearer benchmark names, configuration context, notes, and tags in the Library.
-8. Export a PNG report or portable CSV/JSON analyzed-data snapshot. Exports use the current visible time range.
+6. Choose **Raw data** when every recorded frame must remain, or enable **Precision filtering** to run the automatic loading/transition pipeline.
+7. Enable **Frame points** for real per-frame inspection and zoom further to reveal progressively finer source detail.
+8. Add metadata when you want custom benchmark names, configuration context, notes, and tags in the Library and quick selector.
+9. Export a PNG report or portable CSV/JSON analyzed-data snapshot. Exports use the current visible time range.
 
 ## Requirements
 
@@ -180,16 +185,16 @@ More technical documentation is available in [`docs/`](docs/), including archite
 
 ## Verification
 
-Version **3.1.4** is covered by the Windows/.NET 10 automated test suite and Release build, plus manual validation of Pair, Multi, adaptive FPS scaling, visible-range persistence, range-aware PNG/CSV/JSON exports, portable analyzed-data import, comparison-arrow direction, Library multi-selection, and FrameView/NVIDIA App metrics.
+Version **3.2.0** is covered by the Windows/.NET 10 automated test suite, GitHub release-package validation, and Microsoft Store MSIX validation. Manual checkpoints cover normal-load performance, Precision filtering, compressed analyzed time, true frame points, Pair, Multi, the unified browser, metadata labels, zoom/pan, exact grid lines, and FrameView/NVIDIA App metrics.
 
 Each GitHub release also includes a `.sha256` file for verifying the downloadable ZIP.
 
 ## License
 
-FrameView Analyzer is released under the [MIT License](LICENSE).
+Frame Performance Analyzer is released under the [MIT License](LICENSE).
 
 ## Acknowledgements
 
-FrameView Analyzer uses NVIDIA FrameView and NVIDIA App performance-export data together with open-source libraries including ScottPlot, CsvHelper, CommunityToolkit.Mvvm, and Serilog.
+Frame Performance Analyzer uses NVIDIA FrameView and NVIDIA App performance-export data together with open-source libraries including ScottPlot, CsvHelper, CommunityToolkit.Mvvm, and Serilog.
 
 This project is independent and is not affiliated with or endorsed by NVIDIA Corporation.

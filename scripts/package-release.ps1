@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Deterministic release packaging for FrameView Analyzer.
+    Deterministic release packaging for Frame Performance Analyzer.
 
 .DESCRIPTION
     Restores, builds (Release), runs the full test suite, publishes the
@@ -12,7 +12,9 @@
     The script cleans ONLY its own staging directory under artifacts/release/.
 #>
 [CmdletBinding()]
-param()
+param(
+    [switch] $SkipBuildAndTest
+)
 
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
@@ -42,12 +44,12 @@ $dotnet = (Get-Command dotnet).Source
 if (-not $dotnet) { throw 'dotnet was not found on PATH.' }
 
 # Single source of truth for the version: Directory.Build.props
-# (VersionPrefix → "2.0.1" for the stable release).
+# (VersionPrefix → "3.2.0" for this release).
 $version = (& $dotnet msbuild $appProject -getProperty:Version).Trim()
 if (-not $version) { throw 'Could not resolve the product version from the project.' }
 Write-Host "==> packaging version: $version"
 
-$zipName = "FrameViewAnalyzer-v$version-win-x64.zip"
+$zipName = "FramePerformanceAnalyzer-v$version-win-x64.zip"
 $zipPath = Join-Path $releaseDir $zipName
 
 # 1. Clean only our own staging area (never a broader tree).
@@ -55,10 +57,13 @@ if (Test-Path $stagingDir) { Remove-Item $stagingDir -Recurse -Force }
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
 
-# 2. Restore, build, test.
-Invoke-Checked $dotnet 'restore' @('restore', 'FrameViewAnalyzer.sln', '--nologo')
-Invoke-Checked $dotnet 'build (Release)' @('build', 'FrameViewAnalyzer.sln', '--configuration', 'Release', '--no-restore', '--nologo')
-Invoke-Checked $dotnet 'test (Release)' @('test', 'FrameViewAnalyzer.sln', '--configuration', 'Release', '--no-build', '--nologo')
+# 2. Restore, build, test. CI may skip this repeated work after the same
+# solution has already passed its dedicated build/test steps.
+if (-not $SkipBuildAndTest) {
+    Invoke-Checked $dotnet 'restore' @('restore', 'FrameViewAnalyzer.sln', '--nologo')
+    Invoke-Checked $dotnet 'build (Release)' @('build', 'FrameViewAnalyzer.sln', '--configuration', 'Release', '--no-restore', '--nologo')
+    Invoke-Checked $dotnet 'test (Release)' @('test', 'FrameViewAnalyzer.sln', '--configuration', 'Release', '--no-build', '--nologo')
+}
 
 # 3. Publish the self-contained single-file win-x64 executable.
 Invoke-Checked $dotnet 'publish (win-x64 self-contained single-file)' @(
@@ -72,13 +77,13 @@ if (-not (Test-Path $publishedExe)) {
 }
 
 # 4. Stage only the intentional distribution files.
-Copy-Item $publishedExe (Join-Path $stagingDir 'FrameViewAnalyzer.exe')
+Copy-Item $publishedExe (Join-Path $stagingDir 'FramePerformanceAnalyzer.exe')
 Copy-Item (Join-Path $repoRoot 'LICENSE') (Join-Path $stagingDir 'LICENSE.txt')
 Copy-Item (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.md') (Join-Path $stagingDir 'THIRD-PARTY-NOTICES.txt')
 Copy-Item (Join-Path $repoRoot 'docs/RELEASE-README.md') (Join-Path $stagingDir 'README.txt')
 
 # 5. SHA-256 + ZIP.
-$hash = (Get-FileHash (Join-Path $stagingDir 'FrameViewAnalyzer.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+$hash = (Get-FileHash (Join-Path $stagingDir 'FramePerformanceAnalyzer.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 if (Test-Path "$zipPath.sha256") { Remove-Item "$zipPath.sha256" -Force }
 

@@ -13,7 +13,7 @@
 
 | Feature | Python | C# | Status |
 |---|---|---|---|
-| Main window title/min size | `FrameView Analyzer`, 980×700 | same | ✔ |
+| Main window title/min size | `Frame Performance Analyzer`, 980×700 | same | ✔ |
 | Initial geometry (88% work area, clamped) | yes | persisted + validated, 88% fallback | ✔ |
 | Header identity (logo, title, badge, tagline) | yes | yes | ✔ |
 | Theme segmented control Dark/Light | yes | yes | ✔ |

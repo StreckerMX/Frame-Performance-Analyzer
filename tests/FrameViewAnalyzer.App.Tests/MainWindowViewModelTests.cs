@@ -222,6 +222,27 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task Comparison_rejects_the_same_capture_as_base()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            var path = WriteCapture(directory, "FrameView_Base_Log.csv", frameTime: 10.0);
+            await viewModel.LoadBaseFromPathAsync(path);
+
+            await viewModel.LoadComparisonFromPathAsync(path);
+
+            Assert.Null(viewModel.ComparisonSession);
+            Assert.NotNull(dialogs.LastInfo);
+            Assert.Contains("must be different", dialogs.LastInfo, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     public async Task Remove_comparison_keeps_the_base()
     {
         var (viewModel, _, _, dialogs, directory) = Create();
@@ -656,6 +677,57 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task Quick_capture_selector_combines_custom_and_detected_names_immediately()
+    {
+        var (viewModel, settings, _, _, directory) = Create();
+        try
+        {
+            settings.Current = settings.Current with { CaptureDirectory = directory };
+            var path = WriteCapture(directory, "FrameView_GTA5_Enhanced_Log.csv");
+            await viewModel.ReloadCaptureFolderAsync();
+            Assert.Equal("GTA5_Enhanced", Assert.Single(viewModel.Captures).Display);
+
+            await viewModel.LoadBaseFromPathAsync(path);
+            viewModel.PersistMetadata(
+                viewModel.BaseSession!,
+                new ManualMetadata(BenchmarkName: "Ultra 4K run"));
+
+            var customized = Assert.Single(viewModel.Captures);
+            Assert.Equal("Ultra 4K run · GTA5_Enhanced", customized.Display);
+            Assert.Equal("GTA5_Enhanced", customized.DetectedDisplay);
+
+            // A folder refresh reads the same persisted metadata rather than
+            // falling back to the ambiguous detected name.
+            await viewModel.ReloadCaptureFolderAsync();
+            Assert.Equal(
+                "Ultra 4K run · GTA5_Enhanced",
+                Assert.Single(viewModel.Captures).Display);
+
+            viewModel.PersistMetadata(viewModel.BaseSession!, new ManualMetadata());
+            Assert.Equal("GTA5_Enhanced", Assert.Single(viewModel.Captures).Display);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Theory]
+    [InlineData("", "GTA5_Enhanced")]
+    [InlineData("gta5_enhanced", "GTA5_Enhanced")]
+    [InlineData("  Custom benchmark  ", "Custom benchmark · GTA5_Enhanced")]
+    public void Quick_capture_label_avoids_duplicates_and_trims_custom_names(
+        string customName,
+        string expected)
+    {
+        var actual = MainWindowViewModel.QuickCaptureDisplay(
+            "GTA5_Enhanced",
+            new ManualMetadata(BenchmarkName: customName));
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
     public async Task Empty_metadata_removes_the_entry_and_restores_detected_lines()
     {
         var (viewModel, _, _, dialogs, directory) = Create();
@@ -679,7 +751,7 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public async Task Analysis_option_changes_reanalyze_both_sessions_and_persist_the_options()
+    public async Task Raw_data_mode_reanalyzes_both_sessions_and_persists_binary_options()
     {
         var (viewModel, _, _, dialogs, directory) = Create();
         try
@@ -690,18 +762,28 @@ public class MainWindowViewModelTests
             await viewModel.LoadComparisonFromPathAsync(dialogs.NextCsvPath);
 
             var selectedMetric = viewModel.Chart.SelectedMetric;
-            viewModel.AnalysisRange.TrimBufferSeconds = 2.0;
+            var rawOptions = new AnalysisOptions(
+                GpuThreshold: viewModel.AnalysisRange.GpuThreshold,
+                TrimBufferSeconds: 0.0,
+                AutoGpuThreshold: true,
+                ExcludeTransitions: false);
 
-            await viewModel.ApplyAnalysisOptionsAsync(viewModel.AnalysisRange.SnapshotOptions());
+            await viewModel.ApplyAnalysisOptionsAsync(rawOptions);
 
-            Assert.Equal(2.0, viewModel.BaseSession!.EffectiveOptions.TrimBufferSeconds);
-            Assert.Equal(2.0, viewModel.ComparisonSession!.EffectiveOptions.TrimBufferSeconds);
+            Assert.Equal(0.0, viewModel.BaseSession!.EffectiveOptions.TrimBufferSeconds);
+            Assert.Equal(0.0, viewModel.ComparisonSession!.EffectiveOptions.TrimBufferSeconds);
+            Assert.True(viewModel.BaseSession.EffectiveOptions.AutoGpuThreshold);
+            Assert.True(viewModel.ComparisonSession.EffectiveOptions.AutoGpuThreshold);
+            Assert.False(viewModel.BaseSession.EffectiveOptions.ExcludeTransitions);
+            Assert.False(viewModel.ComparisonSession.EffectiveOptions.ExcludeTransitions);
             Assert.Equal(selectedMetric, viewModel.Chart.SelectedMetric);
 
             var identity = CaptureIdentityResolver.TryBuild(basePath)!;
             var library = new JsonLibraryStore(Path.Combine(directory, "library.json")).Load();
             var record = library.Records[identity];
-            Assert.Equal("2", record.AnalysisOptions["trim_buffer_seconds"]);
+            Assert.Equal("0", record.AnalysisOptions["trim_buffer_seconds"]);
+            Assert.Equal("true", record.AnalysisOptions["auto_gpu_threshold"]);
+            Assert.Equal("false", record.AnalysisOptions["exclude_transitions"]);
             Assert.True(record.StatsSummary.ContainsKey("avg_fps"));
         }
         finally

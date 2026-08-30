@@ -63,6 +63,41 @@ public class ChartViewModelInteractionTests
     }
 
     [Fact]
+    public void Frame_points_recalculate_every_fps_kpi_from_full_resolution_values()
+    {
+        var viewModel = new ChartViewModel();
+        viewModel.SetSessions(MakeSession(seconds: 5), null);
+        var summarySeries = Assert.Single(viewModel.SeriesList);
+        var frameX = Enumerable.Range(0, 20).Select(index => index / 4.0).ToArray();
+        var frameY = Enumerable.Repeat(50.0, frameX.Length).ToArray();
+
+        viewModel.SetFramePointSeries(
+        [
+            summarySeries with
+            {
+                X = frameX,
+                Y = frameY,
+            },
+        ]);
+
+        Assert.Equal("50.0", viewModel.KpiTiles[0].Value);
+        Assert.Equal("50.0", viewModel.KpiTiles[1].Value);
+        Assert.Equal("50.0", viewModel.KpiTiles[2].Value);
+        Assert.Equal("50.0 FPS", viewModel.KpiTiles[3].Value);
+        Assert.Equal("50.0 FPS", viewModel.KpiTiles[4].Value);
+        Assert.Equal("5 s", viewModel.KpiTiles[5].Value);
+
+        viewModel.ClearFramePointSeries();
+
+        Assert.Equal("100.0", viewModel.KpiTiles[0].Value);
+        Assert.Equal("100.0", viewModel.KpiTiles[1].Value);
+        Assert.Equal("100.0", viewModel.KpiTiles[2].Value);
+        Assert.Equal("100.0 FPS", viewModel.KpiTiles[3].Value);
+        Assert.Equal("100.0 FPS", viewModel.KpiTiles[4].Value);
+        Assert.Equal("5 s", viewModel.KpiTiles[5].Value);
+    }
+
+    [Fact]
     public void Visible_range_updates_the_kpi_strip()
     {
         var viewModel = new ChartViewModel();

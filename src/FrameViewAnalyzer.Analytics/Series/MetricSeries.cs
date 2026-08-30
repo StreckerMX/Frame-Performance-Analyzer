@@ -16,4 +16,11 @@ public sealed record MetricSeries(
 {
     /// <summary>Legend/display label; falls back to the metric label.</summary>
     public string LabelOrDefault => Label ?? Metric.Label;
+
+    /// <summary>
+    /// True only for series prepared specifically for a PNG report. Rendering
+    /// helpers use this marker to keep report-only presentation out of the
+    /// interactive chart without changing the record's constructor contract.
+    /// </summary>
+    public bool IsReportSeries { get; init; }
 }

@@ -37,7 +37,7 @@ public sealed class SessionAnalysis
     public SessionMetadata? Metadata { get; init; }
 
     /// <summary>
-    /// Optional analyzed time series restored from a portable FrameView Analyzer
+    /// Optional analyzed time series restored from a portable Frame Performance Analyzer
     /// export. Imported snapshots deliberately bypass raw-CSV reconstruction so
     /// their plotted/statistical values remain byte-for-value equivalent to the
     /// exported analyzed data.

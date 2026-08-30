@@ -28,6 +28,8 @@
     <SolidColorBrush x:Key="DisabledBrush" Color="#5A5A5A" />
     <SolidColorBrush x:Key="SeriesABrush" Color="#76B900" />
     <SolidColorBrush x:Key="SeriesBBrush" Color="#4FA3D1" />
+    <SolidColorBrush x:Key="SeriesBHoverBrush" Color="#68B9E5" />
+    <SolidColorBrush x:Key="SeriesBDimBrush" Color="#102733" />
     <SolidColorBrush x:Key="SelectionBrush" Color="#1D2F0D" />
     <SolidColorBrush x:Key="TooltipBackgroundBrush" Color="#131313" />
     <SolidColorBrush x:Key="TooltipBorderBrush" Color="#333333" />

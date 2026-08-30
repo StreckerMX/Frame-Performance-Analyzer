@@ -1,0 +1,77 @@
+name: Store MSIX validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "Directory.Build.props"
+      - "packaging/store/**"
+      - "scripts/build-store-msix.ps1"
+      - "src/FrameViewAnalyzer.App/**"
+      - ".github/workflows/store-msix-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build production-identity Store MSIX
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build Store MSIX
+        shell: pwsh
+        run: ./scripts/build-store-msix.ps1
+
+      - name: Show artifact sizes
+        shell: pwsh
+        run: |
+          Get-ChildItem artifacts/store -File | ForEach-Object {
+            "{0}  {1:N0} bytes" -f $_.Name, $_.Length
+          }
+
+      - name: Verify Store artifact contract
+        shell: pwsh
+        run: |
+          $version = (dotnet msbuild src/FrameViewAnalyzer.App/FrameViewAnalyzer.App.csproj -getProperty:Version).Trim()
+          $packageVersion = "${version}.0"
+          $msix = "artifacts/store/FramePerformanceAnalyzer-Store-$packageVersion-x64.msix"
+          $checksum = "$msix.sha256"
+          if (-not (Test-Path $msix)) { throw "Missing Store MSIX: $msix" }
+          if (-not (Test-Path $checksum)) { throw "Missing Store checksum: $checksum" }
+
+          $identity = Get-Content packaging/store/StoreIdentity.json -Raw | ConvertFrom-Json
+          if ($identity.PackageIdentityName -ne 'Strecker.FrameViewAnalyzer') { throw 'Unexpected tracked Store Identity Name.' }
+          if ($identity.Publisher -ne 'CN=A37E4A45-43E1-42F1-866D-B4B9249062DE') { throw 'Unexpected tracked Store Publisher.' }
+          if ($identity.PublisherDisplayName -ne 'Strecker') { throw 'Unexpected tracked PublisherDisplayName.' }
+          if ($identity.PackageFamilyName -ne 'Strecker.FrameViewAnalyzer_9aqbg1gb4p26y') { throw 'Unexpected tracked Store PFN.' }
+          if ($identity.StoreId -ne '9P49TT4BJ798') { throw 'Unexpected tracked Store ID.' }
+
+          [xml]$manifest = Get-Content artifacts/store/work/package/AppxManifest.xml
+          if ($manifest.Package.Identity.Name -ne 'Strecker.FrameViewAnalyzer') { throw 'Unexpected Store Identity Name.' }
+          if ($manifest.Package.Identity.Publisher -ne 'CN=A37E4A45-43E1-42F1-866D-B4B9249062DE') { throw 'Unexpected Store Publisher.' }
+          if ($manifest.Package.Identity.Version -ne $packageVersion) { throw 'Unexpected Store package version.' }
+          if ($manifest.Package.Properties.DisplayName -ne 'Frame Performance Analyzer') { throw 'Unexpected Store DisplayName.' }
+          if ($manifest.Package.Properties.PublisherDisplayName -ne 'Strecker') { throw 'Unexpected PublisherDisplayName.' }
+
+          $expected = ((Get-Content $checksum -Raw) -split '\s+')[0]
+          $actual = (Get-FileHash $msix -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($expected -ne $actual) { throw 'Store MSIX checksum does not match.' }
+
+      - name: Upload Store package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FramePerformanceAnalyzer-Store-MSIX
+          path: |
+            artifacts/store/*.msix
+            artifacts/store/*.sha256
+          if-no-files-found: error
+          retention-days: 14

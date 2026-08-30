@@ -53,5 +53,11 @@ public static class GapOverlay
                 label.LabelRotation = -90;
             }
         }
+
+        // Report-only series carry an explicit marker so this compact KPI text
+        // never leaks into the interactive chart. ScottPlot measures multiline
+        // axis labels as part of layout, naturally reserving just enough room
+        // below each exported graph without adding another report card.
+        ReportStatisticsLabel.Apply(plot, list, style);
     }
 }

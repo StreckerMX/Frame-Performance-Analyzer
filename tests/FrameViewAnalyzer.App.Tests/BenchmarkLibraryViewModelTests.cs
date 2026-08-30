@@ -11,7 +11,10 @@ namespace FrameViewAnalyzer.App.Tests;
 public class BenchmarkLibraryViewModelTests
 {
     private static (BenchmarkLibraryViewModel ViewModel, string Directory) Create(
-        string? captureDirectory = null)
+        string? captureDirectory = null,
+        BenchmarkBrowserMode mode = BenchmarkBrowserMode.Library,
+        IReadOnlyList<string>? initiallySelectedPaths = null,
+        string? excludedSelectionPath = null)
     {
         var directory = Path.Combine(Path.GetTempPath(), "fva-lib-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -21,7 +24,10 @@ public class BenchmarkLibraryViewModelTests
             store,
             manualStore,
             new CaptureFolderScanner(new FrameViewCsvReader()),
-            captureDirectory);
+            captureDirectory,
+            mode: mode,
+            initiallySelectedPaths: initiallySelectedPaths,
+            excludedSelectionPath: excludedSelectionPath);
         return (viewModel, directory);
     }
 
@@ -180,6 +186,154 @@ public class BenchmarkLibraryViewModelTests
 
             Assert.NotNull(requested);
             Assert.Equal(["C:/captures/b.csv", "C:/captures/a.csv"], requested);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Pair_browser_keeps_exactly_one_selection_and_confirms_the_requested_slot()
+    {
+        var (viewModel, directory) = Create(mode: BenchmarkBrowserMode.PairComparison);
+        try
+        {
+            Seed(
+                Path.Combine(directory, "library.json"),
+                new Dictionary<string, ManualMetadata>(),
+                ("a", "GTA5", "1920x1080", "RTX 4090"),
+                ("b", "Cyber", "3840x2160", "RTX 5090"));
+            await viewModel.RefreshAsync();
+            BenchmarkBrowserMode? requestedMode = null;
+            IReadOnlyList<string>? requestedPaths = null;
+            viewModel.SelectionConfirmedRequested += (mode, paths) =>
+            {
+                requestedMode = mode;
+                requestedPaths = paths;
+            };
+
+            var first = Assert.Single(viewModel.Rows, row => row.Record.Identity == "a");
+            var second = Assert.Single(viewModel.Rows, row => row.Record.Identity == "b");
+            viewModel.ToggleSelectedCommand.Execute(first);
+            viewModel.ToggleSelectedCommand.Execute(second);
+
+            Assert.Equal(BenchmarkBrowserMode.PairComparison, viewModel.Mode);
+            Assert.True(viewModel.IsPairSelectionMode);
+            Assert.Equal("Select comparison benchmark", viewModel.WindowTitle);
+            Assert.Equal("Load as Comparison", viewModel.PrimaryActionText);
+            Assert.Equal(1, viewModel.SelectedCount);
+            Assert.False(Assert.Single(viewModel.Rows, row => row.Record.Identity == "a").IsSelected);
+            Assert.True(Assert.Single(viewModel.Rows, row => row.Record.Identity == "b").IsSelected);
+            Assert.True(viewModel.CanConfirmSelectionNow);
+
+            viewModel.ConfirmSelectionCommand.Execute(null);
+
+            Assert.Equal(BenchmarkBrowserMode.PairComparison, requestedMode);
+            Assert.Equal(["C:/captures/b.csv"], requestedPaths);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Comparison_browser_marks_the_current_base_and_never_selects_it()
+    {
+        var (viewModel, directory) = Create(
+            mode: BenchmarkBrowserMode.PairComparison,
+            excludedSelectionPath: "c:\\captures\\a.csv");
+        try
+        {
+            Seed(
+                Path.Combine(directory, "library.json"),
+                new Dictionary<string, ManualMetadata>(),
+                ("a", "GTA5", "1920x1080", "RTX 4090"),
+                ("b", "Cyber", "3840x2160", "RTX 5090"));
+            await viewModel.RefreshAsync();
+
+            var currentBase = Assert.Single(viewModel.Rows, row => row.Record.Identity == "a");
+            var comparison = Assert.Single(viewModel.Rows, row => row.Record.Identity == "b");
+
+            Assert.True(viewModel.IsComparisonSelectionMode);
+            Assert.True(currentBase.IsCurrentBase);
+            Assert.False(currentBase.Selectable);
+            viewModel.ToggleSelectedCommand.Execute(currentBase);
+            Assert.Equal(0, viewModel.SelectedCount);
+
+            viewModel.ToggleSelectedCommand.Execute(comparison);
+            Assert.True(comparison.Selectable);
+            Assert.Equal(1, viewModel.SelectedCount);
+            Assert.True(viewModel.CanConfirmSelectionNow);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Changing_source_folder_updates_the_readout_and_indexes_that_folder()
+    {
+        var (viewModel, directory) = Create();
+        try
+        {
+            var captures = Path.Combine(directory, "captures");
+            Directory.CreateDirectory(captures);
+            File.WriteAllText(
+                Path.Combine(captures, "FrameView_TestGame.exe_2026_08_15T120000_Log.csv"),
+                "TimeInSeconds,MsBetweenPresents,Application,Resolution,GPU,CPU\n"
+                + "0.0,16.6,TestGame,1920x1080,RTX 4090,Ryzen 7\n"
+                + "0.5,16.6,TestGame,1920x1080,RTX 4090,Ryzen 7\n"
+                + "1.0,16.6,TestGame,1920x1080,RTX 4090,Ryzen 7\n");
+
+            await viewModel.ChangeCaptureFolderAsync(captures);
+
+            Assert.Equal(captures, viewModel.CaptureFolder);
+            Assert.Single(viewModel.Rows);
+            Assert.Equal("TestGame", viewModel.Rows[0].Title);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Multi_browser_restores_existing_paths_and_confirms_two_to_eight_peers()
+    {
+        var selected = new[] { "C:/captures/b.csv", "C:/captures/a.csv" };
+        var (viewModel, directory) = Create(
+            mode: BenchmarkBrowserMode.Multi,
+            initiallySelectedPaths: selected);
+        try
+        {
+            Seed(
+                Path.Combine(directory, "library.json"),
+                new Dictionary<string, ManualMetadata>(),
+                ("a", "GTA5", "1920x1080", "RTX 4090"),
+                ("b", "Cyber", "3840x2160", "RTX 5090"),
+                ("c", "Helldivers", "2560x1440", "RTX 4080"));
+            await viewModel.RefreshAsync();
+            IReadOnlyList<string>? requestedPaths = null;
+            viewModel.SelectionConfirmedRequested += (mode, paths) =>
+            {
+                Assert.Equal(BenchmarkBrowserMode.Multi, mode);
+                requestedPaths = paths;
+            };
+
+            Assert.True(viewModel.IsMultiSelectionMode);
+            Assert.Equal("Select benchmarks", viewModel.WindowTitle);
+            Assert.Equal("Load selected", viewModel.PrimaryActionText);
+            Assert.Equal(2, viewModel.SelectedCount);
+            Assert.True(viewModel.CanConfirmSelectionNow);
+            Assert.Equal(2, viewModel.Rows.Count(row => row.IsSelected));
+
+            viewModel.ConfirmSelectionCommand.Execute(null);
+
+            Assert.NotNull(requestedPaths);
+            Assert.Equal(selected, requestedPaths!.ToArray());
         }
         finally
         {
