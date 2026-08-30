@@ -34,6 +34,22 @@ public class ThemedDialogWindowTests
         });
 
     [Fact]
+    public void Dialog_uses_the_compact_layout_contract() =>
+        WpfStaTestHost.Run(() =>
+        {
+            WpfStaTestHost.EnsureApplication();
+            var dialog = new ThemedDialogWindow(ThemedDialogKind.Info, "Export", "Saved successfully.");
+
+            Assert.Equal(440, dialog.Width);
+            Assert.Equal(360, dialog.MinWidth);
+            Assert.Equal(560, dialog.MaxWidth);
+            Assert.Equal(480, dialog.MaxHeight);
+
+            var primary = Assert.IsType<Button>(dialog.FindName("PrimaryButton"));
+            Assert.Equal(78, primary.MinWidth);
+        });
+
+    [Fact]
     public void Confirmation_has_a_safe_default_and_explicit_cancel_action() =>
         WpfStaTestHost.Run(() =>
         {
