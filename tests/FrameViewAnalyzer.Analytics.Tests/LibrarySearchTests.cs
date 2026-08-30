@@ -102,7 +102,20 @@ public class LibrarySearchTests
 
         Assert.Equal("Night Run", LibrarySearch.LibraryRowTitle(Gta, manual));
         Assert.Equal("GTA5 Enhanced", LibrarySearch.LibraryRowTitle(Gta));
-        Assert.Equal("Ultra · DLSS  ·  1920x1080  ·  RTX 4090  ·  Ryzen 7  ·  42 s", LibrarySearch.LibraryRowSubtitle(Gta, manual));
+        Assert.Equal("Ultra · DLSS  ·  1920x1080  ·  RTX 4090  ·  Ryzen 7  ·  42s", LibrarySearch.LibraryRowSubtitle(Gta, manual));
+    }
+
+    [Theory]
+    [InlineData(42.0, "42s")]
+    [InlineData(106.0, "1min 46s")]
+    [InlineData(455.0, "7min 35s")]
+    [InlineData(3769.0, "1h 2min")]
+    [InlineData(7200.0, "2h")]
+    public void Row_subtitle_formats_capture_duration_for_people(double seconds, string expected)
+    {
+        var subtitle = LibrarySearch.LibraryRowSubtitle(Gta with { DurationSeconds = seconds });
+
+        Assert.EndsWith(expected, subtitle, StringComparison.Ordinal);
     }
 
     [Fact]

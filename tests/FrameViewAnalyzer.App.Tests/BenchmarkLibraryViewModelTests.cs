@@ -13,7 +13,8 @@ public class BenchmarkLibraryViewModelTests
     private static (BenchmarkLibraryViewModel ViewModel, string Directory) Create(
         string? captureDirectory = null,
         BenchmarkBrowserMode mode = BenchmarkBrowserMode.Library,
-        IReadOnlyList<string>? initiallySelectedPaths = null)
+        IReadOnlyList<string>? initiallySelectedPaths = null,
+        string? excludedSelectionPath = null)
     {
         var directory = Path.Combine(Path.GetTempPath(), "fva-lib-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -25,7 +26,8 @@ public class BenchmarkLibraryViewModelTests
             new CaptureFolderScanner(new FrameViewCsvReader()),
             captureDirectory,
             mode: mode,
-            initiallySelectedPaths: initiallySelectedPaths);
+            initiallySelectedPaths: initiallySelectedPaths,
+            excludedSelectionPath: excludedSelectionPath);
         return (viewModel, directory);
     }
 
@@ -229,6 +231,68 @@ public class BenchmarkLibraryViewModelTests
 
             Assert.Equal(BenchmarkBrowserMode.PairComparison, requestedMode);
             Assert.Equal(["C:/captures/b.csv"], requestedPaths);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Comparison_browser_marks_the_current_base_and_never_selects_it()
+    {
+        var (viewModel, directory) = Create(
+            mode: BenchmarkBrowserMode.PairComparison,
+            excludedSelectionPath: "c:\\captures\\a.csv");
+        try
+        {
+            Seed(
+                Path.Combine(directory, "library.json"),
+                new Dictionary<string, ManualMetadata>(),
+                ("a", "GTA5", "1920x1080", "RTX 4090"),
+                ("b", "Cyber", "3840x2160", "RTX 5090"));
+            await viewModel.RefreshAsync();
+
+            var currentBase = Assert.Single(viewModel.Rows, row => row.Record.Identity == "a");
+            var comparison = Assert.Single(viewModel.Rows, row => row.Record.Identity == "b");
+
+            Assert.True(viewModel.IsComparisonSelectionMode);
+            Assert.True(currentBase.IsCurrentBase);
+            Assert.False(currentBase.Selectable);
+            viewModel.ToggleSelectedCommand.Execute(currentBase);
+            Assert.Equal(0, viewModel.SelectedCount);
+
+            viewModel.ToggleSelectedCommand.Execute(comparison);
+            Assert.True(comparison.Selectable);
+            Assert.Equal(1, viewModel.SelectedCount);
+            Assert.True(viewModel.CanConfirmSelectionNow);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Changing_source_folder_updates_the_readout_and_indexes_that_folder()
+    {
+        var (viewModel, directory) = Create();
+        try
+        {
+            var captures = Path.Combine(directory, "captures");
+            Directory.CreateDirectory(captures);
+            File.WriteAllText(
+                Path.Combine(captures, "FrameView_TestGame.exe_2026_08_15T120000_Log.csv"),
+                "TimeInSeconds,MsBetweenPresents,Application,Resolution,GPU,CPU\n"
+                + "0.0,16.6,TestGame,1920x1080,RTX 4090,Ryzen 7\n"
+                + "0.5,16.6,TestGame,1920x1080,RTX 4090,Ryzen 7\n"
+                + "1.0,16.6,TestGame,1920x1080,RTX 4090,Ryzen 7\n");
+
+            await viewModel.ChangeCaptureFolderAsync(captures);
+
+            Assert.Equal(captures, viewModel.CaptureFolder);
+            Assert.Single(viewModel.Rows);
+            Assert.Equal("TestGame", viewModel.Rows[0].Title);
         }
         finally
         {

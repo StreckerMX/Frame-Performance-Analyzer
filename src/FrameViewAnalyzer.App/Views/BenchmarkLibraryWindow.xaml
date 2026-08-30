@@ -17,6 +17,83 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
         <converters:InverseBooleanConverter x:Key="InverseBool" />
         <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
+
+        <Style x:Key="ContextPrimaryButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource PrimaryButtonStyle}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsComparisonSelectionMode}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource SeriesBBrush}" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsComparisonSelectionMode}" Value="True" />
+                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Background" Value="{DynamicResource SeriesBHoverBrush}" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="BenchmarkRowCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ButtonHoverBrush}" />
+                </Trigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource AccentDimBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSelected}" Value="True" />
+                        <Condition Binding="{Binding DataContext.IsComparisonSelectionMode, RelativeSource={RelativeSource AncestorType=Window}}"
+                                   Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Background" Value="{DynamicResource SeriesBDimBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource SeriesBBrush}" />
+                </MultiDataTrigger>
+                <DataTrigger Binding="{Binding Selectable}" Value="False">
+                    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+                    <Setter Property="Opacity" Value="0.58" />
+                    <Setter Property="Cursor" Value="Arrow" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SelectionIndicatorStyle" TargetType="Border">
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource MutedBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSelected}" Value="True" />
+                        <Condition Binding="{Binding DataContext.IsComparisonSelectionMode, RelativeSource={RelativeSource AncestorType=Window}}"
+                                   Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Background" Value="{DynamicResource SeriesBBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource SeriesBBrush}" />
+                </MultiDataTrigger>
+                <DataTrigger Binding="{Binding Selectable}" Value="False">
+                    <Setter Property="Opacity" Value="0.45" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -30,34 +107,54 @@
 
         <!-- Shared Library + contextual selection header -->
         <StackPanel Grid.Row="0">
-            <TextBlock Text="{Binding HeaderLabel}"
-                       Style="{StaticResource SectionLabelStyle}" />
+            <TextBlock Text="{Binding HeaderLabel}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource SectionLabelStyle}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsComparisonSelectionMode}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource SeriesBBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <TextBlock Text="{Binding HeaderDescription}"
                        Margin="0,3,0,0"
                        FontSize="{DynamicResource FontSize.Small}"
                        Foreground="{DynamicResource TextSoftBrush}"
                        TextWrapping="Wrap" />
-            <Border Margin="0,10,0,0"
-                    Padding="12,9"
-                    Background="{DynamicResource PanelBrush}"
-                    BorderBrush="{DynamicResource CardBorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8">
-                <DockPanel LastChildFill="True">
-                    <TextBlock DockPanel.Dock="Left"
-                               Text="SOURCE FOLDER"
-                               Margin="0,0,12,0"
-                               FontSize="{DynamicResource FontSize.Tiny}"
-                               FontWeight="Bold"
-                               Foreground="{DynamicResource AccentBrush}"
-                               VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding CaptureFolder}"
-                               FontSize="{DynamicResource FontSize.Small}"
-                               Foreground="{DynamicResource TextBrush}"
-                               TextTrimming="CharacterEllipsis"
-                               VerticalAlignment="Center" />
-                </DockPanel>
-            </Border>
+            <Grid Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Padding="12,9"
+                        Background="{DynamicResource PanelBrush}"
+                        BorderBrush="{DynamicResource CardBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8">
+                    <DockPanel LastChildFill="True">
+                        <TextBlock DockPanel.Dock="Left"
+                                   Text="SOURCE FOLDER"
+                                   Margin="0,0,12,0"
+                                   FontSize="{DynamicResource FontSize.Tiny}"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource AccentBrush}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding CaptureFolder}"
+                                   FontSize="{DynamicResource FontSize.Small}"
+                                   Foreground="{DynamicResource TextBrush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                    </DockPanel>
+                </Border>
+                <Button Grid.Column="1"
+                        Content="Capture folder"
+                        Margin="8,0,0,0"
+                        Click="ChooseCaptureFolder_Click"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                        Style="{StaticResource GhostButtonStyle}" />
+            </Grid>
         </StackPanel>
 
         <!-- Search / filters / sort -->
@@ -163,30 +260,46 @@
         </ItemsControl>
 
         <!-- Rows -->
-        <ScrollViewer Grid.Row="4" Margin="0,10,0,0" VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Rows}">
+        <ScrollViewer x:Name="BenchmarkRowsScrollViewer"
+                      Grid.Row="4"
+                      Margin="0,10,0,0"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Rows}" Margin="0,0,2,0">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Background="{DynamicResource PanelBrush}"
-                                BorderBrush="{DynamicResource CardBorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="10"
-                                Padding="12,10"
-                                Margin="0,0,0,8">
+                        <Border Style="{StaticResource BenchmarkRowCardStyle}"
+                                Focusable="{Binding Selectable}"
+                                ToolTip="{Binding DataContext.SelectionToolTip, RelativeSource={RelativeSource AncestorType=Window}}"
+                                MouseLeftButtonUp="BenchmarkRow_MouseLeftButtonUp"
+                                KeyDown="BenchmarkRow_KeyDown">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <CheckBox Grid.Column="0"
-                                          Margin="0,0,12,0"
-                                          VerticalAlignment="Center"
-                                          IsChecked="{Binding IsSelected, Mode=OneWay}"
-                                          IsEnabled="{Binding Available}"
-                                          Command="{Binding DataContext.ToggleSelectedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                          CommandParameter="{Binding}"
-                                          ToolTip="{Binding DataContext.SelectionCheckBoxToolTip, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                <Border Grid.Column="0"
+                                        Margin="0,0,12,0"
+                                        VerticalAlignment="Center"
+                                        Style="{StaticResource SelectionIndicatorStyle}">
+                                    <Path Stroke="{DynamicResource WindowBrush}"
+                                          StrokeThickness="2"
+                                          StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"
+                                          Data="M 3,8 L 6.5,11 L 13,4.5">
+                                        <Path.Style>
+                                            <Style TargetType="Path">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Path.Style>
+                                    </Path>
+                                </Border>
                                 <StackPanel Grid.Column="1">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding Title}"
@@ -205,6 +318,19 @@
                                                        FontSize="{DynamicResource FontSize.Tiny}"
                                                        FontWeight="Bold"
                                                        Foreground="{DynamicResource TextBrush}" />
+                                        </Border>
+                                        <Border Margin="8,0,0,0"
+                                                Padding="6,2"
+                                                CornerRadius="8"
+                                                Background="{DynamicResource SeriesBDimBrush}"
+                                                BorderBrush="{DynamicResource SeriesBBrush}"
+                                                BorderThickness="1"
+                                                VerticalAlignment="Center"
+                                                Visibility="{Binding IsCurrentBase, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Text="CURRENT BASE"
+                                                       FontSize="{DynamicResource FontSize.Tiny}"
+                                                       FontWeight="Bold"
+                                                       Foreground="{DynamicResource SeriesBBrush}" />
                                         </Border>
                                     </StackPanel>
                                     <TextBlock Text="{Binding Subtitle}"
@@ -291,12 +417,6 @@
                         IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                         Visibility="{Binding ShowLibraryActions, Converter={StaticResource BoolToVisibility}}"
                         Style="{StaticResource GhostButtonStyle}" />
-                <Button Content="Browse CSV..."
-                        Margin="0,0,8,0"
-                        Click="BrowseCapture_Click"
-                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                        Visibility="{Binding ShowBrowseAction, Converter={StaticResource BoolToVisibility}}"
-                        Style="{StaticResource GhostButtonStyle}" />
                 <Button Content="Cancel"
                         Margin="0,0,8,0"
                         Click="Close_Click"
@@ -306,7 +426,7 @@
                         Command="{Binding ConfirmSelectionCommand}"
                         IsEnabled="{Binding CanConfirmSelectionNow}"
                         Visibility="{Binding IsSelectionMode, Converter={StaticResource BoolToVisibility}}"
-                        Style="{StaticResource PrimaryButtonStyle}" />
+                        Style="{StaticResource ContextPrimaryButtonStyle}" />
                 <Button Content="Close"
                         Click="Close_Click"
                         Visibility="{Binding ShowLibraryActions, Converter={StaticResource BoolToVisibility}}"

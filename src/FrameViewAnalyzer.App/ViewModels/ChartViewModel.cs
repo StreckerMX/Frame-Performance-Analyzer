@@ -118,7 +118,7 @@ public partial class ChartViewModel : ObservableObject
 
         var sessions = new List<ChartWorkspaceSession>
         {
-            new(baseSession, IsReference: true),
+            new(baseSession, "Base", IsReference: true),
         };
         if (comparisonSession is not null)
         {

@@ -30,6 +30,8 @@ public sealed record LibraryRow(
     string Subtitle,
     string Stamp,
     bool Available,
+    bool Selectable,
+    bool IsCurrentBase,
     bool IsSelected);
 
 public sealed record RecentPairRow(
@@ -52,9 +54,10 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     private readonly IManualMetadataStore _manualStore;
     private readonly CaptureFolderScanner _scanner;
     private readonly LibraryIndexer _indexer = new();
-    private readonly string? _captureDirectory;
+    private string? _captureDirectory;
     private readonly List<string> _selectedIdentities = [];
     private readonly IReadOnlyList<string> _initialSelectedPaths;
+    private readonly string? _excludedSelectionPath;
     private readonly BusyState _busy;
     private readonly BenchmarkBrowserMode _mode;
     private bool _initialSelectionApplied;
@@ -105,13 +108,13 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     public bool IsPairSelectionMode =>
         _mode is BenchmarkBrowserMode.PairBase or BenchmarkBrowserMode.PairComparison;
 
+    public bool IsComparisonSelectionMode => _mode == BenchmarkBrowserMode.PairComparison;
+
     public bool IsMultiSelectionMode => _mode == BenchmarkBrowserMode.Multi;
 
     public bool ShowQuickPairActions => IsLibraryMode;
 
     public bool ShowLibraryActions => IsLibraryMode;
-
-    public bool ShowBrowseAction => IsPairSelectionMode;
 
     public string WindowTitle => _mode switch
     {
@@ -132,9 +135,9 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     public string HeaderDescription => _mode switch
     {
         BenchmarkBrowserMode.PairBase =>
-            "Choose one indexed capture as the Pair base, or browse to another CSV.",
+            "Choose one indexed capture as the Pair base.",
         BenchmarkBrowserMode.PairComparison =>
-            "Choose one indexed capture as the Pair comparison, or browse to another CSV.",
+            "Choose one indexed capture as the Pair comparison. The current Base cannot be selected.",
         BenchmarkBrowserMode.Multi =>
             "Select 2–8 captures. Every selected benchmark is compared equally; there is no Base or Reference.",
         _ =>
@@ -153,16 +156,16 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
         _ => "Compare selected",
     };
 
-    public string SelectionCheckBoxToolTip => IsPairSelectionMode
+    public string SelectionToolTip => IsPairSelectionMode
         ? "Select this benchmark"
         : "Select for Multi comparison";
 
     public string FooterHelpText => _mode switch
     {
         BenchmarkBrowserMode.PairBase =>
-            "One selection is required. Browse CSV keeps direct file loading available.",
+            "One selection is required. Change Source folder to index captures from another location.",
         BenchmarkBrowserMode.PairComparison =>
-            "One selection is required. Browse CSV keeps direct file loading available.",
+            "One selection is required. The active Base is unavailable for comparison.",
         BenchmarkBrowserMode.Multi =>
             "Select between 2 and 8 available captures. Existing Multi selections are preserved when possible.",
         _ =>
@@ -231,13 +234,15 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
         string? captureDirectory = null,
         BusyState? busy = null,
         BenchmarkBrowserMode mode = BenchmarkBrowserMode.Library,
-        IReadOnlyList<string>? initiallySelectedPaths = null)
+        IReadOnlyList<string>? initiallySelectedPaths = null,
+        string? excludedSelectionPath = null)
     {
         _store = store;
         _manualStore = manualStore;
         _scanner = scanner;
         _captureDirectory = captureDirectory;
         _mode = mode;
+        _excludedSelectionPath = excludedSelectionPath;
         _initialSelectedPaths = (initiallySelectedPaths ?? [])
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(MaxMultiSelection)
@@ -273,6 +278,18 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     public Task RefreshAsync() =>
         _busy.RunAsync("Loading benchmark library", RefreshCoreAsync);
 
+    /// <summary>
+    /// Switches the indexed source folder in place. The Library records remain
+    /// available while captures from the new folder are discovered and merged.
+    /// </summary>
+    public Task ChangeCaptureFolderAsync(string captureDirectory) =>
+        _busy.RunAsync("Changing capture folder", async () =>
+        {
+            _captureDirectory = captureDirectory;
+            OnPropertyChanged(nameof(CaptureFolder));
+            await RefreshCoreAsync();
+        });
+
     private async Task RefreshCoreAsync()
     {
         _library = _store.Load();
@@ -291,7 +308,7 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
 
         ApplyInitialSelection();
         _selectedIdentities.RemoveAll(identity =>
-            !_library.Records.TryGetValue(identity, out var record) || !record.Available);
+            !_library.Records.TryGetValue(identity, out var record) || !IsSelectable(record));
         NotifySelectionChanged();
         RebuildOptions();
         RebuildRows();
@@ -319,7 +336,7 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     [RelayCommand]
     private void ToggleSelected(LibraryRow? row)
     {
-        if (row is not { Available: true })
+        if (row is not { Selectable: true })
         {
             return;
         }
@@ -379,7 +396,7 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     private IReadOnlyList<string> SelectedAvailablePaths() =>
         _selectedIdentities
             .Select(identity => _library.Records.TryGetValue(identity, out var record) ? record : null)
-            .Where(record => record is { Available: true })
+            .Where(record => record is not null && IsSelectable(record))
             .Select(record => record!.SourcePath)
             .ToList();
 
@@ -461,7 +478,7 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
         foreach (var path in _initialSelectedPaths)
         {
             var record = _library.Records.Values.FirstOrDefault(candidate =>
-                candidate.Available
+                IsSelectable(candidate)
                 && string.Equals(candidate.SourcePath, path, StringComparison.OrdinalIgnoreCase));
             if (record is null || _selectedIdentities.Contains(record.Identity, StringComparer.Ordinal))
             {
@@ -546,6 +563,8 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
                 LibrarySearch.LibraryRowSubtitle(record, manual),
                 LibrarySearch.LibraryStamp(record),
                 record.Available,
+                IsSelectable(record),
+                IsCurrentBase(record),
                 _selectedIdentities.Contains(record.Identity, StringComparer.Ordinal)));
         }
 
@@ -586,4 +605,18 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
             // Browsing must survive store failures (e.g. unknown versions).
         }
     }
+
+    private bool IsSelectable(LibraryRecord record) =>
+        record.Available && !IsCurrentBase(record);
+
+    private bool IsCurrentBase(LibraryRecord record) =>
+        IsComparisonSelectionMode
+        && !string.IsNullOrWhiteSpace(_excludedSelectionPath)
+        && PathsEqual(record.SourcePath, _excludedSelectionPath!);
+
+    private static bool PathsEqual(string first, string second) =>
+        string.Equals(
+            first.Replace('\\', '/').TrimEnd('/'),
+            second.Replace('\\', '/').TrimEnd('/'),
+            StringComparison.OrdinalIgnoreCase);
 }

@@ -192,7 +192,7 @@ public static class LibrarySearch
 
         if (record.DurationSeconds is { } seconds)
         {
-            parts.Add($"{seconds:F0} s");
+            parts.Add(FormatCompactDuration(seconds));
         }
 
         return parts.Count > 0 ? string.Join("  ·  ", parts) : "No data";
@@ -203,4 +203,30 @@ public static class LibrarySearch
         CaptureFileNaming.TryParseCaptureStamp(record.SourceName, out var stamp)
             ? CaptureFileNaming.FormatStamp(stamp)
             : string.Empty;
+
+    /// <summary>
+    /// Human-sized duration for compact Library rows. Once hours are present,
+    /// seconds are intentionally omitted so long captures stay easy to scan.
+    /// </summary>
+    internal static string FormatCompactDuration(double seconds)
+    {
+        var totalSeconds = Math.Max(0L, (long)Math.Round(seconds));
+        var hours = totalSeconds / 3600;
+        var minutes = totalSeconds % 3600 / 60;
+        var remainingSeconds = totalSeconds % 60;
+
+        if (hours > 0)
+        {
+            return minutes > 0 ? $"{hours}h {minutes}min" : $"{hours}h";
+        }
+
+        if (minutes > 0)
+        {
+            return remainingSeconds > 0
+                ? $"{minutes}min {remainingSeconds}s"
+                : $"{minutes}min";
+        }
+
+        return $"{remainingSeconds}s";
+    }
 }

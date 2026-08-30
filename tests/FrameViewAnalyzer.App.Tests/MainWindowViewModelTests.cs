@@ -222,6 +222,27 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task Comparison_rejects_the_same_capture_as_base()
+    {
+        var (viewModel, _, _, dialogs, directory) = Create();
+        try
+        {
+            var path = WriteCapture(directory, "FrameView_Base_Log.csv", frameTime: 10.0);
+            await viewModel.LoadBaseFromPathAsync(path);
+
+            await viewModel.LoadComparisonFromPathAsync(path);
+
+            Assert.Null(viewModel.ComparisonSession);
+            Assert.NotNull(dialogs.LastInfo);
+            Assert.Contains("must be different", dialogs.LastInfo, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+
+    [Fact]
     public async Task Remove_comparison_keeps_the_base()
     {
         var (viewModel, _, _, dialogs, directory) = Create();

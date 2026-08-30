@@ -72,7 +72,14 @@ internal static class WpfStaTestHost
         // dispatcher loop and null Application.Current, poisoning every
         // subsequent test on the shared host thread).
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        foreach (var name in new[] { "Colors.xaml", "Typography.xaml", "Buttons.xaml", "Panels.xaml" })
+        foreach (var name in new[]
+        {
+            "Colors.xaml",
+            "Typography.xaml",
+            "Buttons.xaml",
+            "Panels.xaml",
+            "ScrollBars.xaml",
+        })
         {
             app.Resources.MergedDictionaries.Add(new ResourceDictionary
             {

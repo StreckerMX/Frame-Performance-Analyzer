@@ -57,24 +57,10 @@
                        VerticalAlignment="Center" />
 
                 <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="FrameView Analyzer"
-                                   FontSize="{DynamicResource FontSize.Title}"
-                                   FontWeight="Bold"
-                                   Foreground="{DynamicResource TextBrush}" />
-                        <Border Background="{DynamicResource AccentDimBrush}"
-                                BorderBrush="{DynamicResource AccentBrush}"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Padding="8,2"
-                                Margin="10,0,0,0"
-                                VerticalAlignment="Center">
-                            <TextBlock Text="NVIDIA FRAMEVIEW"
-                                       FontSize="{DynamicResource FontSize.Tiny}"
-                                       FontWeight="Bold"
-                                       Foreground="{DynamicResource AccentBrush}" />
-                        </Border>
-                    </StackPanel>
+                    <TextBlock Text="FrameView Analyzer"
+                               FontSize="{DynamicResource FontSize.Title}"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" />
                     <TextBlock Text="NVIDIA FrameView session analysis and benchmarking."
                                FontSize="{DynamicResource FontSize.Small}"
                                Foreground="{DynamicResource MutedBrush}"

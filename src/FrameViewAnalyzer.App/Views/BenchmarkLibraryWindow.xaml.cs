@@ -1,5 +1,8 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using System.Windows.Media;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Exports;
 using FrameViewAnalyzer.App.Busy;
@@ -32,14 +35,16 @@ public partial class BenchmarkLibraryWindow : Window
     private readonly IManualMetadataStore _manualStore;
     private readonly IFrameViewCsvReader _reader;
     private readonly ICaptureAnalysisService _analysis;
+    private readonly ISettingsStore _settings;
     private readonly BusyState _busy;
     private readonly BenchmarkBrowserMode _mode;
-    private readonly string? _captureDirectory;
+    private string? _captureDirectory;
 
     public BenchmarkLibraryWindow(
         ILibraryStore libraryStore,
         IManualMetadataStore manualStore,
         CaptureFolderScanner scanner,
+        ISettingsStore settings,
         ILegacyDataImporter legacyImporter,
         IExportService exportService,
         IDialogService dialogs,
@@ -47,7 +52,8 @@ public partial class BenchmarkLibraryWindow : Window
         ICaptureAnalysisService analysis,
         string? captureDirectory = null,
         BenchmarkBrowserMode mode = BenchmarkBrowserMode.Library,
-        IReadOnlyList<string>? initiallySelectedPaths = null)
+        IReadOnlyList<string>? initiallySelectedPaths = null,
+        string? excludedSelectionPath = null)
     {
         InitializeComponent();
         // Small screens / high DPI: cap to the working area; the row list is
@@ -58,6 +64,7 @@ public partial class BenchmarkLibraryWindow : Window
         _dialogs = dialogs;
         _libraryStore = libraryStore;
         _manualStore = manualStore;
+        _settings = settings;
         _reader = reader;
         _analysis = analysis;
         _mode = mode;
@@ -70,7 +77,8 @@ public partial class BenchmarkLibraryWindow : Window
             captureDirectory,
             _busy,
             mode,
-            initiallySelectedPaths);
+            initiallySelectedPaths,
+            excludedSelectionPath);
         DataContext = _viewModel;
         Title = _viewModel.WindowTitle;
         WindowBusy.Attach(this, _busy);
@@ -112,20 +120,87 @@ public partial class BenchmarkLibraryWindow : Window
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
-    private void BrowseCapture_Click(object sender, RoutedEventArgs e)
+    private async void ChooseCaptureFolder_Click(object sender, RoutedEventArgs e)
     {
-        if (_busy.IsBusy || !_viewModel.ShowBrowseAction)
+        if (_busy.IsBusy)
         {
             return;
         }
 
-        var path = _dialogs.PickCsvFile(_captureDirectory);
-        if (path is null)
+        var folder = _dialogs.PickFolder(_captureDirectory);
+        if (folder is null)
         {
             return;
         }
 
-        ForwardContextSelection(_mode, [path]);
+        try
+        {
+            using var scope = _busy.BeginVisible("Changing capture folder");
+            _settings.Save(_settings.Load() with { CaptureDirectory = folder });
+            _captureDirectory = folder;
+            await _viewModel.ChangeCaptureFolderAsync(folder);
+
+            if (Owner is FrameViewAnalyzer.App.MainWindow mainWindow)
+            {
+                await mainWindow.RefreshCaptureFolderFromSettingsAsync();
+            }
+        }
+        catch (Exception error) when (error is IOException
+            or UnauthorizedAccessException
+            or InvalidOperationException)
+        {
+            AppLog.ErrorOperation("Capture folder change", error);
+            _dialogs.ShowError("Capture folder", error.Message);
+        }
+    }
+
+    private void BenchmarkRow_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_busy.IsBusy || IsInsideButton(e.OriginalSource as DependencyObject))
+        {
+            return;
+        }
+
+        ToggleBenchmarkRow(sender);
+        e.Handled = true;
+    }
+
+    private void BenchmarkRow_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (_busy.IsBusy
+            || e.Key is not (Key.Enter or Key.Space)
+            || IsInsideButton(e.OriginalSource as DependencyObject))
+        {
+            return;
+        }
+
+        ToggleBenchmarkRow(sender);
+        e.Handled = true;
+    }
+
+    private void ToggleBenchmarkRow(object sender)
+    {
+        if (sender is FrameworkElement { DataContext: LibraryRow row })
+        {
+            _viewModel.ToggleSelectedCommand.Execute(row);
+        }
+    }
+
+    private static bool IsInsideButton(DependencyObject? element)
+    {
+        while (element is not null)
+        {
+            if (element is ButtonBase)
+            {
+                return true;
+            }
+
+            element = element is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(element)
+                : LogicalTreeHelper.GetParent(element);
+        }
+
+        return false;
     }
 
     private void ForwardContextSelection(

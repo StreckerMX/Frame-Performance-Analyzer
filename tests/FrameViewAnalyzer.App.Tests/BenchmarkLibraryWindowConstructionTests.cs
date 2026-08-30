@@ -1,5 +1,7 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using FrameViewAnalyzer.Analytics;
 using FrameViewAnalyzer.Analytics.Library;
@@ -87,16 +89,19 @@ public class BenchmarkLibraryWindowConstructionTests
         Fixture fixture,
         string? captureDirectory,
         BenchmarkBrowserMode mode = BenchmarkBrowserMode.Library,
-        IReadOnlyList<string>? initiallySelectedPaths = null)
+        IReadOnlyList<string>? initiallySelectedPaths = null,
+        string? excludedSelectionPath = null)
     {
         var libraryStore = new JsonLibraryStore(fixture.LibraryPath);
         var manualStore = new JsonManualMetadataStore(fixture.MetadataPath);
+        var settingsStore = new JsonSettingsStore(fixture.SettingsPath);
         return new BenchmarkLibraryWindow(
             libraryStore,
             manualStore,
             new CaptureFolderScanner(new FrameViewCsvReader()),
+            settingsStore,
             new LegacyDataImporter(
-                new JsonSettingsStore(fixture.SettingsPath),
+                settingsStore,
                 manualStore,
                 libraryStore,
                 fixture.Root,
@@ -107,7 +112,8 @@ public class BenchmarkLibraryWindowConstructionTests
             new CaptureAnalysisService(),
             captureDirectory,
             mode,
-            initiallySelectedPaths);
+            initiallySelectedPaths,
+            excludedSelectionPath);
     }
 
     private static BenchmarkLibraryViewModel ViewModelOf(BenchmarkLibraryWindow window) =>
@@ -319,6 +325,57 @@ public class BenchmarkLibraryWindowConstructionTests
                     {
                         window.Close();
                     }
+                }
+            }
+            finally
+            {
+                Cleanup(fixture);
+            }
+        });
+
+    [Fact]
+    public void Comparison_browser_uses_the_shared_themed_scrollbar_and_disables_current_base() =>
+        WpfStaTestHost.Run(() =>
+        {
+            WpfStaTestHost.EnsureApplication();
+            var fixture = CreateFixture();
+            try
+            {
+                SeedLibrary(
+                    fixture.LibraryPath,
+                    ("a", "GTA5", "1920x1080", "RTX 4090"),
+                    ("b", "Cyber", "3840x2160", "RTX 5090"));
+                var window = CreateWindow(
+                    fixture,
+                    captureDirectory: null,
+                    mode: BenchmarkBrowserMode.PairComparison,
+                    excludedSelectionPath: "C:/captures/a.csv");
+                try
+                {
+                    window.Show();
+                    var viewModel = ViewModelOf(window);
+                    PumpUntil(
+                        () => viewModel.CountText == "2 record(s)",
+                        TimeSpan.FromSeconds(20));
+
+                    Assert.Equal("Select comparison benchmark", window.Title);
+                    Assert.True(viewModel.IsComparisonSelectionMode);
+                    var currentBase = Assert.Single(
+                        viewModel.Rows,
+                        row => row.Record.Identity == "a");
+                    Assert.True(currentBase.IsCurrentBase);
+                    Assert.False(currentBase.Selectable);
+
+                    Assert.IsType<ScrollViewer>(window.FindName("BenchmarkRowsScrollViewer"));
+                    var globalStyle = Assert.IsType<Style>(
+                        Application.Current!.TryFindResource(typeof(ScrollBar)));
+                    Assert.Contains(
+                        globalStyle.Setters.OfType<Setter>(),
+                        setter => setter.Property == ScrollBar.TemplateProperty);
+                }
+                finally
+                {
+                    window.Close();
                 }
             }
             finally

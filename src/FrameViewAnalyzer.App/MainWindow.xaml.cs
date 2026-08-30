@@ -355,7 +355,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        OpenBenchmarkBrowser(BenchmarkBrowserMode.PairComparison);
+        OpenBenchmarkBrowser(
+            BenchmarkBrowserMode.PairComparison,
+            excludedSelectionPath: _viewModel.BaseSession.Capture.Path);
     }
 
     /// <summary>
@@ -364,7 +366,8 @@ public partial class MainWindow : Window
     /// </summary>
     private void OpenBenchmarkBrowser(
         BenchmarkBrowserMode mode,
-        IReadOnlyList<string>? initiallySelectedPaths = null)
+        IReadOnlyList<string>? initiallySelectedPaths = null,
+        string? excludedSelectionPath = null)
     {
         // Opening the browser is instant; it owns its folder refresh and busy
         // presentation. MainWindow becomes busy only after a selection closes it.
@@ -373,11 +376,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        var captureDirectory = _settings.Load().CaptureDirectory;
+        var captureDirectory = _settings.Load().CaptureDirectory
+            ?? PlatformFolders.FrameViewDirectory();
         var library = new BenchmarkLibraryWindow(
             _libraryStore,
             _manualMetadataStore,
             _scanner,
+            _settings,
             _legacyImporter,
             _exportService,
             _dialogs,
@@ -385,7 +390,8 @@ public partial class MainWindow : Window
             _analysis,
             captureDirectory,
             mode,
-            initiallySelectedPaths)
+            initiallySelectedPaths,
+            excludedSelectionPath)
         {
             Owner = this,
         };
@@ -414,6 +420,10 @@ public partial class MainWindow : Window
         };
         library.ShowDialog();
     }
+
+    /// <summary>Keeps the main toolbar synchronized with folder changes made in the browser.</summary>
+    internal Task RefreshCaptureFolderFromSettingsAsync() =>
+        _viewModel.ReloadCaptureFolderAsync();
 
     private void ExportPng_Click(object sender, RoutedEventArgs e)
     {

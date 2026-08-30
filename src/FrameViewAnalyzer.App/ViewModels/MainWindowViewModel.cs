@@ -222,6 +222,9 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    /// <summary>Refreshes the toolbar after another app window changes the shared folder setting.</summary>
+    public Task ReloadCaptureFolderAsync() => RefreshCapturesAsync();
+
     [RelayCommand]
     private async Task ChooseCaptureFolderAsync()
     {
@@ -305,8 +308,20 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>Loads a comparison by path (Library "Load as Comparison").</summary>
-    public Task LoadComparisonFromPathAsync(string path) =>
-        _busy.RunAsync("Loading comparison capture", () => LoadComparisonFromPathCoreAsync(path));
+    public Task LoadComparisonFromPathAsync(string path)
+    {
+        if (BaseSession is not null && SameCapturePath(BaseSession.Capture.Path, path))
+        {
+            _dialogs.ShowInfo(
+                "Benchmark comparison",
+                "Base and Comparison must be different benchmarks.");
+            return Task.CompletedTask;
+        }
+
+        return _busy.RunAsync(
+            "Loading comparison capture",
+            () => LoadComparisonFromPathCoreAsync(path));
+    }
 
     private async Task LoadComparisonFromPathCoreAsync(string path)
     {
@@ -373,6 +388,21 @@ public partial class MainWindowViewModel : ObservableObject
             or InvalidOperationException)
         {
             // Library bookkeeping is best-effort; loading must never fail.
+        }
+    }
+
+    private static bool SameCapturePath(string first, string second)
+    {
+        try
+        {
+            return string.Equals(
+                Path.GetFullPath(first).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                Path.GetFullPath(second).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception error) when (error is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return string.Equals(first, second, StringComparison.OrdinalIgnoreCase);
         }
     }
 
