@@ -215,16 +215,15 @@ public partial class BenchmarkLibraryWindow : Window
 
     private void ConfirmRemoveFromLibrary(LibraryRow row)
     {
-        var result = MessageBox.Show(
-            this,
+        var confirmed = _dialogs.Confirm(
+            "Remove from Library",
             $"Remove '{row.Title}' from Benchmark Library?\n\n"
             + "The source CSV will not be deleted. The record will stay hidden when the capture folder is refreshed.",
-            "Remove from Library",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No);
+            confirmText: "Remove",
+            cancelText: "Cancel",
+            destructive: true);
 
-        if (result == MessageBoxResult.Yes)
+        if (confirmed)
         {
             _viewModel.RemoveFromLibrary(row);
         }
@@ -245,12 +244,7 @@ public partial class BenchmarkLibraryWindow : Window
                 "Reading legacy data",
                 () => _legacyImporter.Import());
             await _viewModel.RefreshAsync();
-            MessageBox.Show(
-                this,
-                result.Summary(),
-                "Legacy import",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            _dialogs.ShowSuccess("Legacy import", result.Summary());
         }
         catch (Exception error)
         {
@@ -298,7 +292,7 @@ public partial class BenchmarkLibraryWindow : Window
                 });
                 return prepared;
             });
-            _dialogs.ShowInfo(
+            _dialogs.ShowSuccess(
                 "Export",
                 $"Package saved to:\n{path}\n\n"
                 + $"Exported: {result.Exported} capture(s)\n"
@@ -349,7 +343,7 @@ public partial class BenchmarkLibraryWindow : Window
             _manualStore.Reload();
 
             await _viewModel.RefreshAsync();
-            _dialogs.ShowInfo(
+            _dialogs.ShowSuccess(
                 "Benchmark package",
                 $"Imported {proposal.Imported} capture(s), {proposal.Skipped} skipped.");
         }

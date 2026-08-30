@@ -84,13 +84,26 @@ public partial class App : Application
         }
         catch (Exception error)
         {
-            // Controlled startup failure: log it, tell the user, and stop.
+            // Controlled startup failure: use the themed dialog whenever the
+            // service provider exists. A native MessageBox remains only as the
+            // last-resort path for failures that occur before UI services can
+            // be constructed at all.
             Log.Fatal(error, "Frame Performance Analyzer startup failed");
-            MessageBox.Show(
-                $"The application could not start.\n\n{error.Message}",
-                "Frame Performance Analyzer",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            if (_services?.GetService<IDialogService>() is { } dialogs)
+            {
+                dialogs.ShowError(
+                    "Frame Performance Analyzer",
+                    $"The application could not start.\n\n{error.Message}");
+            }
+            else
+            {
+                MessageBox.Show(
+                    $"The application could not start.\n\n{error.Message}",
+                    "Frame Performance Analyzer",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+
             Shutdown(1);
         }
     }
