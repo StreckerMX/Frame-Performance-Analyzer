@@ -7,7 +7,7 @@ namespace FrameViewAnalyzer.Analytics.Filtering;
 /// <summary>
 /// Detects the analyzable segment of a capture: GPU-utilization filtering,
 /// abnormal-FPS culling, smart transition-edge cleanup, sustained-run grouping,
-/// and user-controlled outer-edge trimming. FrameView keeps the established
+/// and mode-controlled outer-edge trimming. FrameView keeps the established
 /// one-second analysis model while avoiding fixed extra cuts around every load.
 /// </summary>
 public static class FilterProfileDetector
@@ -325,7 +325,8 @@ public static class FilterProfileDetector
                 new HashSet<int>(),
                 new FilterDiagnostics(
                     TotalBins: summaries.Count,
-                    BelowGpuBins: excludeTransitions && hasGpuData ? summaries.Count : 0,
+                    BelowGpuBins: belowGpuIndices.Count,
+                    FpsOutlierBins: fpsOutlierIndices.Count,
                     FpsUpperBound: fpsUpperBound));
         }
 
@@ -436,8 +437,9 @@ public static class FilterProfileDetector
                 continue;
             }
 
-            // The first and final outer capture edges are already controlled by
-            // Trim. Smart stabilization is reserved for internal loading gaps.
+            // The first and final outer capture edges are already handled by
+            // the active data mode's outer-edge trim. Smart stabilization is
+            // reserved for internal loading gaps.
             if (runIndex > 0)
             {
                 ProbeStart(run, byIndex, excluded);
