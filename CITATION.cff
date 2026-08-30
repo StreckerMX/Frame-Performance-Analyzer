@@ -7,8 +7,8 @@ license: MIT
 abstract: "Native Windows desktop application for analyzing and comparing NVIDIA FrameView captures and NVIDIA App performance-overlay logs, with interactive charts, benchmark comparison, visible-range statistics, filtering, a benchmark library, and presentation-ready exports."
 authors:
   - name: "Strecker"
-repository-code: "https://github.com/StreckerMX/FrameView-Analyzer"
-url: "https://github.com/StreckerMX/FrameView-Analyzer"
+repository-code: "https://github.com/StreckerMX/Frame-Performance-Analyzer"
+url: "https://github.com/StreckerMX/Frame-Performance-Analyzer"
 keywords:
   - Windows software
   - performance analysis

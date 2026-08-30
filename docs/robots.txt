@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://streckermx.github.io/FrameView-Analyzer/sitemap.xml
+Sitemap: https://streckermx.github.io/Frame-Performance-Analyzer/sitemap.xml

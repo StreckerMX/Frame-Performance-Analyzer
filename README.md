@@ -6,10 +6,10 @@
 
 A native Windows desktop application for analyzing and comparing **NVIDIA FrameView** captures and **NVIDIA App performance-overlay logs**.
 
-[![Release](https://img.shields.io/github/v/release/StreckerMX/FrameView-Analyzer?label=release)](https://github.com/StreckerMX/FrameView-Analyzer/releases/latest)
+[![Release](https://img.shields.io/github/v/release/StreckerMX/Frame-Performance-Analyzer?label=release)](https://github.com/StreckerMX/Frame-Performance-Analyzer/releases/latest)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/)
-[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D4)](https://github.com/StreckerMX/FrameView-Analyzer/releases/latest)
-[![License](https://img.shields.io/github/license/StreckerMX/FrameView-Analyzer)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D4)](https://github.com/StreckerMX/Frame-Performance-Analyzer/releases/latest)
+[![License](https://img.shields.io/github/license/StreckerMX/Frame-Performance-Analyzer)](LICENSE)
 
 Frame Performance Analyzer turns NVIDIA performance CSV captures into an interactive benchmark workspace. Inspect frame-rate and telemetry data over time, compare two runs with the familiar **Pair** workflow, compare **2–8 benchmarks as equal peers** in **Multi**, isolate noisy or loading-screen regions, organize captures in a local Library, and export presentation-ready reports and portable analyzed data.
 
@@ -59,7 +59,7 @@ Frame Performance Analyzer turns NVIDIA performance CSV captures into an interac
 
 ## Download
 
-Download the latest stable build from **[GitHub Releases](https://github.com/StreckerMX/FrameView-Analyzer/releases/latest)**.
+Download the latest stable build from **[GitHub Releases](https://github.com/StreckerMX/Frame-Performance-Analyzer/releases/latest)**.
 
 For the current stable release:
 
@@ -140,8 +140,8 @@ CSV loading includes tolerant handling for common encoding and numeric-format va
 The project targets **.NET 10** and uses WPF.
 
 ```powershell
-git clone https://github.com/StreckerMX/FrameView-Analyzer.git
-cd FrameView-Analyzer
+git clone https://github.com/StreckerMX/Frame-Performance-Analyzer.git
+cd Frame-Performance-Analyzer
 
 dotnet restore FrameViewAnalyzer.sln
 dotnet build FrameViewAnalyzer.sln --configuration Release

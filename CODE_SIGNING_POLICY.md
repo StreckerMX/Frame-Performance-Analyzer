@@ -12,7 +12,7 @@ Until approval and pipeline integration are complete, existing release binaries 
 
 Only official Frame Performance Analyzer release artifacts built from this repository are eligible for signing.
 
-- Source repository: `https://github.com/StreckerMX/FrameView-Analyzer`
+- Source repository: `https://github.com/StreckerMX/Frame-Performance-Analyzer`
 - Signed product: `Frame Performance Analyzer`
 - Primary signed binary: `FramePerformanceAnalyzer.exe`
 - Build system: GitHub Actions on GitHub-hosted Windows runners
