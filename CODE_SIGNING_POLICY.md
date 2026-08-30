@@ -44,11 +44,15 @@ Frame Performance Analyzer does not include telemetry and does not make network 
 
 Application settings, benchmark metadata, Library records, and logs are stored locally on the user's computer. See the release documentation for the current storage locations.
 
-## System changes and uninstall
+## Distribution, system changes, and uninstall
 
-Frame Performance Analyzer is distributed as a portable, self-contained Windows x64 application. It does not require an installer and does not modify system configuration as part of installation.
+GitHub releases are distributed as a portable, self-contained Windows x64 application. Microsoft Store distribution uses a separate MSIX package that is signed by Microsoft as part of Store distribution.
 
-To uninstall it, delete the extracted application folder. Local application data can optionally be removed from the locations documented in `docs/RELEASE-README.md`.
+The SignPath Foundation signing scope applies only to official GitHub release artifacts produced by the repository-controlled GitHub Actions workflow. Microsoft Store packages are outside this SignPath signing scope.
+
+The portable GitHub release does not require an installer and does not modify system configuration as part of installation. To uninstall it, delete the extracted application folder. Local application data can optionally be removed from the locations documented in `docs/RELEASE-README.md`.
+
+Microsoft Store installations are installed and removed through Windows using the Store/MSIX application lifecycle.
 
 ## Verification
 
