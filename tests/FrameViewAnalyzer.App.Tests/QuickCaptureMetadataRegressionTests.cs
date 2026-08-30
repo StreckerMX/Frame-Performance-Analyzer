@@ -24,9 +24,15 @@ public sealed class QuickCaptureMetadataRegressionTests
 
     private sealed class FakeThemeService : IThemeService
     {
+        public string Current { get; private set; } = "dark";
+
         public event EventHandler? Changed;
 
-        public void Apply(string mode) => Changed?.Invoke(this, EventArgs.Empty);
+        public void Apply(string mode)
+        {
+            Current = mode;
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private sealed class FakeDialogService : IDialogService
