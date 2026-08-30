@@ -145,6 +145,7 @@ public partial class MainWindow
         }
 
         var isMultiReport = selection.Sessions.All(option => option.IsMultiPeer);
+        var useFramePoints = _viewModel.Chart.MarkersVisible;
         var byId = selection.Sessions
             .SelectMany(option => option.Session.Catalog)
             .GroupBy(metric => metric.Id, StringComparer.Ordinal)
@@ -152,7 +153,7 @@ public partial class MainWindow
 
         var groups = await _busy.RunOnThreadPoolAsync(
             "Preparing report",
-            () => BuildVisibleReportGroups(selection, byId, isMultiReport, range));
+            () => BuildVisibleReportGroups(selection, byId, isMultiReport, range, useFramePoints));
         if (groups.Count == 0)
         {
             _dialogs.ShowInfo("Export", "No selected metrics have data in the visible time range.");
@@ -174,7 +175,7 @@ public partial class MainWindow
         try
         {
             var style = ChartStyle.FromApplicationResources();
-            var header = BuildReportHeader(selection);
+            var header = BuildReportHeader(selection, useFramePoints);
             if (range is { } visible)
             {
                 header = header with
@@ -209,7 +210,8 @@ public partial class MainWindow
         ExportReportSelection selection,
         IReadOnlyDictionary<string, MetricDefinition> byId,
         bool isMultiReport,
-        AxisLimits? range)
+        AxisLimits? range,
+        bool useFramePoints)
     {
         var groups = new List<ReportPlotBuilder.ReportGroup>();
         foreach (var metricId in selection.MetricIds)
@@ -222,7 +224,7 @@ public partial class MainWindow
             var seriesList = new List<MetricSeries>();
             foreach (var option in selection.Sessions)
             {
-                var series = SeriesBuilder.Build(option.Session, metricId);
+                var series = ReportSeriesBuilder.Build(option.Session, metricId, useFramePoints);
                 if (range is { } visible)
                 {
                     series = SelectVisibleSeries(series, visible.Left, visible.Right);
