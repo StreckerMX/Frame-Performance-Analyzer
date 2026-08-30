@@ -94,6 +94,8 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private CaptureOption? _selectedCapture;
 
+    private bool _suppressSelectedCaptureLoad;
+
     public ObservableCollection<CaptureOption> Captures { get; } = [];
 
     public ChartViewModel Chart { get; }
@@ -177,7 +179,7 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnSelectedCaptureChanged(CaptureOption? value)
     {
         // Switching captures mid-operation would race the loader.
-        if (value is not null && !_busy.IsBusy)
+        if (value is not null && !_busy.IsBusy && !_suppressSelectedCaptureLoad)
         {
             _ = LoadBaseFromPathAsync(value.Path);
         }
@@ -759,10 +761,17 @@ public partial class MainWindowViewModel : ObservableObject
             Captures[index] = updated;
             if (remainsSelected)
             {
-                // Bypass the generated change callback: this is a label-only
-                // update and must not load the capture a second time.
-                _selectedCapture = updated;
-                OnPropertyChanged(nameof(SelectedCapture));
+                // This is a label-only update and must not load the capture a
+                // second time through OnSelectedCaptureChanged.
+                _suppressSelectedCaptureLoad = true;
+                try
+                {
+                    SelectedCapture = updated;
+                }
+                finally
+                {
+                    _suppressSelectedCaptureLoad = false;
+                }
             }
 
             return;
