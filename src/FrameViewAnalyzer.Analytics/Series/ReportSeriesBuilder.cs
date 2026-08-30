@@ -14,15 +14,18 @@ public static class ReportSeriesBuilder
         string metricId,
         bool useFramePoints)
     {
+        MetricSeries series;
         if (useFramePoints)
         {
             var frameSeries = FramePointSeriesBuilder.Build(session, metricId);
             if (frameSeries.Y.Length > 0)
             {
-                return frameSeries;
+                series = frameSeries;
+                return series with { IsReportSeries = true };
             }
         }
 
-        return SeriesBuilder.Build(session, metricId);
+        series = SeriesBuilder.Build(session, metricId);
+        return series with { IsReportSeries = true };
     }
 }

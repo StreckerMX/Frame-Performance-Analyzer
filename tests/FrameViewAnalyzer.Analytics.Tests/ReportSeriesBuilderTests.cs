@@ -17,6 +17,7 @@ public class ReportSeriesBuilderTests
         Assert.True(summary.X.SequenceEqual(report.X));
         Assert.True(summary.Y.SequenceEqual(report.Y));
         Assert.True(report.Y.Length < 30);
+        Assert.True(report.IsReportSeries);
         Assert.False(FramePointSeriesBuilder.IsCached(session, "fps"));
     }
 
@@ -29,6 +30,7 @@ public class ReportSeriesBuilderTests
         var report = ReportSeriesBuilder.Build(session, "fps", useFramePoints: true);
 
         Assert.True(FramePointSeriesBuilder.IsCached(session, "fps"));
+        Assert.True(report.IsReportSeries);
         Assert.Equal(30, report.Y.Length);
         Assert.All(report.Y, value => Assert.Equal(100.0, value, precision: 8));
         Assert.True(report.X.SequenceEqual(report.X.Order()));
