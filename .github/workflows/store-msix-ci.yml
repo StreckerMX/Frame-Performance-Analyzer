@@ -48,6 +48,13 @@ jobs:
           if (-not (Test-Path $msix)) { throw "Missing Store MSIX: $msix" }
           if (-not (Test-Path $checksum)) { throw "Missing Store checksum: $checksum" }
 
+          $identity = Get-Content packaging/store/StoreIdentity.json -Raw | ConvertFrom-Json
+          if ($identity.PackageIdentityName -ne 'Strecker.FrameViewAnalyzer') { throw 'Unexpected tracked Store Identity Name.' }
+          if ($identity.Publisher -ne 'CN=A37E4A45-43E1-42F1-866D-B4B9249062DE') { throw 'Unexpected tracked Store Publisher.' }
+          if ($identity.PublisherDisplayName -ne 'Strecker') { throw 'Unexpected tracked PublisherDisplayName.' }
+          if ($identity.PackageFamilyName -ne 'Strecker.FrameViewAnalyzer_9aqbg1gb4p26y') { throw 'Unexpected tracked Store PFN.' }
+          if ($identity.StoreId -ne '9P49TT4BJ798') { throw 'Unexpected tracked Store ID.' }
+
           [xml]$manifest = Get-Content artifacts/store/work/package/AppxManifest.xml
           if ($manifest.Package.Identity.Name -ne 'Strecker.FrameViewAnalyzer') { throw 'Unexpected Store Identity Name.' }
           if ($manifest.Package.Identity.Publisher -ne 'CN=A37E4A45-43E1-42F1-866D-B4B9249062DE') { throw 'Unexpected Store Publisher.' }
