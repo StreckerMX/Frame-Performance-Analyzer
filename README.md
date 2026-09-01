@@ -7,6 +7,7 @@
 A native Windows desktop application for analyzing and comparing **NVIDIA FrameView** captures and **NVIDIA App performance-overlay logs**.
 
 [![Release](https://img.shields.io/github/v/release/StreckerMX/Frame-Performance-Analyzer?label=release)](https://github.com/StreckerMX/Frame-Performance-Analyzer/releases/latest)
+[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Get%20the%20app-0078D4?logo=microsoft)](https://apps.microsoft.com/detail/9P49TT4BJ798)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D4)](https://github.com/StreckerMX/Frame-Performance-Analyzer/releases/latest)
 [![License](https://img.shields.io/github/license/StreckerMX/Frame-Performance-Analyzer)](LICENSE)
@@ -59,7 +60,13 @@ Frame Performance Analyzer turns NVIDIA performance CSV captures into an interac
 
 ## Download
 
-Download the latest stable build from **[GitHub Releases](https://github.com/StreckerMX/Frame-Performance-Analyzer/releases/latest)**.
+### Microsoft Store (recommended)
+
+Install **[Frame Performance Analyzer from Microsoft Store](https://apps.microsoft.com/detail/9P49TT4BJ798)** for the Store-managed Windows installation and update experience.
+
+### GitHub Releases
+
+Portable self-contained builds remain available from **[GitHub Releases](https://github.com/StreckerMX/Frame-Performance-Analyzer/releases/latest)**.
 
 For the current stable release:
 
@@ -67,11 +74,9 @@ For the current stable release:
 2. Extract the archive.
 3. Run `FramePerformanceAnalyzer.exe`.
 
-The application is distributed as a **self-contained Windows x64 build**, so installing the .NET runtime separately is not required.
+The portable application is distributed as a **self-contained Windows x64 build**, so installing the .NET runtime separately is not required.
 
-Microsoft Store builds use `FramePerformanceAnalyzer-Store-3.2.0.0-x64.msix`. The Store-facing name is **Frame Performance Analyzer**, while its Partner Center package identity remains unchanged for compatibility with the validated listing.
-
-> Windows SmartScreen may show an unknown-publisher warning because the executable is not code-signed.
+> The portable GitHub executable may show a Windows SmartScreen unknown-publisher warning while SignPath Foundation signing is pending. The Microsoft Store build is distributed through Microsoft's Store signing pipeline.
 
 ## Code signing policy
 
@@ -185,7 +190,7 @@ More technical documentation is available in [`docs/`](docs/), including archite
 
 ## Verification
 
-Version **3.2.0** is covered by the Windows/.NET 10 automated test suite, GitHub release-package validation, and Microsoft Store MSIX validation. Manual checkpoints cover normal-load performance, Precision filtering, compressed analyzed time, true frame points, Pair, Multi, the unified browser, metadata labels, zoom/pan, exact grid lines, and FrameView/NVIDIA App metrics.
+Version **3.2.0** is published on Microsoft Store and covered by the Windows/.NET 10 automated test suite, GitHub release-package validation, and Microsoft Store MSIX validation. Manual checkpoints cover normal-load performance, Precision filtering, compressed analyzed time, true frame points, Pair, Multi, the unified browser, metadata labels, zoom/pan, exact grid lines, and FrameView/NVIDIA App metrics.
 
 Each GitHub release also includes a `.sha256` file for verifying the downloadable ZIP.
 

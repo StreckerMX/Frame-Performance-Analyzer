@@ -2,6 +2,14 @@
 
 Target listing language: **English (United States)**
 
+## Live listing
+
+Status: **Published**
+
+[View Frame Performance Analyzer on Microsoft Store](https://apps.microsoft.com/detail/9P49TT4BJ798)
+
+Store ID: `9P49TT4BJ798`
+
 ## Product name
 
 Frame Performance Analyzer
