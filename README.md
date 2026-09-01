@@ -14,6 +14,20 @@ A native Windows desktop application for analyzing and comparing **NVIDIA FrameV
 
 Frame Performance Analyzer turns NVIDIA performance CSV captures into an interactive benchmark workspace. Inspect frame-rate and telemetry data over time, compare two runs with the familiar **Pair** workflow, compare **2–8 benchmarks as equal peers** in **Multi**, isolate noisy or loading-screen regions, organize captures in a local Library, and export presentation-ready reports and portable analyzed data.
 
+<p align="center">
+  <a href="https://apps.microsoft.com/detail/9P49TT4BJ798">
+    <img
+      src="https://get.microsoft.com/images/en-us%20dark.svg"
+      alt="Download Frame Performance Analyzer from Microsoft Store"
+      width="420"
+    />
+  </a>
+</p>
+
+<p align="center">
+  <sub><strong>Available now on Microsoft Store</strong> · Store-managed installation and automatic updates for Windows.</sub>
+</p>
+
 ## Screenshots
 
 ### Pair comparison
