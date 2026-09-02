@@ -55,6 +55,8 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     private readonly CaptureFolderScanner _scanner;
     private readonly LibraryIndexer _indexer = new();
     private string? _captureDirectory;
+    private IReadOnlySet<string> _activeFolderIdentities =
+        new HashSet<string>(StringComparer.Ordinal);
     private readonly List<string> _selectedIdentities = [];
     private readonly IReadOnlyList<string> _initialSelectedPaths;
     private readonly string? _excludedSelectionPath;
@@ -279,8 +281,9 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
         _busy.RunAsync("Loading benchmark library", RefreshCoreAsync);
 
     /// <summary>
-    /// Switches the indexed source folder in place. The Library records remain
-    /// available while captures from the new folder are discovered and merged.
+    /// Switches the active Source folder in place. The global Library keeps its
+    /// historical records, while contextual Pair/Multi browsers are scoped to
+    /// identities returned by the active folder scan.
     /// </summary>
     public Task ChangeCaptureFolderAsync(string captureDirectory) =>
         _busy.RunAsync("Changing capture folder", async () =>
@@ -302,10 +305,15 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
             // NotSupportedException when their source collection changes from
             // a non-Dispatcher thread, so the rebuild must resume on the UI
             // thread that started the refresh.
-            await _indexer.RefreshAsync(_library, _captureDirectory, _scanner);
+            _activeFolderIdentities =
+                await _indexer.RefreshAsync(_library, _captureDirectory, _scanner);
             TrySave();
         }
-
+        else
+        {
+            _activeFolderIdentities =
+                new HashSet<string>(StringComparer.Ordinal);
+        }
         ApplyInitialSelection();
         _selectedIdentities.RemoveAll(identity =>
             !_library.Records.TryGetValue(identity, out var record) || !IsSelectable(record));
@@ -492,46 +500,77 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
             }
         }
     }
+    private IEnumerable<LibraryRecord> BrowserRecords()
+    {
+        if (!IsSelectionMode || string.IsNullOrWhiteSpace(_captureDirectory))
+        {
+            return _library.Records.Values;
+        }
 
+        return _library.Records.Values.Where(record =>
+            _activeFolderIdentities.Contains(record.Identity));
+    }
+
+    private bool IsInActiveSourceFolder(LibraryRecord record) =>
+        !IsSelectionMode
+        || string.IsNullOrWhiteSpace(_captureDirectory)
+        || _activeFolderIdentities.Contains(record.Identity);
     private void RebuildOptions()
     {
-        static void Replace(ObservableCollection<string> options, IEnumerable<string> values)
+        static void Replace(
+            ObservableCollection<string> options,
+            IEnumerable<string> values)
         {
             options.Clear();
             options.Add(AllValue);
+
             foreach (var value in values)
             {
                 options.Add(value);
             }
         }
 
+        var records = BrowserRecords().ToList();
+
         Replace(
             GameOptions,
-            _library.Records.Values
+            records
                 .Select(record => LibrarySearch.LibraryGame(
                     record,
-                    _manualLookup.TryGetValue(record.Identity, out var manual) ? manual : null))
+                    _manualLookup.TryGetValue(record.Identity, out var manual)
+                        ? manual
+                        : null))
                 .Where(game => game.Length > 0)
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(game => game, StringComparer.CurrentCultureIgnoreCase));
+
         Replace(
             ResolutionOptions,
-            _library.Records.Values
+            records
                 .Select(record => record.Resolution)
-                .Where(resolution => resolution.Length > 0 && resolution != "--")
+                .Where(resolution =>
+                    resolution.Length > 0 && resolution != "--")
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(resolution => resolution, StringComparer.Ordinal));
+
         Replace(
             GpuOptions,
-            _library.Records.Values
+            records
                 .Select(record => record.Gpu)
                 .Where(gpu => gpu.Length > 0 && gpu != "--")
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(gpu => gpu, StringComparer.Ordinal));
 
-        SelectedGame = GameOptions.Contains(SelectedGame) ? SelectedGame : AllValue;
-        SelectedResolution = ResolutionOptions.Contains(SelectedResolution) ? SelectedResolution : AllValue;
-        SelectedGpu = GpuOptions.Contains(SelectedGpu) ? SelectedGpu : AllValue;
+        SelectedGame =
+            GameOptions.Contains(SelectedGame) ? SelectedGame : AllValue;
+
+        SelectedResolution =
+            ResolutionOptions.Contains(SelectedResolution)
+                ? SelectedResolution
+                : AllValue;
+
+        SelectedGpu =
+            GpuOptions.Contains(SelectedGpu) ? SelectedGpu : AllValue;
     }
 
     private void RebuildRows()
@@ -540,22 +579,43 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
             .Select(tag => tag.Trim())
             .Where(tag => tag.Length > 0)
             .ToList();
-        var searched = LibrarySearch.SearchRecords(_library.Records.Values, SearchText, _manualLookup);
+
+        var browserRecords = BrowserRecords();
+
+        var searched = LibrarySearch.SearchRecords(
+            browserRecords,
+            SearchText,
+            _manualLookup);
+
         var filtered = LibrarySearch.FilterRecords(
             searched,
             _manualLookup,
             tags: tags,
-            resolution: SelectedResolution == AllValue ? null : SelectedResolution,
-            gpu: SelectedGpu == AllValue ? null : SelectedGpu,
-            game: SelectedGame == AllValue ? null : SelectedGame);
+            resolution: SelectedResolution == AllValue
+                ? null
+                : SelectedResolution,
+            gpu: SelectedGpu == AllValue
+                ? null
+                : SelectedGpu,
+            game: SelectedGame == AllValue
+                ? null
+                : SelectedGame);
+
         var sorted = LibrarySearch.SortRecords(
             filtered,
-            SortByDate ? LibraryConstants.SortDate : LibraryConstants.SortName);
+            SortByDate
+                ? LibraryConstants.SortDate
+                : LibraryConstants.SortName);
 
         Rows.Clear();
+
         foreach (var record in sorted)
         {
-            var manual = _manualLookup.TryGetValue(record.Identity, out var value) ? value : null;
+            var manual =
+                _manualLookup.TryGetValue(record.Identity, out var value)
+                    ? value
+                    : null;
+
             Rows.Add(new LibraryRow(
                 record,
                 manual,
@@ -565,7 +625,9 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
                 record.Available,
                 IsSelectable(record),
                 IsCurrentBase(record),
-                _selectedIdentities.Contains(record.Identity, StringComparer.Ordinal)));
+                _selectedIdentities.Contains(
+                    record.Identity,
+                    StringComparer.Ordinal)));
         }
 
         CountText = $"{Rows.Count} record(s)";
@@ -607,7 +669,9 @@ public partial class BenchmarkLibraryViewModel : ObservableObject
     }
 
     private bool IsSelectable(LibraryRecord record) =>
-        record.Available && !IsCurrentBase(record);
+        IsInActiveSourceFolder(record)
+        && record.Available
+        && !IsCurrentBase(record);
 
     private bool IsCurrentBase(LibraryRecord record) =>
         IsComparisonSelectionMode
