@@ -50,6 +50,45 @@ internal static class TestCapture
     }
 
     /// <summary>
+    /// Stable 100 FPS capture with one isolated 2000 FPS frame inside an otherwise
+    /// valid gameplay bin. The bin itself remains normal so frame-level Precision
+    /// filtering, rather than bin rejection, must handle the spike.
+    /// </summary>
+    public static CaptureData MakeFrameSpikeSession()
+    {
+        var headers = new[]
+        {
+        "TimeInSeconds",
+        "MsBetweenPresents",
+        "GPU0Util(%)",
+    };
+
+        var rows = new List<string[]>();
+
+        for (var second = 0; second < 12; second++)
+        {
+            for (var frame = 0; frame < 10; frame++)
+            {
+                var time = second + frame / 10.0;
+
+                var frameTime =
+                    second == 6 && frame == 5
+                        ? 0.5
+                        : 10.0;
+
+                rows.Add(
+                [
+                    time.ToString(CultureInfo.InvariantCulture),
+                frameTime.ToString(CultureInfo.InvariantCulture),
+                "80.0",
+            ]);
+            }
+        }
+
+        return CaptureWith(headers, rows);
+    }
+
+    /// <summary>
     /// Multi-scene capture with four high-FPS transition seconds (4-7) in
     /// the middle, mirroring the Python fixture exactly.
     /// </summary>

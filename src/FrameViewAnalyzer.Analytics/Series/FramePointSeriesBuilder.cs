@@ -9,11 +9,12 @@ namespace FrameViewAnalyzer.Analytics.Series;
 /// during normal capture loading: callers opt in explicitly, and completed
 /// results are cached by immutable SessionAnalysis + metric.
 ///
-/// FPS uses each analyzed frame's actual 1000/MsBetweenPresents value. The
-/// interactive chart is responsible for viewport decimation, so zooming can
-/// progressively reveal the original frames without smoothing real stutters
-/// or spikes out of the data. Other metrics expose their row-level values.
-/// </summary>
+/// FPS uses each analyzed frame's actual 1000/MsBetweenPresents value.
+/// Precision mode applies a robust frame-level FPS fence after the normal
+/// bin-level filtering so abnormal present-interval spikes inside otherwise
+/// valid bins do not reappear when Frame points is enabled. Raw mode preserves
+/// those source values. The interactive chart remains responsible only for
+/// viewport decimation and never smooths the surviving frame data.
 public static class FramePointSeriesBuilder
 {
     private static readonly ConditionalWeakTable<
@@ -66,6 +67,10 @@ public static class FramePointSeriesBuilder
         var xs = new List<double>();
         var ys = new List<double>();
 
+        var precisionUpperBound = session.EffectiveOptions.ExcludeTransitions
+            ? ComputePrecisionFrameFpsUpperBound(session)
+            : null;
+
         foreach (var bin in session.ValidBins.Order())
         {
             if (!analyzedXByBin.TryGetValue(bin, out var binX)
@@ -83,7 +88,15 @@ public static class FramePointSeriesBuilder
                 }
 
                 var fps = 1000.0 / frameTime;
-                if (!double.IsFinite(fps) || fps <= 0 || fps > AnalysisConstants.FpsChartCap)
+                if (!double.IsFinite(fps)
+                    || fps <= 0
+                    || fps > AnalysisConstants.FpsChartCap)
+                {
+                    continue;
+                }
+
+                if (precisionUpperBound.HasValue
+                    && fps > precisionUpperBound.Value)
                 {
                     continue;
                 }
@@ -94,7 +107,78 @@ public static class FramePointSeriesBuilder
             }
         }
 
-        return new MetricSeries(metric, xs.ToArray(), ys.ToArray(), SourceSession: session);
+        return new MetricSeries(
+            metric,
+            xs.ToArray(),
+            ys.ToArray(),
+            SourceSession: session);
+    }
+
+    private static double? ComputePrecisionFrameFpsUpperBound(
+        SessionAnalysis session)
+    {
+        var values = new List<double>();
+
+        foreach (var bin in session.ValidBins)
+        {
+            if (!session.RowsByBin.TryGetValue(bin, out var sampleIndices))
+            {
+                continue;
+            }
+
+            foreach (var sampleIndex in sampleIndices)
+            {
+                var frameTime = session.Samples.FrametimeMs[sampleIndex];
+                if (!double.IsFinite(frameTime) || frameTime <= 0)
+                {
+                    continue;
+                }
+
+                var fps = 1000.0 / frameTime;
+                if (!double.IsFinite(fps)
+                    || fps <= 0
+                    || fps > AnalysisConstants.FpsChartCap)
+                {
+                    continue;
+                }
+
+                values.Add(fps);
+            }
+        }
+
+        if (values.Count < 8)
+        {
+            return null;
+        }
+
+        values.Sort();
+
+        var median = FrameViewAnalyzer.Core.Math.Statistics.Percentile(
+            values,
+            0.50);
+        var q1 = FrameViewAnalyzer.Core.Math.Statistics.Percentile(
+            values,
+            0.25);
+        var q3 = FrameViewAnalyzer.Core.Math.Statistics.Percentile(
+            values,
+            0.75);
+
+        if (median is null || q1 is null || q3 is null)
+        {
+            return null;
+        }
+
+        var iqr = Math.Max(0.0, q3.Value - q1.Value);
+
+        var robustLimit = Math.Max(
+            q3.Value + 3.0 * iqr,
+            Math.Max(
+                median.Value * 1.75,
+                median.Value + 30.0));
+
+        return Math.Min(
+            AnalysisConstants.FpsChartCap,
+            robustLimit);
     }
 
     private static MetricSeries BuildRawMetric(
