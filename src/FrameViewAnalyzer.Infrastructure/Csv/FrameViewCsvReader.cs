@@ -198,11 +198,14 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
                 }
 
                 var headers = RowFields(csv);
-                var timeIndex = Array.IndexOf(headers, "TimeInSeconds");
-                if (timeIndex < 0)
-                {
-                    timeIndex = Array.IndexOf(headers, CaptureSourceDetector.NvidiaAppTimeHeader);
-                }
+                var frameViewTimeIndex = Array.IndexOf(headers, "TimeInSeconds");
+                var nvidiaAppTimeIndex = Array.IndexOf(
+                    headers,
+                    CaptureSourceDetector.NvidiaAppTimeHeader);
+
+                var timeIndex = frameViewTimeIndex >= 0
+                    ? frameViewTimeIndex
+                    : nvidiaAppTimeIndex;
 
                 var presentsIndex = Array.IndexOf(headers, "MsBetweenPresents");
                 if (timeIndex < 0 && presentsIndex < 0)
@@ -228,9 +231,17 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
                     return null;
                 }
 
-                // Duration used to require walking every row of every capture.
-                // Read the final time value from a small tail window instead,
-                // reducing a minutes-long benchmark to two short disk reads.
+                // Duration is the span of the capture timeline, not the absolute final
+                // TimeInSeconds value. FrameView timestamps can begin well above zero when
+                // recording starts after the monitored process has already been running.
+                //
+                // The first timestamp is already available from the small metadata sample at
+                // the beginning of the file, while the last timestamp comes from the existing
+                // tail read. This preserves the lightweight metadata path for long captures.
+                var firstTime = frameViewTimeIndex >= 0
+                    ? FirstNumericValue(sampleRows, frameViewTimeIndex)
+                    : null;
+
                 var lastTime = timeIndex >= 0
                     ? await ReadLastTimeFromTailAsync(
                         fullPath,
@@ -239,6 +250,30 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
                         cancellationToken).ConfigureAwait(false)
                     : null;
 
+                double? durationSeconds = null;
+
+                if (lastTime.HasValue && double.IsFinite(lastTime.Value))
+                {
+                    if (frameViewTimeIndex >= 0)
+                    {
+                        // FrameView TimeInSeconds follows the monitored process timeline and
+                        // may therefore begin well above zero. Capture duration is the span
+                        // between the first and final recorded timestamps.
+                        if (firstTime.HasValue
+                            && double.IsFinite(firstTime.Value)
+                            && lastTime.Value >= firstTime.Value)
+                        {
+                            durationSeconds = lastTime.Value - firstTime.Value;
+                        }
+                    }
+                    else if (nvidiaAppTimeIndex >= 0 && lastTime.Value >= 0)
+                    {
+                        // NVIDIA App explicitly reports elapsed capture time. Its final
+                        // timestamp already represents the capture duration even when the
+                        // first sampled row occurs after zero.
+                        durationSeconds = lastTime.Value;
+                    }
+                }
                 var application = FirstNonEmpty(sampleRows, applicationIndex) ?? "--";
                 return new CaptureInfo(
                     Path: fullPath,
@@ -247,7 +282,7 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
                     Resolution: FirstNonEmpty(sampleRows, resolutionIndex) ?? "--",
                     Gpu: FirstNonEmpty(sampleRows, gpuIndices) ?? "--",
                     Cpu: FirstNonEmpty(sampleRows, cpuIndex) ?? "--",
-                    DurationSeconds: lastTime);
+                    DurationSeconds: durationSeconds);
             }
             catch (DecoderFallbackException)
             {
@@ -344,6 +379,36 @@ public sealed class FrameViewCsvReader : IFrameViewCsvReader
         }
 
         return fields;
+    }
+
+    private static double? FirstNumericValue(
+        IReadOnlyList<string[]> rows,
+        int index)
+    {
+        if (index < 0)
+        {
+            return null;
+        }
+
+        foreach (var row in rows)
+        {
+            if (index >= row.Length)
+            {
+                continue;
+            }
+
+            var raw = row[index];
+            if (CsvValues.IsNa(raw)
+                || !CsvValues.TryParseNumber(raw, out var value)
+                || !double.IsFinite(value))
+            {
+                continue;
+            }
+
+            return value;
+        }
+
+        return null;
     }
 
     private static string? FirstNonEmpty(List<string[]> rows, params int[] indices)
