@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use Frame Performance Analyzer, please cite the software using these metadata."
 title: "Frame Performance Analyzer"
 type: software
-version: "3.2.0"
+version: "3.2.3"
 license: MIT
 abstract: "Native Windows desktop application for analyzing and comparing NVIDIA FrameView captures and NVIDIA App performance-overlay logs, with interactive charts, benchmark comparison, visible-range statistics, filtering, a benchmark library, and presentation-ready exports."
 authors:

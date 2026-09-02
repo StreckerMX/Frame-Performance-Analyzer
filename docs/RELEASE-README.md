@@ -1,16 +1,28 @@
-# Frame Performance Analyzer 3.2.0
+# Frame Performance Analyzer 3.2.3
 
-**Release:** Precision Timeline
-**Version:** 3.2.0
-**Windows package version:** 3.2.0.0
+**Release:** Precision Timeline maintenance update  
+**Version:** 3.2.3  
+**Windows package version:** 3.2.3.0
 
-Frame Performance Analyzer is a native Windows desktop application for
-analyzing and comparing NVIDIA FrameView captures and NVIDIA App
-performance-overlay logs. Version 3.2.0 introduces the Precision Timeline
-workflow while preserving the established Pair, Multi, Library, and export
-features.
+Frame Performance Analyzer 3.2.3 is a maintenance update for the
+Precision Timeline release. It preserves the 3.2.0 feature set while
+addressing issues discovered during post-release validation.
 
-## What's new in 3.2.0
+## Fixes in 3.2.3
+
+- **Contextual benchmark browser scoping:** Pair Base, Pair Comparison, and
+  Multi selectors now show only captures belonging to the currently active
+  Source folder. The global Benchmark Library remains historical and is not
+  cleared when the Source folder changes.
+- **Precision Frame points:** enabling Frame points no longer reintroduces
+  abnormal raw FPS spikes while Precision filtering is active. Raw mode still
+  preserves the original frame-level values.
+- **Benchmark capture duration:** FrameView capture duration is now calculated
+  from the actual recorded timestamp span rather than treating the final
+  absolute `TimeInSeconds` value as the capture length. NVIDIA App elapsed-time
+  logs retain their existing semantics.
+
+## Precision Timeline highlights
 
 - **Precision filtering** is one explicit binary mode. Off keeps the complete
   raw capture. On applies automatic GPU gating, FPS outlier handling, fixed
@@ -29,17 +41,14 @@ features.
   visible-range statistics, and direction-aware deltas.
 - **Multi** compares 2–8 captures as equal peers with stable colors shared by
   charts, KPI rows, cursor values, selection, and exports.
-- Pair, Comparison, Multi, and Library now use one **unified benchmark
-  browser** with search, filters, full-card selection, source-folder control,
-  and protection against choosing the current Base as its own Comparison.
+- Pair, Comparison, Multi, and Library use one **unified benchmark browser**
+  with search, filters, full-card selection, source-folder control, and
+  protection against choosing the current Base as its own Comparison.
 - Metadata **Benchmark name** values appear together with the detected capture
   name in the quick selector, so repeated captures remain distinguishable.
 - The interface uses themed scrollbars, exact tick-aligned grid lines, a fixed
   cursor-value readout, and distinct **Reset view** and **Fit visible Y**
   actions.
-- Public branding is now **Frame Performance Analyzer**. Technical project
-  names, persisted storage locations, Microsoft Store identity, and legitimate
-  NVIDIA FrameView terminology remain stable for compatibility.
 
 ## Supported input
 
@@ -100,7 +109,7 @@ existing files.
 
 ## GitHub ZIP
 
-1. Unzip `FramePerformanceAnalyzer-v3.2.0-win-x64.zip`.
+1. Unzip `FramePerformanceAnalyzer-v3.2.3-win-x64.zip`.
 2. Double-click `FramePerformanceAnalyzer.exe`.
 
 The build is self-contained for Windows x64; a separate .NET runtime is not
@@ -113,7 +122,7 @@ only when it came from the official repository release.
 ## Microsoft Store package
 
 The Store artifact is
-`FramePerformanceAnalyzer-Store-3.2.0.0-x64.msix`. Microsoft Store signs the
+`FramePerformanceAnalyzer-Store-3.2.3.0-x64.msix`. Microsoft Store signs the
 package after certification. The physical filename and public DisplayName use
 the new brand, while the Partner Center package identity intentionally remains
 `Strecker.FrameViewAnalyzer`.

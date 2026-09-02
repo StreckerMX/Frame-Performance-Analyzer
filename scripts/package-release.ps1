@@ -44,7 +44,7 @@ $dotnet = (Get-Command dotnet).Source
 if (-not $dotnet) { throw 'dotnet was not found on PATH.' }
 
 # Single source of truth for the version: Directory.Build.props
-# (VersionPrefix → "3.2.0" for this release).
+# (VersionPrefix → "3.2.3" for this release).
 $version = (& $dotnet msbuild $appProject -getProperty:Version).Trim()
 if (-not $version) { throw 'Could not resolve the product version from the project.' }
 Write-Host "==> packaging version: $version"
