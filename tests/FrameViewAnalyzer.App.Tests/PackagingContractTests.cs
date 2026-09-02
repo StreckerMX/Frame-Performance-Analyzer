@@ -33,12 +33,12 @@ public class PackagingContractTests
         var props = XDocument.Parse(Read("Directory.Build.props"));
         var version = props.Descendants("VersionPrefix").Single().Value;
 
-        Assert.Equal("3.2.0", version);
-        Assert.Equal("3.2.0.0", $"{version}.0");
+        Assert.Equal("3.2.3", version);
+        Assert.Equal("3.2.3.0", $"{version}.0");
         Assert.Equal(PublicName, props.Descendants("Product").Single().Value);
         Assert.Equal(PublicName, props.Descendants("AssemblyTitle").Single().Value);
-        Assert.Equal("3.2.0.0", props.Descendants("AssemblyVersion").Single().Value);
-        Assert.Equal("3.2.0.0", props.Descendants("FileVersion").Single().Value);
+        Assert.Equal("3.2.3.0", props.Descendants("AssemblyVersion").Single().Value);
+        Assert.Equal("3.2.3.0", props.Descendants("FileVersion").Single().Value);
     }
 
     [Fact]

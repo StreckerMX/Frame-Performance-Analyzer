@@ -84,7 +84,7 @@ Portable self-contained builds remain available from **[GitHub Releases](https:/
 
 For the current stable release:
 
-1. Download `FramePerformanceAnalyzer-v3.2.0-win-x64.zip`.
+1. Download `FramePerformanceAnalyzer-v3.2.3-win-x64.zip`.
 2. Extract the archive.
 3. Run `FramePerformanceAnalyzer.exe`.
 
@@ -108,6 +108,12 @@ The current application has no telemetry and makes no network calls during norma
 - **Pair and Multi parity.** Both workspaces share Precision filtering, frame-point statistics, visible-range behavior, busy presentation, zoom/pan, and exports.
 - **Interface polish.** Themed scrollbars, exact tick-aligned grid lines, fixed cursor readouts, and distinct **Reset view** / **Fit visible Y** actions keep the dense benchmark interface predictable.
 - **Distribution rebranding.** The public product and downloadable files are now **Frame Performance Analyzer**, while NVIDIA FrameView terminology and stable technical identities remain compatible.
+
+## Maintenance fixes in 3.2.3
+
+- **Source-folder scoped benchmark selection.** Pair Base, Pair Comparison, and Multi now show only captures discovered in the active Source folder while the global Benchmark Library remains intact.
+- **Precision-safe Frame points.** Frame points now preserve the active Precision-filtered frame set instead of reintroducing excluded raw FPS spikes. Raw mode continues to expose the original frame-level values.
+- **Correct capture durations.** FrameView benchmark duration now uses the actual recorded timestamp span rather than the final absolute `TimeInSeconds` value. NVIDIA App elapsed-time logs retain their native duration semantics.
 
 ## Features
 
@@ -204,7 +210,7 @@ More technical documentation is available in [`docs/`](docs/), including archite
 
 ## Verification
 
-Version **3.2.0** is published on Microsoft Store and covered by the Windows/.NET 10 automated test suite, GitHub release-package validation, and Microsoft Store MSIX validation. Manual checkpoints cover normal-load performance, Precision filtering, compressed analyzed time, true frame points, Pair, Multi, the unified browser, metadata labels, zoom/pan, exact grid lines, and FrameView/NVIDIA App metrics.
+GitHub release **3.2.3** is covered by the Windows/.NET 10 automated test suite, release-package validation, and manual release-candidate testing. Version **3.2.0** remains the currently published Microsoft Store build until the Store update completes.
 
 Each GitHub release also includes a `.sha256` file for verifying the downloadable ZIP.
 

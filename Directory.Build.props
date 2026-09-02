@@ -19,11 +19,11 @@
 
     <!-- Single source of truth for the product version.
          Changing this file triggers the release workflow; manual workflow runs are also supported.
-         Version/InformationalVersion = 3.2.0 (UI, startup log, and packaging
+         Version/InformationalVersion = 3.2.3 (UI, startup log, and packaging
          read this); AssemblyVersion/FileVersion stay numeric for Windows. -->
-    <VersionPrefix>3.2.0</VersionPrefix>
-    <AssemblyVersion>3.2.0.0</AssemblyVersion>
-    <FileVersion>3.2.0.0</FileVersion>
+    <VersionPrefix>3.2.3</VersionPrefix>
+    <AssemblyVersion>3.2.3.0</AssemblyVersion>
+    <FileVersion>3.2.3.0</FileVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 </Project>
