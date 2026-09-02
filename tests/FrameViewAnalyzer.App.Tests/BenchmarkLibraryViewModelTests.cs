@@ -43,6 +43,27 @@ public class BenchmarkLibraryViewModelTests
         }
     }
 
+    private static string WriteCapture(
+        string directory,
+        string application,
+        string timestamp)
+    {
+        Directory.CreateDirectory(directory);
+
+        var path = Path.Combine(
+            directory,
+            $"FrameView_{application}.exe_{timestamp}_Log.csv");
+
+        File.WriteAllText(
+            path,
+            "TimeInSeconds,MsBetweenPresents,Application,Resolution,GPU,CPU\n"
+            + $"0.0,16.6,{application},1920x1080,RTX 4090,Ryzen 7\n"
+            + $"0.5,16.6,{application},1920x1080,RTX 4090,Ryzen 7\n"
+            + $"1.0,16.6,{application},1920x1080,RTX 4090,Ryzen 7\n");
+
+        return path;
+    }
+
     private static void Seed(
         string storePath,
         IReadOnlyDictionary<string, ManualMetadata> manual,
@@ -435,6 +456,121 @@ public class BenchmarkLibraryViewModelTests
             Assert.Contains("a", persisted.IgnoredIdentities);
             Assert.DoesNotContain("a", persisted.Records.Keys);
             Assert.Empty(persisted.RecentComparisons);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+    [Theory]
+    [InlineData(BenchmarkBrowserMode.PairBase)]
+    [InlineData(BenchmarkBrowserMode.PairComparison)]
+    [InlineData(BenchmarkBrowserMode.Multi)]
+    public async Task Context_browser_scopes_rows_to_the_active_source_folder(
+    BenchmarkBrowserMode mode)
+    {
+        var (viewModel, directory) = Create(mode: mode);
+
+        try
+        {
+            var folderA = Path.Combine(directory, "folder-a");
+            var folderB = Path.Combine(directory, "folder-b");
+            var emptyFolder = Path.Combine(directory, "empty");
+
+            WriteCapture(
+                folderA,
+                "GameA",
+                "2026_08_31T120000");
+
+            WriteCapture(
+                folderB,
+                "GameB",
+                "2026_08_31T130000");
+
+            Directory.CreateDirectory(emptyFolder);
+
+            await viewModel.ChangeCaptureFolderAsync(folderA);
+
+            var first = Assert.Single(viewModel.Rows);
+            Assert.Equal("GameA", first.Title);
+            Assert.Equal(
+                [BenchmarkLibraryViewModel.AllValue, "GameA"],
+                viewModel.GameOptions);
+
+            await viewModel.ChangeCaptureFolderAsync(folderB);
+
+            var second = Assert.Single(viewModel.Rows);
+            Assert.Equal("GameB", second.Title);
+            Assert.DoesNotContain(
+                viewModel.Rows,
+                row => row.Title == "GameA");
+            Assert.Equal(
+                [BenchmarkLibraryViewModel.AllValue, "GameB"],
+                viewModel.GameOptions);
+
+            await viewModel.ChangeCaptureFolderAsync(emptyFolder);
+
+            Assert.Empty(viewModel.Rows);
+            Assert.Equal("0 record(s)", viewModel.CountText);
+            Assert.Equal(
+                [BenchmarkLibraryViewModel.AllValue],
+                viewModel.GameOptions);
+            Assert.Equal(0, viewModel.SelectedCount);
+
+            await viewModel.ChangeCaptureFolderAsync(folderA);
+
+            var restored = Assert.Single(viewModel.Rows);
+            Assert.Equal("GameA", restored.Title);
+
+            var persisted = new JsonLibraryStore(
+                Path.Combine(directory, "library.json")).Load();
+
+            Assert.Equal(2, persisted.Records.Count);
+        }
+        finally
+        {
+            Cleanup(directory);
+        }
+    }
+    [Fact]
+    public async Task Library_mode_remains_global_when_the_source_folder_changes()
+    {
+        var (viewModel, directory) = Create(
+            mode: BenchmarkBrowserMode.Library);
+
+        try
+        {
+            var folderA = Path.Combine(directory, "folder-a");
+            var folderB = Path.Combine(directory, "folder-b");
+            var emptyFolder = Path.Combine(directory, "empty");
+
+            WriteCapture(
+                folderA,
+                "GameA",
+                "2026_08_31T120000");
+
+            WriteCapture(
+                folderB,
+                "GameB",
+                "2026_08_31T130000");
+
+            Directory.CreateDirectory(emptyFolder);
+
+            await viewModel.ChangeCaptureFolderAsync(folderA);
+
+            Assert.Single(viewModel.Rows);
+
+            await viewModel.ChangeCaptureFolderAsync(folderB);
+
+            Assert.Equal(2, viewModel.Rows.Count);
+            Assert.Contains(viewModel.Rows, row => row.Title == "GameA");
+            Assert.Contains(viewModel.Rows, row => row.Title == "GameB");
+
+            await viewModel.ChangeCaptureFolderAsync(emptyFolder);
+
+            Assert.Equal(2, viewModel.Rows.Count);
+            Assert.Contains(viewModel.Rows, row => row.Title == "GameA");
+            Assert.Contains(viewModel.Rows, row => row.Title == "GameB");
         }
         finally
         {

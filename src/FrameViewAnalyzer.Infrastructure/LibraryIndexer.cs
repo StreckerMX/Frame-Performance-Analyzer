@@ -54,11 +54,14 @@ public sealed class LibraryIndexer
     }
 
     /// <summary>
-    /// Scan a folder and update the library; records that no longer resolve
-    /// anywhere stay visible but are marked missing. User-hidden identities
-    /// are excluded from refresh even when their source CSV still exists.
+    /// Scan a folder and update the global Library. Returns the stable identities
+    /// discovered in this specific scan so contextual browsers can scope their
+    /// view to the active Source folder without deleting historical Library data.
+    /// Records that no longer resolve anywhere stay visible but are marked missing.
+    /// User-hidden identities are excluded from refresh even when their source CSV
+    /// still exists.
     /// </summary>
-    public async Task RefreshAsync(
+    public async Task<IReadOnlySet<string>> RefreshAsync(
         LibraryModel library,
         string directory,
         CaptureFolderScanner scanner,
@@ -74,8 +77,12 @@ public sealed class LibraryIndexer
             || library.IgnoredIdentities.Contains(pair.Comparison));
 
         var now = LibraryUpdater.NowIso();
-        var infos = await scanner.ScanCaptureFolderAsync(directory, cancellationToken).ConfigureAwait(false);
+        var infos = await scanner
+            .ScanCaptureFolderAsync(directory, cancellationToken)
+            .ConfigureAwait(false);
+
         var foundIdentities = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var info in infos)
         {
             var identity = IdentityOf(info);
@@ -100,10 +107,13 @@ public sealed class LibraryIndexer
             var record = library.Records[identity];
             var available = foundIdentities.Contains(identity)
                 || ResolveAvailability(record);
+
             if (available != record.Available)
             {
                 library.Records[identity] = record with { Available = available };
             }
         }
+
+        return foundIdentities;
     }
 }
