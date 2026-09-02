@@ -52,6 +52,32 @@ public class ReadCaptureInfoTests
     }
 
     [Fact]
+    public async Task Duration_uses_timestamp_span_when_capture_does_not_start_at_zero()
+    {
+        using var temp = new TempDirectory();
+
+        var path = temp.WriteUtf8(
+            "FrameView_RDR2.exe_2026_08_31T235405_Log.csv",
+            """
+        Application,Resolution,GPU,CPU,TimeInSeconds,MsBetweenPresents,GPU0Util(%)
+        RDR2.exe,WINDOWED,NVIDIA GeForce RTX 5070 Ti,AMD Ryzen 7 5700X3D,220.336503,16.6,90
+        RDR2.exe,WINDOWED,NVIDIA GeForce RTX 5070 Ti,AMD Ryzen 7 5700X3D,300.000000,16.6,90
+        RDR2.exe,WINDOWED,NVIDIA GeForce RTX 5070 Ti,AMD Ryzen 7 5700X3D,400.000000,16.6,90
+        RDR2.exe,WINDOWED,NVIDIA GeForce RTX 5070 Ti,AMD Ryzen 7 5700X3D,500.000000,16.6,90
+        RDR2.exe,WINDOWED,NVIDIA GeForce RTX 5070 Ti,AMD Ryzen 7 5700X3D,587.070687,16.6,90
+        """);
+
+        var info = await _reader.ReadCaptureInfoAsync(path);
+
+        Assert.NotNull(info);
+        Assert.NotNull(info.DurationSeconds);
+        Assert.Equal(
+            366.734184,
+            info.DurationSeconds.Value,
+            precision: 6);
+    }
+
+    [Fact]
     public async Task Summary_files_are_rejected()
     {
         using var temp = new TempDirectory();
